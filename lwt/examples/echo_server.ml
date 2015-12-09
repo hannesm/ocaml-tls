@@ -39,7 +39,7 @@ let serve_ssl port callback =
     let authenticator = null_auth in
     let config = Tls.Config.server ~reneg:true ~certificates:(`Single cert) ~authenticator () in
     (Lwt.catch
-       (fun () -> Tls_lwt.accept_ext ~trace:eprint_sexp config s >|= fun r -> `R r)
+       (fun () -> Tls_lwt.accept_ext config s >|= fun r -> `R r)
        (function
          | Unix.Unix_error (e, f, p) -> return (`L (string_of_unix_err e f p))
          | Tls_lwt.Tls_alert a -> return (`L (Tls.Packet.alert_type_to_string a))

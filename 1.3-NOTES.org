@@ -1,0 +1,465 @@
+* <2018-10-13 Sat> rebase tls13 branch, fix built, start re-reading changes and rfc 8446
+* <2018-11-01 Thu> reading RFC 8446, wire formats
+- revised alert types
+- revised handshake types
+- revised supported_groups
+--> should these contain only supported things, or everything from iana?
+----> former is more concise, but doesn't let us print anything
+-----> but latter only increases size for no good value!
+* <2018-11-06 Tue>
+adjusting extensions and hellos:
+- server_hello.version is always 0x03 0x03, but a SupportedVersions extension present
+  --> in the business logic, I don't want to lookup in extensions, but parser should do this!
+- writer does ..create XX; memset <- use newer cstruct and get rid of memset
+- order of extensions: client hello requires PSK to be last (from 4.2)!
+- sigalgs_cert (4.2.3: if not present, use sigalg)
+- OID filter (4.2.5): list of <oid, values> pairs - server says client cert must contain oid with any <value>, KU/EKU matchers are documented
+- hello retry request contains special random and also extensions! be aware!
+- TODO: PSK, early data indication, HRR, cookie
+- HRR is a SERVER_HELLO with some magic
+- COOKIE extension may be present in SH/HRR even if CH didn't contain it
+- Table 4.2 (allowed extensions) is partial for CH (which may include more since it may want to negotiate earlier protocol versions)
+- in certificate (4.4.2) - what is the certificateType doing there? is it on the wire?
+ --> there's now server_certificate_type and client_certificate_type extensions!
+- Appendix D for vesion negotiation -- 5.1 says "first client hello 0x0301", followed by "0x0303"
+- protected record layer has type always application data (= 23)!
+ - the body of a protected record:
+   - content (TLSPlaintext.length)
+   - type (one byte)
+   - zeroes (lengh_of_padding)
+- zero length appdata is fine, alert and handshake not!
+- max len: 2 ^ 14 + 1 (content type) + 255 (max AEAD expansion)
+- rekey after: AES-GCM 2^24.5 (~24million), chacha: seq wrap
+- rolling hash during handshake (less memory usage, don't keep entirely log)
+* <2018-11-07 Wed>
+technical debt:
+- lib/control (replace with result and Rresult)
+- newer Cstruct releases contain (a) memset 0 on create (b) empty / null, ...
+- Engine interface should use result
+- Tracing ~~> Logs
+- Mirage layer uses (Lwt) exceptions, not always result type
+- Module "Core"
+- Is it worth having huge amounts of enums (e.g. ciphersuites)? could as well implement only those support
+- build system
+- allocation of lots of small Cstruct.t in writer + other places
+figuring out:
+- ciphersuites for 1.3 has new magic values
+- don't include kex anymore (done by CH extension)
+- key schedule is different from draft11
+* <2018-11-09 Fri>
+- yy extensions are driving me mad... should use gmap here!?
+- ordering is that PSK must be last (re-iterate from 4.2)
+** rewrap data flow:
+main entry: Engine.handle_tls : state -> buf -> ..
+calls out to:
+ - separate_records (which uses Reader.parse_record [guards record size and unencrypted version])
+ - recursive handle_records - using handle_raw_records:
+    - guards for version
+    - decrypt
+    - handle_packet -> hs_state, `change_enc/`change_dec/`record (then encrypted), app_data
+      - matches on packet type and calls type-specific function
+ -> ok (state, out, appdata) | fail
+** rewrap version negotiation:
+- used to be the case that we can just use the version information of the outer (unencrypted) layer
+- now need to use the one in our internal state (clear after the server hello)
+- ignore the outer version number!? (how to deal with older TLS versions?)
+  - according to appendix D:
+    The value of TLSPlaintext.legacy_record_version MUST be ignored by all
+    implementations Version negotiation is performed using only the handshake
+    versions (ClientHello.legacy_version and ServerHello.legacy_version, as well
+    as the ClientHello, HelloRetryRequest, and ServerHello "supported_versions"
+    extensions).  In order to maximize interoperability with older endpoints,
+    implementations that negotiate the use of TLS 1.0-1.2 SHOULD set the record
+    layer version number to the negotiated version for the ServerHello and all
+    records thereafter.
+- unencrypted CCS may be received at any point (byte value 0x01) - should be ignored
+* <2018-11-14 Wed>
+- tls version negotiation changes
+- separated session_data and session_data13, both may need some cleaning (psk_id in session_data)
+* <2018-11-21 Wed>
+** tried OpenSSL interop (failed due to bug in supported_versions extension parser)
+** OpenSSL does not support FFDHE, s_client hello:
+(handshake-in
+ (ClientHello
+  ((client_version (Supported TLS_1_2))
+   (client_random
+     "\213G\
+    \n\131o^\165H\179s\246\162\
+    \n\211\233\239\214I\213\212\227m$\212Bh\174\143\245/\141\177")
+   (sessionid
+    ("\157\180\180p`\028\154\190\151\228\150\029\192{M@\"C\231ynu\018\156\197\017n\128}\231\137\134"))
+   (ciphersuites
+    (TLS_AES_256_GCM_SHA384 TLS_CHACHA20_POLY1305_SHA256
+     TLS_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384
+     TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
+     TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+     TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+     TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+     TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_DHE_RSA_WITH_AES_256_CBC_SHA
+     TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+     TLS_DHE_RSA_WITH_AES_128_CBC_SHA TLS_RSA_WITH_AES_256_GCM_SHA384
+     TLS_RSA_WITH_AES_128_GCM_SHA256 TLS_RSA_WITH_AES_256_CBC_SHA256
+     TLS_RSA_WITH_AES_128_CBC_SHA256 TLS_RSA_WITH_AES_256_CBC_SHA
+     TLS_RSA_WITH_AES_128_CBC_SHA TLS_EMPTY_RENEGOTIATION_INFO_SCSV))
+   (extensions
+    ((Hostname localhost)
+     (ECPointFormats
+      (UNCOMPRESSED ANSIX962_COMPRESSED_PRIME ANSIX962_COMPRESSED_CHAR2))
+     (SupportedGroups (X25519 SECP256R1 X448 SECP521R1 SECP384R1))
+     (UnknownExtension (35 "")) (UnknownExtension (22 ""))
+     ExtendedMasterSecret
+     (SignatureAlgorithms
+      (RSA_PSS_RSAENC_SHA256 RSA_PSS_RSAENC_SHA384 RSA_PSS_RSAENC_SHA512
+       RSA_PKCS1_SHA256 RSA_PKCS1_SHA384 RSA_PKCS1_SHA512 RSA_PKCS1_SHA224
+       RSA_PKCS1_SHA1))
+     (SupportedVersions
+      ((Supported TLS_1_3) (Supported TLS_1_2) (Supported TLS_1_1)
+       (Supported TLS_1_0) SSL_3))
+     (UnknownExtension (45 "\001\001"))
+     (KeyShare
+      ((X25519
+         " \226\
+        \n\211S\247\234kE\001\147\215\012!'>\173\189\\u\015\2177%\206\151h>\249\208\184e"))))))))
+** TODO unknown 22 (encrypt-then-mac) 35 (session-ticket) 45 (psk-key-exchange-modes)
+** GnuTLS 3.6.4 (installed to /opt), /opt/bin/gnutls-cli --insecure localhost:4433
+(handshake-in
+ (ClientHello
+  ((client_version (Supported TLS_1_2))
+   (client_random
+    "9/6>6\201\186t\190}m=\158\000\161K\191M>A\239)\bf\027OA\199\b\192\193\249")
+   (sessionid ())
+   (ciphersuites
+    (TLS_AES_256_GCM_SHA384 TLS_CHACHA20_POLY1305_SHA256
+     TLS_AES_128_GCM_SHA256 TLS_AES_128_CCM_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+     TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+     TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA TLS_RSA_WITH_AES_256_GCM_SHA384
+     TLS_RSA_WITH_AES_256_CCM TLS_RSA_WITH_AES_256_CBC_SHA
+     TLS_RSA_WITH_AES_128_GCM_SHA256 TLS_RSA_WITH_AES_128_CCM
+     TLS_RSA_WITH_AES_128_CBC_SHA TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_DHE_RSA_WITH_AES_256_CCM
+     TLS_DHE_RSA_WITH_AES_256_CBC_SHA TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_DHE_RSA_WITH_AES_128_CCM TLS_DHE_RSA_WITH_AES_128_CBC_SHA))
+   (extensions
+    ((UnknownExtension (5 "\001\000\000\000\000"))
+     (SupportedGroups
+      (SECP256R1 SECP384R1 SECP521R1 X25519 FFDHE2048 FFDHE3072 FFDHE4096
+       FFDHE6144 FFDHE8192))
+     (ECPointFormats (UNCOMPRESSED))
+     (SignatureAlgorithms
+      (RSA_PKCS1_SHA256 RSA_PSS_RSAENC_SHA256 RSA_PKCS1_SHA384
+       RSA_PSS_RSAENC_SHA384 RSA_PKCS1_SHA512 RSA_PSS_RSAENC_SHA512
+       RSA_PKCS1_SHA1))
+     (UnknownExtension (22 "")) ExtendedMasterSecret
+     (UnknownExtension (35 ""))
+     (KeyShare
+      ((SECP256R1
+        "\004\253\155\194]\249<\006\011\203\bR$\251\012w\012GM\196!%\028\174\003\156\167\212)\128\226\tzGX\182\r3\185/]DT-,\164\226%_\183n\136\206\020w\231\155@\014\175\185\166\bU\242")
+       (X25519
+         "\210~\174\148\025o\1389\180_\238\135\001\239h\145(\178\184\201\
+        \n\198f\166Y\239c4\028\016$\\")))
+     (SupportedVersions
+      ((Supported TLS_1_3) (Supported TLS_1_2) (Supported TLS_1_1)
+       (Supported TLS_1_0)))
+     (SecureRenegotiation "") (Hostname localhost)
+     (UnknownExtension (45 "\002\001\000")) (UnknownExtension (28 "@\000")))))))
+** TODO unknown 5 (status request) 22 (encrypt-then-mac) 28 (record-size-limit) 35 (session-ticket) 45 (psk-key-exchange-modes)
+** getting there: /opt/bin/gnutls-cli --insecure --priority="NORMAL:+GROUP-FFDHE2048:-GROUP-SECP256R1:-GROUP-SECP384R1:-GROUP-SECP521R1:-GROUP-X25519" localhost:4433
+** server implementation can send valid encrypted data (finished missing, certificate wrong, ...)
+* <2018-11-22 Thu>
+** yay, got certificateverify to work, next step finished (and then we're all set :D)
+** glad to see no more PKCS1_5 in certificateverify! :)
+* <2018-11-23 Fri>
+** re-enable support for finished, and fix the implementation (it requires s_hs_traffic / c_hs_traffic keys, which means they need to be exposed by crypto API)
+* <2018-11-28 Wed>
+- TODO padding strategy? (for each piece of payload)
+- DH now has leading zeros! (oh, look at me, NSS https://bugzilla.mozilla.org/show_bug.cgi?id=1478698)
+- TODO consistency of nocrypto: RSA.decrypt pads on the left, while Dh.gen_key does not (see https://github.com/mirleft/ocaml-nocrypto/issues/145) --> should be unified (provide an optional labeled argument?)
+- HRR server-side support! can now run:
+/opt/bin/gnutls-cli --insecure -d 999 localhost:4433
+* <2018-11-29 Thu>
+- there's struggle with CCS. tls 1.3 allows this to be sent at arbitrary points (really?) during the handshake, to-be-ignored.
+- now FF sends CH, gets HRR, sends CCS; CH. our server (doing stateless HRR) is still in state (Server AwaitClientHello) - Engine.handle_change_cipher_spec uses that for dispatching (and ignores the hs.protocol_version)
+--> this is intricate, unclear whether there is an attack surface. are clients after HRR allowed to use an older version? can HRR contain <1.3?
+- for now, handle_ccs uses hs.protocol_version <- is this safe? can it be downgraded/invalid at some point? need to check that (it's set by new_state to the maximum configured protocol version)
+--> this means a client/server can sent arbitrary amount of CCS if OCaml-TLS is configured with 1.3
+- when should we (should we?) emit CCS?
+- fiddling more with FF: - EE may be empty (esp. sending `hostname without client sent hostname is not a good idea)
+- sessionid is reused in HRR and SH (copied from CH in both cases)
+- TODO group vs named_group :/
+- installed tlsfuzzer (python) from tomato42/tlsfuzz
+- fixed some bugs ;) (valid_client_hello etc.)
+- found some bugs (TODO: readup downgrade prevention)
+- avoid empty EncryptedExtensions
+* <2018-11-30 Fri>
+from a zoomed out POV:
+- validity of packets (e.g. CH, when CCS may be received (only during handshake IIRC, not after Finished))
+- client handshake
+- client authentication
+- PSK
+- 0RTT (and (client) API changes? - not sending cookies during 0RTT)
+- have a checklist of RFC sections and OCaml-TLS status
+now, there are a bunch of new parameters/extensions to consider
+- extensions in certificate
+- cert_sig_algs
+these extensions are quite cumbersome atm (map_find etc.)
+* <2018-12-03 Mon>
+re-reading section 2.2 (PSK), 4.6.1
+- server decides on PSK vs DHE_PSK --> server configuration "require ephemeral"?
+- server can send multiple newsessionticket, one after initial HS, others after client authentication
+- ticket must be resumed with a cipher using the same hash!
+- client side: ticket must match sni of initial hs, should match sni of resumption
+from 4.6.1:
+Note: Although the resumption master secret depends on the client's
+second flight, a server which does not request client authentication
+MAY compute the remainder of the transcript independently and then
+send a NewSessionTicket immediately upon sending its Finished rather
+than waiting for the client Finished.  This might be appropriate in
+cases where the client is expected to open multiple TLS connections
+in parallel and would benefit from the reduced overhead of a
+resumption handshake, for example.
+--> that's possible since S only awaits client finished, which is completely
+    deterministic!
+DONE according to appendix, if the session ID is echoed back the server _must_ send CCS
+-> TODO we now always send CCS and SID, should this be configurable?
+TODO we can precompute the sessionticket and send it after finished in the same flight
+* <2019-01-09 Wed>
+- rebased on tls 0.9.3 release
+- CertificateRequest parse and assembly (part of client authentication)
+- CertificateAuthorities extension
+* <2019-01-15 Tue> (client auth working)
+- client authentication (certificate parsing, certificateverify)
+- interop with gnutls with client certificates :D
+/opt/bin/gnutls-cli 127.0.0.1:4433 --insecure -d 999 --x509keyfile=mirage/ocaml-tls/certificates/server.key --x509certfile=mirage/ocaml-tls/certificates/server.pem
+* <2019-01-17 Thu>
+- PskKeyExchangeModes extension
+- gnutls 3.5.0 interop
+- getting sessionticket / psk client hello extension to work with firefox, but not with gnutls :(
+ - FF only offers PSK_KE_DHE, no PSK_KE
+* <2019-01-18 Fri>
+* <2019-01-22 Tue>
+- pre-shared keys (resumption)
+* <2019-01-30 Wed>
+- resumption continued
+* <2019-02-03 Sun>
+- resumption KDF, works with example traces now!
+- still missing: keyupdate, post-handshake auth, 0rtt
+- resumption (binder key) works now with gnutls and firefox, still need to fiddle it through
+* <2019-02-07 Thu>
+- hook up resumption (send PreSharedKey from server, avoid to send certificate, CV, CR if resumed session)
+- use correct early_secret
+- TODO still unclear what to do with a TLS session that a client opened, successfully completed, and immediately closed
+  - atm (since finished + alert may be in the same tcp frame) this session does not exist in tls_lwt etc.
+  - gnutls-cli when started with -r behaves in this way, and it is a good idea to be able to count + cache this session
+- early data, from RFC:
+  - sessionticket needs to include early_data extension
+  - client sends early_data extension in client_hello
+  - uses first psk binder for early_data
+  - if server accepts this (by sending early_data ext in server_hello), needs to derive key and switch only when receiving endofearlydata to hs_ctx
+  - if server rejects, needs to trial decrypt with hs_ctx until it read finished (and throw away the pieces in between)
+* <2019-02-08 Fri>
+- more 0rtt design thoughts, and steps
+  a) extend sessionticket with earlydata
+  b) extend hello HS with end_of_early_data, also kdf / install decryptor
+   -> needs a new state in handshake13_server
+  c) extend engine to handle appdata earlier in case of 0rtt
+  d) trial decryption for client finished when not in 0rtt, but client sent 0rtt
+* <2019-02-14 Thu>
+resumption: should each PSK only be used once? should a resumption HS contain a sessionticket?
+what are the security-related issues with 0rtt?
+- not forward secure (only using client random)
+- can be replayed
+  - a _client_ should not sent identifiable data (cookies!?)
+  - replay attacks possible (0rtt contains "delete", attacker can replay "delete")
+  --> application needs to be able to discover whether received data was 0rtt or not
+  --> either via epoch? or via another mechanism
+  --> esp. if 0rtt over a resumed, client authenticated session!?
+- mitigation:
+  - use-only-once ticket (as database key)
+  - record "unique" id (don't include everything..) of client hellos (avoiding replay) -- until max_lifetime exceeded
+- related: self-contained(&encrypted) session tickets vs those with database key
+  - configuration option?
+
+client side
+- needs "configuration option" whether 0rtt is desired
+  - this may be part of val client : Config.client -> (state * Cstruct.t)
+  - as a ?0rtt:Cstruct.t
+  --> information whether 0rtt was successfully sent must be preserved
+   --> i.e. if server denies, the client may need to retransmit the data (in one form or another, see alpn)
+* <2019-02-15 Fri>
+- read (IETF tls WG) "[TLS] Server validation of a second ClientHello" thread (HRR, which exts to use (first or second CH), what to verify?)
+ -> our server doesn't check CH1 and CH2 (apart from cipher ++ group (used by log))
+ -> our server uses CH2 exts
+ --> we _could_ put more stuff into the cookie (to preserve stateless HRR ++ checking) maybe in the future?
+- X25519 hacl
+* <2019-02-18 Mon>
+- ticket and lifetime
+  - server selects a lifetime (in seconds, uint32)
+  - server selects a ticket_age_add (uint32, obfuscated)
+  - client sends obfuscated_ticket_age: in ms, delta between ticket arrival and use
+ -> ok, [stateless session ticket story] server can put server time into ticket (encrypted)
+  -> then computes adjusted_creation_time = server_time + RTT
+  -> client reports adjusted_creation_time (encrypted), and ticket_age
+  -> server can check their _current_ wall clock time against ticket_age + adjusted_creation_time for checking
+-> server needs time getting passed in
+ -> what about different session ticket approaches? atm, it's recorded in epoch and can be retrieved
+  -> alternatives include: passing in a polyvar to config (plus specify size of cache (full/CH cache))
+ -> pick one, expose it properly, abstract if there's demand
+* <2019-02-19 Tue>
+reading IETF TLS WG threads on 0RTT, specifically:
+- [TLS] [PSA] 0-RTT tolerance is mandatory
+- [TLS] 0-RTT encrypted data limits
+- [TLS] Closing on 0-RTT
+- also RFC sec 4.2.10 and D.3
+
+resulting in:
+- if server is configured for 0rtt, and client sends 0rtt
+(a) key material matches and 0rtt is accepted
+(b) does not match and trial decryption is done
+both only ever up to configured max_size_limit! (not the one from the session ticket)
+
+- if server is not configured for 0rtt, client sends it ~> failure (violating 4.2.10)
+* <2019-02-20 Wed>
+- downgrade (tls13-downgrade)
+- P256 fiat
+* <2019-02-21 Thu>
+- cleanups
+- 0rtt bytes
+* <2019-02-22 Fri>
+- really limit bytes of 0rtt
+- TODO when should a server be able to send application data? according to spec, it is after its first flight
+ - but that means there's no EPOCH yet :/
+ - and if the server demanded client authentication, that hasn't happened yet
+--> maybe install epoch earlier, and wait until client's second flight if client authentication is enabled?
+- general semantics of blocking etc:
+  - effectful layer call handle_tls / send_application_data
+  - the former changes state, the latter uses can_handle_appdata (and returns None if not)
+  - effectful layer blocks in accept/connect (via drain_handshake) until handshake_in_progress == false
+  - reneg as well calls drain_handshake to wait until handshake is completed
+  --> a t that is not in established should never leak (it does in the reneg case, though, since it may be shared to another task)
+- whenever internal state changes to Established, a new session is prepended to the state, accessible via epoch
+ -> a t in `InitialEpoch never escapes!
+- in 1.0/1.1/1.2 this is slightly wrong, since while a hellorequest / clienthello was sent, the handshake is not required to happen next (there may be any appdata in transit, and we may as well send some more appdata)
+ -> but it's a useful semantics!
+- now 1.3 walks into the door, where application data can be send/received earlier:
+  - client side may use 0rtt and just send data after clienthello
+  - server side may send after their finished any data
+    - what about keyupdate and post-handshake auth?
+      - keyupdate shouldn't affect
+      - post-hs auth is initiated by the server (sending a certificateverify), support signaled by client (client hello extension)
+       -> should be blocking in the server (+new epoch, drop old data to distinguish which was authenticated)
+     - in theory, multiple post-hs auth may be in transit at the same time (ctx field), but where is this useful for an application programmer?
+  - epochs are also more and earlier:
+    - earlydata (not ephemeral)
+    - hs (ephemeral)
+    - appdata (ephemeral)
+  -> this means that write is allowed earlier, read as well
+  --> epoch needs to be installed earlier! as soon as read/write works, an epoch should be available
+   --> should it be tagged with "0rtt" etc.?
+- client API for connect including 0rtt which is denied
+ -> first step: do we have a ticket that allows 0rtt?
+ -> second step: allow write early - but what to return here?
+- drop is only for "we'd like a new epoch for client auth"
+- on recv side, you block on read (or not), handle the data (using epoch to inspect which if you like), and call read again (potentially in a new epoch)
+- or accept / server_of_fd returns not only a t, but also a cstruct.t option -- then accept can only return when end of early data is received (but we could want to send application data earlier, directly after our finished)
+-- the 1.3 model suggests we've separate can_x_application_data for send and receive
+- whenever acc/conn returns:
+  accept : server -> ?read_zero_rtt:bool -> fd -> (t * sockaddr * buffer option) io
+              (* or via config? *) (* where would this be if zero_rtt is via config? *)
+  could: accept_0rtt : server -> fd -> (t * sockaddr * buffer option)
+  connect : client -> ?zero_rtt:buffer -> host * port -> t * zero_rtt_sent:bool io
+    actually:
+       Engine.client : Config.client -> Cstruct.t option -> (state * Cstruct.t *)
+ - we can call read and write on it
+ - then we can write on it, and it has an epoch
+ - read doesn't read 0rtt. if you want it, you get all at once.
+* <2019-02-23 Sat>
+- TODO embed kex info into epoch!
+- what should session.state contain?
+ - why do we keep old sessions around? should it instead of a list be an option?
+ - track epoch/crypto context numbers?
+   - None ~> Some `Handshake ~> Some `AppX ~> Some `AppX+1
+   - but that's different for the two peers, can a API client make use out of that info?
+- SHA384 fixes (empty psk must be hash len, certificateverify uses the same hash)
+ - TODO is the latter necessary? can PSS-SHA256 be used with AES-256-GCM-SHA384?
+* <2019-02-25 Mon>
+- server side things
+  - preserve resumption_secret for future session tickets (computed in _finished)
+    - track nonce
+  - respect certificate_signature_algorithms in agreed_certs
+  - post-handshake authentication
+  - keyupdate
+  - API: 0rtt (see above discussion)
+- working on client side
+  - handshake
+  - hrr
+- still needs:
+  - send ccs for middlebox
+  - client authentication
+  - ee data into epoch
+  - psk, 0rtt
+* <2019-02-26 Tue>
+- tlsfuzzer testing https://gist.github.com/hannesm/97824e6a634e5f4209b018c119ecede7
+- ee alpn into epoch
+- client psk:
+  - make psk from session ticket available!?
+  - need [(identity, obf_ts, old ts, current ts), secret] as input (maybe epoch)
+    - could have multiple PSK!?
+  - computes binder (using CH), and sends it out
+ - missing lifetime + ticket extension (0RTT) -- now done!
+* <2019-02-27 Wed>
+- TODO BUG respect and record server's `Hostname (and report in epoch)
+- TODO ticket_cache, cached_session, session_cache Config thingies:
+  - session_cache is ID -> epoch option (for server)
+  - cached_session is epoch option (for client)
+  - now, tickets are a bit more intricate:
+    - need timestamp and compute time deltas
+    - server needs to include (lifetime, early_data_bytes ext)
+    - client _when sending_ needs obfuscated_age + delta, verify lifetime
+       or take timestamp * psk * lifetime as input, and compute what's needed
+    - client _when receiving_ needs to take timestamp and output lifetime
+    - client may send multiple tickets (when is this useful?)
+    - currently a record { lookup ; ticket_granted ; lifetime ; timestamp }
+      -> application passes a callback instead of requesting via epoch on a session
+        -> because the new session ticket may appear at any time, not under control of client
+    ~> added lifetime and early_data to psk13!
+-> ts needed to preserve:
+   ticket_issuance, obfuscation, lifetime
+- TODO temporarily disabled padding since it's awkwardly put by Writer at the end of the buffer
+  ~~> PSK needs to go last!
+- TODO HRR and resumption
+- client authentication (unfinished, TODO doesn't respect server's CR exts)
+* <2019-02-28 Thu>
+- TODO can_handle_appdata story in respect with 1.3 and 0rtt
+- cleanups (remove add_to_cache/find_in_cache), don't assemble clienthello multiple times
+- downgrade magic numbers cleanups
+---
+- client zerortt (+HRR+resume), sessionticket lifetime checks
+- client send CCS (middlebox mode)
+- API zerortt
+- check fragment being empty
+- post-HS authentication
+- keyupdate
+- extensions (esp cert_sig_alg, others?)
+- OCSP/..
+- server side ticket issuance and reusability (stateless tickets, nonce, etc.)
+- general: when should the session be in the state (and epoch return sth useful)?
+  - the whole peeking whether the top is a `TLS13 isn't so nice
+- padding policy (or general padding API)
+- looked at diff master..tls13 (minimised, found some issues)

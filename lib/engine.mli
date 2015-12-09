@@ -55,25 +55,42 @@ val server : Config.server -> state
 type error = [
   | `AuthenticationFailure of X509.Validation.validation_error
   | `NoConfiguredCiphersuite of Ciphersuite.ciphersuite list
-  | `NoConfiguredVersion of Core.tls_version
-  | `NoConfiguredHash of Mirage_crypto.Hash.hash list
+  | `NoConfiguredVersions of Core.tls_version list
+  | `NoConfiguredSignatureAlgorithm of Core.signature_algorithm list
   | `NoMatchingCertificateFound of string
   | `NoCertificateConfigured
   | `CouldntSelectCertificate
 ]
 
+type client_hello_errors = [
+  | `EmptyCiphersuites
+  | `NotSetCiphersuites of Packet.any_ciphersuite list
+  | `NoSupportedCiphersuite of Packet.any_ciphersuite list
+  | `NotSetExtension of Core.client_extension list
+  | `HasSignatureAlgorithmsExtension
+  | `NoSignatureAlgorithmsExtension
+  | `NoGoodSignatureAlgorithms of Core.signature_algorithm list
+  | `NoKeyShareExtension
+  | `NoSupportedGroupExtension
+  | `NotSetSupportedGroup of Packet.named_group list
+  | `NotSetKeyShare of (Packet.named_group * Cstruct.t) list
+  | `NotSubsetKeyShareSupportedGroup of (Packet.named_group list * (Packet.named_group * Cstruct.t) list)
+]
+
 (** failures from received garbage or lack of features *)
 type fatal = [
   | `NoSecureRenegotiation
-  | `NoCiphersuite of Packet.any_ciphersuite list
-  | `NoVersion of Core.tls_any_version
+  | `NoSupportedGroup
+  | `NoVersions of Core.tls_any_version list
   | `ReaderError of Reader.error
   | `NoCertificateReceived
+  | `NoCertificateVerifyReceived
   | `NotRSACertificate
   | `NotRSASignature
   | `KeyTooSmall
   | `RSASignatureMismatch
   | `RSASignatureVerificationFailed
+  | `UnsupportedSignatureScheme
   | `HashAlgorithmMismatch
   | `BadCertificateChain
   | `MACMismatch
@@ -88,7 +105,7 @@ type fatal = [
   | `HandshakeFragmentsNotEmpty
   | `InvalidDH
   | `InvalidRenegotiation
-  | `InvalidClientHello
+  | `InvalidClientHello of client_hello_errors
   | `InvalidServerHello
   | `InvalidRenegotiationVersion of Core.tls_version
   | `InappropriateFallback
@@ -98,6 +115,12 @@ type fatal = [
   | `InvalidCertificateExtendedUsage
   | `InvalidSession
   | `NoApplicationProtocol
+  | `HelloRetryRequest
+  | `InvalidMessage
+  | `Toomany0rttbytes
+  | `MissingContentType
+  | `Downgrade12
+  | `Downgrade11
 ]
 
 (** type of failures *)

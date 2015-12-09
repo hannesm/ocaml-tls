@@ -35,6 +35,7 @@ let pseudo_random_function version cipher len secret label seed =
   | TLS_1_2 ->
      let module D = (val (prf_mac cipher)) in
      p_hash (D.hmac, D.digest_size) secret labelled len
+  | _ -> assert false
 
 let key_block version cipher len master_secret seed =
   pseudo_random_function version cipher len master_secret "key expansion" seed
@@ -42,8 +43,10 @@ let key_block version cipher len master_secret seed =
 let hash version cipher data =
   match version with
   | TLS_1_0 | TLS_1_1 -> MD5.digest data <+> SHA1.digest data
-  | TLS_1_2 -> let module H = (val (prf_mac cipher)) in
-               H.digest data
+  | TLS_1_2 ->
+    let module H = (val (prf_mac cipher)) in
+    H.digest data
+  | _ -> assert false
 
 let finished version cipher master_secret label ps =
   let data = Utils.Cs.appends ps in
@@ -60,7 +63,7 @@ let divide_keyblock key mac iv buf =
   in
   (c_mac, s_mac, c_key, s_key, c_iv, s_iv)
 
-let derive_master_secret version session premaster log =
+let derive_master_secret version (session : session_data) premaster log =
   let prf = pseudo_random_function version session.ciphersuite 48 premaster in
   if session.extended_ms then
     let session_hash =
@@ -69,13 +72,13 @@ let derive_master_secret version session premaster log =
     in
     prf "extended master secret" session_hash
   else
-    prf "master secret" (session.client_random <+> session.server_random)
+    prf "master secret" (session.common_session_data.client_random <+> session.common_session_data.server_random)
 
-let initialise_crypto_ctx version session =
+let initialise_crypto_ctx version (session : session_data) =
   let open Ciphersuite in
-  let client_random = session.client_random
-  and server_random = session.server_random
-  and master = session.master_secret
+  let client_random = session.common_session_data.client_random
+  and server_random = session.common_session_data.server_random
+  and master = session.common_session_data.master_secret
   and cipher = session.ciphersuite
   in
 

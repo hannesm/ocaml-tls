@@ -6,7 +6,6 @@ let http_client ?ca ?fp hostname port =
   let port          = int_of_string port in
   auth ~hostname ?ca ?fp () >>= fun authenticator ->
   Tls_lwt.connect_ext
-    ~trace:eprint_sexp
     (Tls.Config.client ~authenticator ())
     (hostname, port) >>= fun (ic, oc) ->
   let req = String.concat "\r\n" [
