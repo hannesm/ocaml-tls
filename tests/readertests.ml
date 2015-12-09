@@ -27,7 +27,7 @@ let any_version_parser_tests = [
   good_any_version_parser 3 1 Core.(Supported TLS_1_0) ;
   good_any_version_parser 3 2 Core.(Supported TLS_1_1) ;
   good_any_version_parser 3 3 Core.(Supported TLS_1_2) ;
-  good_any_version_parser 3 4 (Core.TLS_1_X 4) ;
+  good_any_version_parser 3 4 Core.(Supported TLS_1_3) ;
   good_any_version_parser 3 42 (Core.TLS_1_X 42);
 
   bad_any_version_parser 2 4 ;
@@ -39,7 +39,7 @@ let any_version_parser_tests = [
 
 let any_version_tests =
   List.mapi
-    (fun i f -> "Parse version " ^ string_of_int i >:: f)
+    (fun i f -> "Parse any version " ^ string_of_int i >:: f)
     any_version_parser_tests
 
 let good_version_parser major minor result _ =
@@ -64,9 +64,9 @@ let version_parser_tests = [
   good_version_parser 3 1 Core.TLS_1_0 ;
   good_version_parser 3 2 Core.TLS_1_1 ;
   good_version_parser 3 3 Core.TLS_1_2 ;
+  good_version_parser 3 4 Core.TLS_1_3 ;
 
   bad_version_parser 3 0 ;
-  bad_version_parser 3 4 ;
   bad_version_parser 3 42 ;
   bad_version_parser 2 4 ;
   bad_version_parser 4 4 ;
@@ -104,7 +104,7 @@ let good_records =
     ([ 21 ; 3 ; 2 ; 0 ; 0 ], `Record (({ content_type = ALERT ; version = Supported TLS_1_1 }, empty), empty) ) ;
     ([ 22 ; 3 ; 3 ; 0 ; 0 ], `Record (({ content_type = HANDSHAKE ; version = Supported TLS_1_2 }, empty), empty) ) ;
     ([ 23 ; 3 ; 0 ; 0 ; 0 ], `Record (({ content_type = APPLICATION_DATA ; version = SSL_3 }, empty), empty) ) ;
-    ([ 24 ; 3 ; 4 ; 0 ; 0 ], `Record (({ content_type = HEARTBEAT ; version = TLS_1_X 4 }, empty), empty) ) ;
+    ([ 24 ; 3 ; 4 ; 0 ; 0 ], `Record (({ content_type = HEARTBEAT ; version = Supported TLS_1_3 }, empty), empty) ) ;
     ([ 16 ; 3 ; 1 ; 0 ; 0 ], `UnknownContent 16 ) ;
     ([ 19 ; 3 ; 1 ; 0 ; 0 ], `UnknownContent 19 ) ;
     ([ 20 ; 5 ; 1 ; 0 ; 0 ], `UnknownVersion (5, 1) ) ;
@@ -207,7 +207,7 @@ let bad_alert_parser xs _ =
 
 let bad_alerts = [
   [3; 0] ;
-  [1; 1] ;
+  [1; 2] ;
   [2; 200] ;
   [0; 200] ;
   [0; 0; 0] ;
@@ -603,7 +603,7 @@ let bad_dss_1_2 =
     Cstruct.sub ds 0 (pred l) ;
     list_to_cstruct [7] <+> Cstruct.shift ds 1 ;
     list_to_cstruct [8] <+> Cstruct.shift ds 1 ;
-    list_to_cstruct [1 ; 4] <+> Cstruct.shift ds 2 ;
+    list_to_cstruct [1 ; 7] <+> Cstruct.shift ds 2 ;
     list_to_cstruct [7 ; 2] <+> Cstruct.shift ds 2 ;
     list_to_cstruct [1 ; 1 ; 1; 0xff] <+> Cstruct.shift ds 4 ;
     list_to_cstruct [1 ; 1 ; 0xff ; 0] <+> Cstruct.shift ds 4 ;
@@ -1153,7 +1153,7 @@ let good_client_hellos =
           ([1; 0; 0; 38; 3; 0] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] , { ch with client_version = SSL_3 } ) ;
           ([1; 0; 0; 38; 3; 1] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] , { ch with client_version = Supported TLS_1_0 } ) ;
           ([1; 0; 0; 38; 3; 2] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] , { ch with client_version = Supported TLS_1_1 } ) ;
-          ([1; 0; 0; 38; 3; 4] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] , { ch with client_version = TLS_1_X 4 } ) ;
+          ([1; 0; 0; 38; 3; 4] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] , { ch with client_version = Supported TLS_1_3 } ) ;
           ([1; 0; 0; 38; 3; 5] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] , { ch with client_version = TLS_1_X 5 } ) ;
 
           (* well-formed compression (not available in higher layer) *)
@@ -1202,14 +1202,14 @@ let good_client_hellos =
           (* max fragment length *)
           ([1; 0; 0; 45; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 1; 0; 1; 3] , { ch with extensions = [`MaxFragmentLength Packet.TWO_11] } ) ;
 
-          (* empty EllipticCurves *)
-          ([1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xA; 0; 2; 0; 0] , { ch with extensions = [`EllipticCurves []] } ) ;
-          (* one elliptic curve *)
-          ([1; 0; 0; 48; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 8; 0; 0xA; 0; 4; 0; 2; 0; 25] , { ch with extensions = [`EllipticCurves [Packet.SECP521R1]] } ) ;
-          (* two elliptic curves *)
-          ([1; 0; 0; 50; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 10; 0; 0xA; 0; 6; 0; 4; 0; 25; 0; 20] , { ch with extensions = [`EllipticCurves Packet.([SECP521R1; SECP224K1])] } ) ;
-          (* three elliptic curves, one unknown *)
-          ([1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0xA; 0; 8; 0; 6; 0; 25; 0xFF; 0xFF; 0; 20] , { ch with extensions = [`EllipticCurves Packet.([SECP521R1; SECP224K1])] } ) ;
+          (* empty SupportedGroups *)
+          ([1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xA; 0; 2; 0; 0] , { ch with extensions = [`SupportedGroups []] } ) ;
+          (* one supported group *)
+          ([1; 0; 0; 48; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 8; 0; 0xA; 0; 4; 0; 2; 0; 25] , { ch with extensions = [`SupportedGroups [Packet.SECP521R1]] } ) ;
+          (* two supported groups *)
+          ([1; 0; 0; 50; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 10; 0; 0xA; 0; 6; 0; 4; 0; 25; 0; 20] , { ch with extensions = [`SupportedGroups Packet.([SECP521R1; SECP224K1])] } ) ;
+          (* three supported groups, one unknown *)
+          ([1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0xA; 0; 8; 0; 6; 0; 25; 0xFF; 0xFF; 0; 20] , { ch with extensions = [`SupportedGroups Packet.([SECP521R1; SECP224K1])] } ) ;
 
           (* empty ECPointFormats *)
           ([1; 0; 0; 45; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xB; 0; 1; 0] , { ch with extensions = [`ECPointFormats []] } ) ;
@@ -1259,7 +1259,7 @@ let good_client_hellos =
              client_random =  list_to_cstruct [0x7c; 0x53; 0x05; 0x72; 0x7a; 0x1b; 0x84; 0x70; 0x30; 0x89; 0xef; 0xad; 0xfb; 0x56; 0xc1; 0x3d; 0x73; 0x4b; 0xc7; 0xcb; 0x8c; 0xc8; 0x75; 0x43; 0x01; 0x12; 0x32; 0xd6; 0x74; 0x87; 0xcb; 0x18] ;
              ciphersuites = Packet.([TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA; TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA; TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA; TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA; TLS_DHE_RSA_WITH_AES_256_CBC_SHA; TLS_DHE_DSS_WITH_AES_256_CBC_SHA; TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA; TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA; TLS_ECDH_RSA_WITH_AES_256_CBC_SHA; TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA; TLS_RSA_WITH_AES_256_CBC_SHA; TLS_RSA_WITH_CAMELLIA_256_CBC_SHA; TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA; TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA; TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA; TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA; TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA; TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA; TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA; TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA; TLS_RSA_WITH_3DES_EDE_CBC_SHA; TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA; TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA; TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA; TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA; TLS_DHE_RSA_WITH_AES_128_CBC_SHA; TLS_DHE_DSS_WITH_AES_128_CBC_SHA; TLS_DHE_RSA_WITH_SEED_CBC_SHA; TLS_DHE_DSS_WITH_SEED_CBC_SHA; TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA; TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA; TLS_ECDH_RSA_WITH_AES_128_CBC_SHA; TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA; TLS_RSA_WITH_AES_128_CBC_SHA; TLS_RSA_WITH_SEED_CBC_SHA; TLS_RSA_WITH_CAMELLIA_128_CBC_SHA; TLS_RSA_WITH_IDEA_CBC_SHA; TLS_ECDHE_RSA_WITH_RC4_128_SHA; TLS_ECDHE_ECDSA_WITH_RC4_128_SHA; TLS_ECDH_RSA_WITH_RC4_128_SHA; TLS_ECDH_ECDSA_WITH_RC4_128_SHA; TLS_RSA_WITH_RC4_128_SHA; TLS_RSA_WITH_RC4_128_MD5; TLS_DHE_RSA_WITH_DES_CBC_SHA; TLS_DHE_DSS_WITH_DES_CBC_SHA; TLS_RSA_WITH_DES_CBC_SHA; TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA; TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA; TLS_RSA_EXPORT_WITH_DES40_CBC_SHA; TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5; TLS_RSA_EXPORT_WITH_RC4_40_MD5; TLS_EMPTY_RENEGOTIATION_INFO_SCSV]);
              extensions = [`ECPointFormats Packet.([UNCOMPRESSED; ANSIX962_COMPRESSED_PRIME; ANSIX962_COMPRESSED_CHAR2]) ;
-                           `EllipticCurves Packet.([SECT571R1; SECT571K1; SECP521R1; SECT409K1; SECT409R1; SECP384R1; SECT283K1; SECT283R1; SECP256K1; SECP256R1; SECT239K1; SECT233K1; SECT233R1; SECP224K1; SECP224R1; SECT193R1; SECT193R2; SECP192K1; SECP192R1; SECT163K1; SECT163R1; SECT163R2; SECP160K1; SECP160R1; SECP160R2]);
+                           `SupportedGroups Packet.([SECT571R1; SECT571K1; SECP521R1; SECT409K1; SECT409R1; SECP384R1; SECT283K1; SECT283R1; SECP256K1; SECP256R1; SECT239K1; SECT233K1; SECT233R1; SECP224K1; SECP224R1; SECT193R1; SECT193R2; SECP192K1; SECP192R1; SECT163K1; SECT163R1; SECT163R2; SECP160K1; SECP160R1; SECP160R2]);
                            `ALPN ["h2"; "http/1.1"] ] } ) ;
 
           (
@@ -1302,7 +1302,7 @@ let good_client_hellos =
               client_random = list_to_cstruct [0xb7; 0x36; 0xeb; 0x21; 0xec; 0x81; 0x4d; 0x01; 0xfc; 0xf4; 0xe2; 0x06; 0x9a; 0x34; 0xb7; 0x21; 0xe1; 0x23; 0x6f; 0xbe; 0x50; 0xbf; 0xfe; 0x33; 0x9b; 0xc9; 0x5b; 0x20; 0x0e; 0x15; 0x02; 0x27] ;
               ciphersuites = Packet.([TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384; TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384; TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384; TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384; TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA; TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA; TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA; TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA; TLS_DHE_DSS_WITH_AES_256_GCM_SHA384; TLS_DHE_RSA_WITH_AES_256_GCM_SHA384; TLS_DHE_RSA_WITH_AES_256_CBC_SHA256; TLS_DHE_DSS_WITH_AES_256_CBC_SHA256; TLS_DHE_RSA_WITH_AES_256_CBC_SHA; TLS_DHE_DSS_WITH_AES_256_CBC_SHA; TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA; TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA; TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384; TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384; TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384; TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384; TLS_ECDH_RSA_WITH_AES_256_CBC_SHA; TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA; TLS_RSA_WITH_AES_256_GCM_SHA384; TLS_RSA_WITH_AES_256_CBC_SHA256; TLS_RSA_WITH_AES_256_CBC_SHA; TLS_RSA_WITH_CAMELLIA_256_CBC_SHA; TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA; TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA; TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA; TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA; TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA; TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA; TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA; TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA; TLS_RSA_WITH_3DES_EDE_CBC_SHA; TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256; TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256; TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256; TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256; TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA; TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA; TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA; TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA; TLS_DHE_DSS_WITH_AES_128_GCM_SHA256; TLS_DHE_RSA_WITH_AES_128_GCM_SHA256; TLS_DHE_RSA_WITH_AES_128_CBC_SHA256; TLS_DHE_DSS_WITH_AES_128_CBC_SHA256; TLS_DHE_RSA_WITH_AES_128_CBC_SHA; TLS_DHE_DSS_WITH_AES_128_CBC_SHA; TLS_DHE_RSA_WITH_SEED_CBC_SHA; TLS_DHE_DSS_WITH_SEED_CBC_SHA; TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA; TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA; TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256; TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256; TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256; TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256; TLS_ECDH_RSA_WITH_AES_128_CBC_SHA; TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA; TLS_RSA_WITH_AES_128_GCM_SHA256; TLS_RSA_WITH_AES_128_CBC_SHA256; TLS_RSA_WITH_AES_128_CBC_SHA; TLS_RSA_WITH_SEED_CBC_SHA; TLS_RSA_WITH_CAMELLIA_128_CBC_SHA; TLS_RSA_WITH_IDEA_CBC_SHA; TLS_ECDHE_RSA_WITH_RC4_128_SHA; TLS_ECDHE_ECDSA_WITH_RC4_128_SHA; TLS_ECDH_RSA_WITH_RC4_128_SHA; TLS_ECDH_ECDSA_WITH_RC4_128_SHA; TLS_RSA_WITH_RC4_128_SHA; TLS_RSA_WITH_RC4_128_MD5; TLS_DHE_RSA_WITH_DES_CBC_SHA; TLS_DHE_DSS_WITH_DES_CBC_SHA; TLS_RSA_WITH_DES_CBC_SHA; TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA; TLS_DHE_DSS_EXPORT_WITH_DES40_CBC_SHA; TLS_RSA_EXPORT_WITH_DES40_CBC_SHA; TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5; TLS_RSA_EXPORT_WITH_RC4_40_MD5; TLS_EMPTY_RENEGOTIATION_INFO_SCSV]) ;
               extensions = [`ECPointFormats Packet.([UNCOMPRESSED; ANSIX962_COMPRESSED_PRIME; ANSIX962_COMPRESSED_CHAR2]);
-                            `EllipticCurves Packet.([SECT571R1; SECT571K1; SECP521R1; SECT409K1; SECT409R1; SECP384R1; SECT283K1; SECT283R1; SECP256K1; SECP256R1; SECT239K1; SECT233K1; SECT233R1; SECP224K1; SECP224R1; SECT193R1; SECT193R2; SECP192K1; SECP192R1; SECT163K1; SECT163R1; SECT163R2; SECP160K1; SECP160R1; SECP160R2]);
+                            `SupportedGroups Packet.([SECT571R1; SECT571K1; SECP521R1; SECT409K1; SECT409R1; SECP384R1; SECT283K1; SECT283R1; SECP256K1; SECP256R1; SECT239K1; SECT233K1; SECT233R1; SECP224K1; SECP224R1; SECT193R1; SECT193R2; SECP192K1; SECP192R1; SECT163K1; SECT163R1; SECT163R2; SECP160K1; SECP160R1; SECP160R2]);
                             `SignatureAlgorithms
                               [(`SHA512, Packet.RSA) ;
                                (`SHA512, Packet.DSA) ;
@@ -1339,7 +1339,7 @@ let good_client_hellos =
               0x02; 0x68; 0x32;
               0x08; 0x68; 0x74; 0x74; 0x70; 0x2f; 0x31; 0x2e; 0x31
             ],
-            { ch with client_version = TLS_1_X 4 ;
+            { ch with client_version = Supported TLS_1_3 ;
                       client_random = list_to_cstruct [ 0xf1; 0xb2; 0x50; 0x16; 0x4b; 0x77; 0x50; 0xb3; 0xdc; 0xcb; 0x1c; 0x6a; 0xae; 0x1a; 0x94; 0x87; 0xc4; 0x17; 0xbb; 0xa4; 0xf7; 0x92; 0xf8; 0x16; 0x56; 0x12; 0x03; 0x38; 0x1e; 0xe5; 0xc1; 0xae ] ;
                       ciphersuites = Packet.([TLS_RSA_WITH_AES_256_CBC_SHA ; TLS_DHE_RSA_WITH_AES_256_CBC_SHA ; TLS_RSA_WITH_AES_128_CBC_SHA ; TLS_DHE_RSA_WITH_AES_128_CBC_SHA ; TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA ; TLS_RSA_WITH_3DES_EDE_CBC_SHA ; TLS_RSA_WITH_RC4_128_SHA ; TLS_RSA_WITH_RC4_128_MD5]) ;
                       extensions = [ `SecureRenegotiation (Cstruct.create 0) ;
@@ -1378,72 +1378,71 @@ let bad_client_hellos =
   (* I rolled the dice 16 times *)
   let rnd = [ 0; 1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15 ] in
   let rand = rnd @ rnd in
-  [
-    (* versions *)
-    [1; 0; 0; 38; 4; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] ;
-    (* invalid length *)
-    [1; 0; 0; 39; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] ;
-    (* should be broken as well due to missing compression_algos *)
-    [1; 0; 0; 38; 3; 3] @ rand @ [(* session id *) 1; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] ;
+  Core.([
+      (* versions *)
+      [1; 0; 0; 38; 4; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] ;
+      (* invalid length *)
+      [1; 0; 0; 39; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] ;
+      (* should be broken as well due to missing compression_algos *)
+      [1; 0; 0; 38; 3; 3] @ rand @ [(* session id *) 1; (* cipher *) 0; 0; (* comp *) 0; (* exts *)] ;
 
-    (* ciphersuites *)
-    [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 1; 0; 0; (* comp *) 0; (* exts *)] ;
-    [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 3; 0; 0; (* comp *) 0; (* exts *)] ;
-    [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 1; 3; 0; 0; (* comp *) 0; (* exts *)] ;
+      (* ciphersuites *)
+      [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 1; 0; 0; (* comp *) 0; (* exts *)] ;
+      [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 3; 0; 0; (* comp *) 0; (* exts *)] ;
+      [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 1; 3; 0; 0; (* comp *) 0; (* exts *)] ;
 
-    (* extensions *)
-    (* empty *)
-    [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 1] ;
+      (* extensions *)
+      (* empty *)
+      [1; 0; 0; 40; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 1] ;
 
-    (* some hostname *)
-    [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 6; 0; 0; 4; 102; 111; 111] ;
-    [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 6; 0; 0; 4; 102; 111; 111; 111] ;
-    [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 7; 0; 0; 4; 102; 111; 111; 111] ;
-    [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 9; 0; 7; 0; 0; 4; 102; 111; 111; 111] ;
-    [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 13; 0; 0; 0; 9; 0; 7; 0; 0; 4; 102; 111; 111; 111] ;
-    [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 5; 0; 0; 2; 102; 111; 111] ;
+      (* some hostname *)
+      [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 6; 0; 0; 4; 102; 111; 111] ;
+      [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 6; 0; 0; 4; 102; 111; 111; 111] ;
+      [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 7; 0; 0; 4; 102; 111; 111; 111] ;
+      [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 9; 0; 7; 0; 0; 4; 102; 111; 111; 111] ;
+      [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 13; 0; 0; 0; 9; 0; 7; 0; 0; 4; 102; 111; 111; 111] ;
+      [1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 0; 0; 8; 0; 5; 0; 0; 2; 102; 111; 111] ;
 
-    (* multiple hostnames - legal in RFC, not accepted by any implementation *)
-    [1; 0; 0; 58; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 18; 0; 0; 0; 14; 0; 12; 0; 0; 3; 102; 111; 111; 0; 0; 3; 98; 97; 114] ;
+      (* multiple hostnames - legal in RFC, not accepted by any implementation *)
+      [1; 0; 0; 58; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 18; 0; 0; 0; 14; 0; 12; 0; 0; 3; 102; 111; 111; 0; 0; 3; 98; 97; 114] ;
 
-    (* empty EllipticCurves *)
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xA; 0; 1; 0; 0] ;
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xA; 0; 2; 0; 0] ;
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xA; 0; 2; 0; 1] ;
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 0xA; 0; 3; 0; 1; 0] ;
-    [1; 0; 0; 50; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 10; 0; 0xA; 0; 6; 0; 2; 0; 25; 0; 20] ;
+      (* empty SupportedGroups *)
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xA; 0; 1; 0; 0] ;
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xA; 0; 2; 0; 0] ;
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xA; 0; 2; 0; 1] ;
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 0xA; 0; 3; 0; 1; 0] ;
+      [1; 0; 0; 50; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 10; 0; 0xA; 0; 6; 0; 2; 0; 25; 0; 20] ;
 
-    (* empty ECPointFormats *)
-    [1; 0; 0; 45; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xB; 0; 1; 3] ;
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xB; 0; 1; 3; 1] ;
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xB; 0; 1; 3; 1] ;
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 0xB; 0; 3; 1; 0; 1] ;
+      (* empty ECPointFormats *)
+      [1; 0; 0; 45; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xB; 0; 1; 3] ;
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 0xB; 0; 1; 3; 1] ;
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 0xB; 0; 1; 3; 1] ;
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 0xB; 0; 3; 1; 0; 1] ;
 
-    (* secure renegotiation *)
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0xFF; 1; 0; 5; 2; 1; 2] ;
-    [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0xFF; 1; 0; 5; 2; 1; 2; 3; 4] ;
-    [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0xFF; 1; 0; 3; 2; 1; 2; 3; 4] ;
-    [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0xFF; 1; 0; 5; 10; 1; 2; 3; 4] ;
-    [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0xFF; 1; 0; 5; 2; 1; 2; 3; 4] ;
+      (* secure renegotiation *)
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0xFF; 1; 0; 5; 2; 1; 2] ;
+      [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0xFF; 1; 0; 5; 2; 1; 2; 3; 4] ;
+      [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0xFF; 1; 0; 3; 2; 1; 2; 3; 4] ;
+      [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0xFF; 1; 0; 5; 10; 1; 2; 3; 4] ;
+      [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0xFF; 1; 0; 5; 2; 1; 2; 3; 4] ;
 
-    (* max fragment length *)
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 1; 0; 2; 3; 4] ;
-    [1; 0; 0; 44; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 4; 0; 1; 0; 0] ;
-    [1; 0; 0; 45; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 1; 0; 1; 42] ;
+      (* max fragment length *)
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 1; 0; 2; 3; 4] ;
+      [1; 0; 0; 44; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 4; 0; 1; 0; 0] ;
+      [1; 0; 0; 45; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 5; 0; 1; 0; 1; 42] ;
 
+      (* Padding *)
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 3; 1; 2; 3] ;
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 5; 0; 0; 0] ;
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0; 21; 0; 5; 0; 0; 0] ;
+      [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0; 21; 0; 5; 0; 0; 0] ;
+      [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 3; 0; 0; 0] ;
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 2; 0; 0; 0] ;
 
-    (* Padding *)
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 3; 1; 2; 3] ;
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 5; 0; 0; 0] ;
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0; 21; 0; 5; 0; 0; 0] ;
-    [1; 0; 0; 49; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 9; 0; 21; 0; 5; 0; 0; 0] ;
-    [1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 3; 0; 0; 0] ;
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 21; 0; 2; 0; 0; 0] ;
-
-    (* sig hash *)
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 13; 0; 3; 0; 1; 0] ;
-    [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 13; 0; 3; 0; 0; 0] ;
-  ]
+      (* sig hash *)
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 13; 0; 3; 0; 1; 0] ;
+      [1; 0; 0; 47; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 7; 0; 13; 0; 3; 0; 0; 0] ;
+    ])
 
 let bad_client_hello_parser xs _ =
   let buf = list_to_cstruct xs in

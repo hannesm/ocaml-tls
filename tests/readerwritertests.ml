@@ -380,13 +380,13 @@ let rw_handshake_client_hello_vals =
           ClientHello { ch with extensions = [ `Hostname "foobar" ] } ;
           ClientHello { ch with extensions = [ `Hostname "foobarblubb" ] } ;
 
-          ClientHello { ch with extensions = [ `Hostname "foobarblubb" ; `EllipticCurves Packet.([SECP521R1; SECP384R1]) ] } ;
+          ClientHello { ch with extensions = [ `Hostname "foobarblubb" ; `SupportedGroups Packet.([SECP521R1; SECP384R1]) ] } ;
 
           ClientHello { ch with extensions = [ `ALPN ["h2"; "http/1.1"] ] } ;
 
           ClientHello { ch with extensions = [
                              `Hostname "foobarblubb" ;
-                             `EllipticCurves Packet.([SECP521R1; SECP384R1]) ;
+                             `SupportedGroups Packet.([SECP521R1; SECP384R1]) ;
                              `ECPointFormats Packet.([UNCOMPRESSED ; ANSIX962_COMPRESSED_PRIME ;   ANSIX962_COMPRESSED_CHAR2 ]) ;
                              `SignatureAlgorithms [(`MD5, Packet.RSA)] ;
                              `ALPN ["h2"; "http/1.1"]
@@ -402,7 +402,7 @@ let rw_handshake_client_hello_vals =
                         sessionid = (Some client_random) ;
                         extensions = [
                              `Hostname "foobarblubb" ;
-                             `EllipticCurves Packet.([SECP521R1; SECP384R1]) ;
+                             `SupportedGroups Packet.([SECP521R1; SECP384R1]) ;
                              `ECPointFormats Packet.([UNCOMPRESSED ; ANSIX962_COMPRESSED_PRIME ;   ANSIX962_COMPRESSED_CHAR2 ]) ;
                              `SignatureAlgorithms [(`SHA1, Packet.ANONYMOUS); (`MD5, Packet.RSA)] ;
                              `ALPN ["h2"; "http/1.1"]
@@ -413,7 +413,7 @@ let rw_handshake_client_hello_vals =
                         sessionid = (Some client_random) ;
                         extensions = [
                              `Hostname "foobarblubb" ;
-                             `EllipticCurves Packet.([SECP521R1; SECP384R1]) ;
+                             `SupportedGroups Packet.([SECP521R1; SECP384R1]) ;
                              `ECPointFormats Packet.([UNCOMPRESSED ; ANSIX962_COMPRESSED_PRIME ;   ANSIX962_COMPRESSED_CHAR2 ]) ;
                              `SignatureAlgorithms [(`MD5, Packet.ANONYMOUS); (`SHA1, Packet.RSA)] ;
                              `SecureRenegotiation client_random ;
