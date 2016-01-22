@@ -32,6 +32,7 @@ type config = {
   session_cache     : session_cache ;
   cached_session    : epoch_data option ;
   alpn_protocols    : string list ;
+  groups            : group list ;
 } [@@deriving sexp]
 
 module Ciphers = struct
@@ -83,9 +84,13 @@ let min_rsa_key_size = 1024
 
 let dh_group = Dh.Group.ffdhe2048 (* ff-dhe draft 2048-bit group *)
 
+let supported_groups =
+  let open Dh.Group in
+  [ ffdhe8192 ; ffdhe6144 ; ffdhe4096 ; ffdhe3072 ; ffdhe2048 ]
+
 let default_config = {
   ciphers           = Ciphers.default ;
-  protocol_versions = (TLS_1_0, TLS_1_2) ;
+  protocol_versions = (TLS_1_0, TLS_1_3) ;
   hashes            = default_hashes ;
   use_reneg         = false ;
   authenticator     = None ;
@@ -95,6 +100,7 @@ let default_config = {
   session_cache     = (fun _ -> None) ;
   cached_session    = None ;
   alpn_protocols    = [] ;
+  groups            = supported_groups ;
 }
 
 let invalid msg = invalid_arg ("Tls.Config: invalid configuration: " ^ msg)
@@ -103,12 +109,11 @@ let validate_common config =
   let (v_min, v_max) = config.protocol_versions in
   if v_max < v_min then invalid "bad version range" ;
   ( match config.hashes with
-    | [] when v_max >= TLS_1_2                          ->
+    | [] when v_max >= TLS_1_2 ->
        invalid "TLS 1.2 configured but no hashes provided"
     | hs when not (List_set.subset hs supported_hashes) ->
        invalid "Some hash algorithms are not supported"
-    | _                                                 ->
-       () ) ;
+    | _ -> () ) ;
   if not (List_set.is_proper_set config.ciphers) then
     invalid "set of ciphers is not a proper set" ;
   if List.length config.ciphers = 0 then
@@ -229,7 +234,7 @@ let with_acceptable_cas conf acceptable_cas = { conf with acceptable_cas }
 let (<?>) ma b = match ma with None -> b | Some a -> a
 
 let client
-  ~authenticator ?peer_name ?ciphers ?version ?hashes ?reneg ?certificates ?cached_session ?alpn_protocols () =
+  ~authenticator ?peer_name ?ciphers ?version ?hashes ?reneg ?certificates ?cached_session ?alpn_protocols ?groups () =
   let config =
     { default_config with
         authenticator     = Some authenticator ;
@@ -241,11 +246,12 @@ let client
         peer_name         = peer_name ;
         cached_session    = cached_session ;
         alpn_protocols    = alpn_protocols <?> default_config.alpn_protocols ;
+        groups            = groups        <?> default_config.groups ;
     } in
   ( validate_common config ; validate_client config ; config )
 
 let server
-  ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?alpn_protocols () =
+  ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?alpn_protocols ?groups () =
   let config =
     { default_config with
         ciphers           = ciphers        <?> default_config.ciphers ;
@@ -257,5 +263,6 @@ let server
         authenticator     = authenticator ;
         session_cache     = session_cache  <?> default_config.session_cache ;
         alpn_protocols    = alpn_protocols <?> default_config.alpn_protocols ;
+        groups            = groups         <?> default_config.groups ;
     } in
   ( validate_common config ; validate_server config ; config )
