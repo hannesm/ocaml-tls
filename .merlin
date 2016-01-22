@@ -10,5 +10,6 @@ PKG oUnit cstruct.unix
 PKG lwt lwt.unix str nocrypto.lwt
 PKG mirage-flow mirage-kv mirage-clock ptime
 PKG mirage-types mirage-types
+PKG hkdf
 
 FLG -safe-string -w +A-4-9-41-42-44-45

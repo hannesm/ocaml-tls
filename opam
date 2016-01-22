@@ -33,6 +33,7 @@ depends: [
   "x509" {>= "0.9.0"}
   "domain-name" {>= "0.3.0"}
   "fmt"
+  "hkdf"
   "cstruct-unix" {with-test & >= "3.0.0"}
   "ounit" {with-test}
 ]
