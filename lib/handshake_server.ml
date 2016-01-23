@@ -384,10 +384,11 @@ let answer_client_hello state (ch : client_hello) raw =
        `Record (Packet.HANDSHAKE, fin_raw)])
   in
 
-  let process_client_hello config ch =
+  let process_client_hello config ch version =
     let cciphers = ch.ciphersuites in
-    guard (client_hello_valid ch) (`Fatal `InvalidClientHello) >>= fun () ->
-    agreed_version config.protocol_versions ch.client_version >>= fun version ->
+    (match client_hello_valid ch with
+     | `Ok -> return ()
+     | `Error e -> fail (`Fatal (`InvalidClientHello e))) >>= fun () ->
     guard (not (List.mem Packet.TLS_FALLBACK_SCSV cciphers) ||
            version = max_protocol_version config.protocol_versions)
       (`Fatal `InappropriateFallback) >>= fun () ->
@@ -396,14 +397,17 @@ let answer_client_hello state (ch : client_hello) raw =
 
     (* Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version version ; *)
 
-    version
+    ()
   in
 
-  process_client_hello state.config ch >>= fun protocol_version ->
-  let state = { state with protocol_version } in
-  match resume ch state with
-  | None -> answer_client_hello_common state None ch raw
-  | Some session -> answer_resumption session state
+  agreed_version state.config.protocol_versions ch.client_version >>= function
+   | TLS_1_0 | TLS_1_1 | TLS_1_2 as protocol_version ->
+     process_client_hello state.config ch protocol_version >>= fun () ->
+     let state = { state with protocol_version } in
+     (match resume ch state with
+      | None -> answer_client_hello_common state None ch raw
+      | Some session -> answer_resumption session state)
+   | TLS_1_3 -> Handshake_server13.answer_client_hello state ch raw
 
 let answer_client_hello_reneg state (ch : client_hello) raw =
   (* ensure reneg allowed and supplied *)
@@ -414,7 +418,9 @@ let answer_client_hello_reneg state (ch : client_hello) raw =
   in
 
   let process_client_hello config oldversion ours ch =
-    guard (client_hello_valid ch) (`Fatal `InvalidClientHello) >>= fun () ->
+    (match client_hello_valid ch with
+     | `Ok -> return ()
+     | `Error x -> fail (`Fatal (`InvalidClientHello x))) >>= fun () ->
     agreed_version config.protocol_versions ch.client_version >>= fun version ->
     guard (version = oldversion) (`Fatal (`InvalidRenegotiationVersion version)) >>= fun () ->
     let theirs = get_secure_renegotiation ch.extensions in

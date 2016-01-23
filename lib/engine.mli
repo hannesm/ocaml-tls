@@ -63,10 +63,25 @@ type error = [
   | `CouldntSelectCertificate
 ]
 
+type client_hello_errors = [
+  | `EmptyCiphersuites
+  | `NotSetCiphersuites of Packet.any_ciphersuite list
+  | `NoSupportedCiphersuite of Packet.any_ciphersuite list
+  | `NotSetExtension of Core.client_extension list
+  | `HasSignatureAlgorithmsExtension
+  | `NoSignatureAlgorithmsExtension
+  | `NoGoodSignatureAlgorithms of (Nocrypto.Hash.hash * Packet.signature_algorithm_type) list
+  | `NoKeyShareExtension
+  | `NoSupportedGroupExtension
+  | `NotSetSupportedGroup of Packet.named_group list
+  | `NotSetKeyShare of (Packet.named_group * Cstruct.t) list
+  | `NotSubsetKeyShareSupportedGroup of (Packet.named_group list * (Packet.named_group * Cstruct.t) list)
+]
+
 (** failures from received garbage or lack of features *)
 type fatal = [
   | `NoSecureRenegotiation
-  | `NoCiphersuite of Packet.any_ciphersuite list
+  | `NoSupportedGroup
   | `NoVersion of Core.tls_any_version
   | `ReaderError of Reader.error
   | `NoCertificateReceived
@@ -89,7 +104,7 @@ type fatal = [
   | `HandshakeFragmentsNotEmpty
   | `InvalidDH
   | `InvalidRenegotiation
-  | `InvalidClientHello
+  | `InvalidClientHello of client_hello_errors
   | `InvalidServerHello
   | `InvalidRenegotiationVersion of Core.tls_version
   | `InappropriateFallback
