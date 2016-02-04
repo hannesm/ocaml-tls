@@ -645,4 +645,6 @@ let epoch state =
         session_id             = session.session_id ;
         extended_ms            = session.extended_ms ;
         alpn_protocol          = session.alpn_protocol ;
+        resumption_secret      = session.resumption_secret ;
+        psk_id                 = session.psk_id ;
       }

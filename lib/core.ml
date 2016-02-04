@@ -76,6 +76,13 @@ module SessionID = struct
   let equal = Cstruct.equal
 end
 
+module PreSharedKeyID = struct
+  type t = Cstruct.t [@@deriving sexp]
+  let compare = Cstruct.compare
+  let hash t = Hashtbl.hash (Cstruct.to_bigarray t)
+  let equal = Cstruct.equal
+end
+
 type early_data = {
   configuration_id : Cstruct.t ;
   ciphersuite : ciphersuite ;
@@ -232,4 +239,6 @@ type epoch_data = {
   session_id             : SessionID.t ;
   extended_ms            : bool ;
   alpn_protocol          : string option ;
+  resumption_secret      : Cstruct.t ;
+  psk_id                 : PreSharedKeyID.t ;
 } [@@deriving sexp]

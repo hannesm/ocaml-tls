@@ -45,6 +45,8 @@ let empty_session = {
   session_id             = Cstruct.create 0 ;
   extended_ms            = false ;
   alpn_protocol          = None ;
+  resumption_secret      = Cstruct.create 0 ;
+  psk_id                 = Cstruct.create 0 ;
 }
 
 let session_of_epoch (epoch : epoch_data) : session_data = {
@@ -61,6 +63,8 @@ let session_of_epoch (epoch : epoch_data) : session_data = {
   session_id = epoch.session_id ;
   extended_ms = epoch.extended_ms ;
   alpn_protocol = epoch.alpn_protocol ;
+  resumption_secret = epoch.resumption_secret ;
+  psk_id = epoch.psk_id ;
 }
 
 let supported_protocol_version (min, max) v =
