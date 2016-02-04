@@ -31,6 +31,10 @@ module DN = struct
   let sexp_of_t _ = Sexplib.Sexp.Atom "distinguished name"
 end
 
+type psk_cache = PreSharedKeyID.t -> epoch_data option
+let psk_cache_of_sexp _ = fun _ -> None
+let sexp_of_psk_cache _ = Sexplib.Sexp.Atom "PSK_CACHE"
+
 type config = {
   ciphers           : Ciphersuite.ciphersuite list ;
   protocol_versions : tls_version * tls_version ;
@@ -42,6 +46,7 @@ type config = {
   own_certificates  : own_cert ;
   acceptable_cas    : DN.t list ;
   session_cache     : session_cache ;
+  psk_cache         : psk_cache ;
   cached_session    : epoch_data option ;
   alpn_protocols    : string list ;
   groups            : group list ;
@@ -52,7 +57,14 @@ module Ciphers = struct
   (* A good place for various pre-baked cipher lists and helper functions to
    * slice and groom those lists. *)
 
-  let default = [
+  let psk = [
+    `TLS_PSK_WITH_AES_256_GCM_SHA384 ;
+    `TLS_PSK_WITH_AES_128_GCM_SHA256 ;
+    `TLS_PSK_WITH_AES_128_CCM ;
+    `TLS_PSK_WITH_AES_256_CCM ;
+  ]
+
+  let default = psk @ [
     `TLS_DHE_RSA_WITH_AES_256_CCM ;
     `TLS_DHE_RSA_WITH_AES_128_CCM ;
     `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 ;
@@ -82,6 +94,7 @@ module Ciphers = struct
 
   let fs = fs_of default
 
+  let psk_of = List.filter Ciphersuite.ciphersuite_psk
 end
 
 let default_hashes =
@@ -113,6 +126,7 @@ let default_config = {
   cached_session    = None ;
   alpn_protocols    = [] ;
   groups            = supported_groups ;
+  psk_cache         = (fun _ -> None) ;
 }
 
 let invalid msg = invalid_arg ("Tls.Config: invalid configuration: " ^ msg)
@@ -260,7 +274,7 @@ let client
   ( validate_common config ; validate_client config ; config )
 
 let server
-  ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?alpn_protocols ?groups () =
+  ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups () =
   let config =
     { default_config with
         ciphers           = ciphers        <?> default_config.ciphers ;
@@ -272,6 +286,7 @@ let server
         authenticator     = authenticator ;
         session_cache     = session_cache  <?> default_config.session_cache ;
         alpn_protocols    = alpn_protocols <?> default_config.alpn_protocols ;
+        psk_cache         = psk_cache      <?> default_config.psk_cache ;
         groups            = groups         <?> default_config.groups ;
     } in
   ( validate_common config ; validate_server config ; config )
