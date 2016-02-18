@@ -195,15 +195,17 @@ module Unix = struct
       | None -> config
       | Some host -> Tls.Config.peer config host
     in
-    let (tls, init) = Tls.Engine.client config' in
     let t = {
-      state  = `Active tls ;
+      state  = `Eof ;
       fd     = fd ;
       linger = None ;
       tracer = trace ;
     } in
+    let (tls, init) = tracing t @@ fun () -> Tls.Engine.client config' in
+    let t = { t with state  = `Active tls } in
     write_t t init >>= fun () ->
     drain_handshake t
+
 
 
   let accept ?trace conf fd =
