@@ -94,6 +94,7 @@ let to_client_ext_type = function
   | `KeyShare _            -> `KeyShare
   | `EarlyDataIndication _ -> `EarlyDataIndication
   | `PreSharedKey _        -> `PreSharedKey
+  | `Draft _               -> `Draft
 
 let to_server_ext_type = function
   | `Hostname              -> `Hostname
@@ -106,6 +107,7 @@ let to_server_ext_type = function
   | `KeyShare _            -> `KeyShare
   | `EarlyDataIndication   -> `EarlyDataIndication
   | `PreSharedKey _        -> `PreSharedKey
+  | `Draft _               -> `Draft
 
 let extension_types t exts = List.(
   exts |> map t
