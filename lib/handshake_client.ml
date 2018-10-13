@@ -149,9 +149,9 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
 
   let state = { state with protocol_version = sh.server_version } in
   match sh.server_version with
-  | TLS_1_3 -> Handshake_client13.answer_server_hello state ch sh secrets raw (Cs.appends log)
+  | TLS_1_3 ->
+    Handshake_client13.answer_server_hello state ch sh secrets raw (Cs.appends log)
   | TLS_1_0 | TLS_1_1 | TLS_1_2 ->
-    validate_reneg (get_secure_renegotiation sh.extensions) >|= fun () ->
     match state.config.cached_session with
     | Some epoch when epoch_matches epoch ->
        let session = session_of_epoch epoch in
@@ -166,7 +166,7 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
          Handshake_crypto.initialise_crypto_ctx sh.server_version session
        in
        let machina = AwaitServerChangeCipherSpecResume (session, client_ctx, server_ctx, log @ [raw]) in
-       ({ state with machina = Client machina }, [])
+       Ok ({ state with machina = Client machina }, [])
     | _ ->
        let machina =
          let cipher = sh.ciphersuite in
@@ -188,7 +188,7 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
                       | RSA     -> AwaitCertificate_RSA (session, log @ [raw])
                       | DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
        in
-       ({ state with machina = Client machina }, [])
+       Ok ({ state with machina = Client machina }, [])
 
 let answer_server_hello_renegotiate state session (ch : client_hello) sh raw log =
   common_server_hello_validation state.config (Some session.renegotiation) sh ch >>= fun () ->
@@ -320,7 +320,7 @@ let answer_server_hello_done state session sigalgs kex premaster raw log =
        return ([cert ; kex], [ccert ; ckex], log @ [ raw ; ccert ; ckex ], None)
     | false, _ ->
        return ([kex], [ckex], log @ [ raw ; ckex ], None) )
-  >|= fun (_msgs, raw_msgs, raws, cert_verify) ->
+  >|= fun (msgs, raw_msgs, raws, cert_verify) ->
 
   let to_fin = raws @ option [] (fun x -> [x]) cert_verify in
 

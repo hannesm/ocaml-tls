@@ -227,7 +227,7 @@ let answer_client_hello_common state reneg ch raw =
       | Some x -> return x
       | None   -> match first_match cciphers Config.Ciphers.supported with
         | Some _ -> fail (`Error (`NoConfiguredCiphersuite cciphers))
-        | None -> fail (`Fatal (`NoCiphersuite ch.ciphersuites)) ) >>= fun cipher ->
+        | None -> fail (`Fatal (`InvalidClientHello (`NoSupportedCiphersuite ch.ciphersuites))) ) >>= fun cipher ->
 
     let extended_ms = List.mem `ExtendedMasterSecret ch.extensions in
 
