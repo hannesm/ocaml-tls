@@ -689,12 +689,10 @@ let parse_handshake = catch @@ fun buf ->
     | Some CERTIFICATE_REQUEST -> CertificateRequest payload
     | Some CLIENT_KEY_EXCHANGE -> parse_client_key_exchange payload
     | Some FINISHED -> Finished payload
-    | Some HELLO_RETRY_REQUEST -> let hrr = parse_hello_retry_request payload in
-                                  HelloRetryRequest hrr
     | Some SERVER_CONFIGURATION -> let sc = parse_server_configuration payload in
                                    ServerConfiguration sc
     | Some ENCRYPTED_EXTENSIONS -> let ee = parse_extensions parse_server_extension payload in
                                    EncryptedExtensions ee
     | Some KEY_UPDATE -> if len payload <> 0 then raise_trailing_bytes "key update" else KeyUpdate
     | Some SESSION_TICKET -> SessionTicket payload
-    | _  -> raise_unknown @@ "handshake type" ^ string_of_int typ
+    | None  -> raise_unknown @@ "handshake type" ^ string_of_int typ
