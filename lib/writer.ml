@@ -401,7 +401,6 @@ let assemble_handshake hs =
     | EncryptedExtensions ee ->
        let cs = assemble_extensions assemble_server_extension ee in
        (cs, ENCRYPTED_EXTENSIONS)
-    | HelloRetryRequest hrr -> (assemble_hello_retry_request hrr, HELLO_RETRY_REQUEST)
     | ServerConfiguration sc -> (assemble_server_config sc, SERVER_CONFIGURATION)
     | KeyUpdate -> (create 0, KEY_UPDATE)
   in

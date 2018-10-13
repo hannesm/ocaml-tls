@@ -75,7 +75,7 @@ type handshake_type =
   | SERVER_HELLO         [@id 2]
   | HELLO_VERIFY_REQUEST [@id 3] (*RFC6347*)
   | SESSION_TICKET       [@id 4] (*RFC4507, TLS 1.3*)
-  | HELLO_RETRY_REQUEST  [@id 6] (*TLS 1.3*)
+  | END_OF_EARLY_DATA    [@id 5] (*TLS 1.3*)
   | ENCRYPTED_EXTENSIONS [@id 8] (*TLS 1.3*)
   | CERTIFICATE          [@id 11]
   | SERVER_KEY_EXCHANGE  [@id 12]
@@ -89,6 +89,7 @@ type handshake_type =
   | CERTIFICATE_STATUS   [@id 22] (*RFC4366*)
   | SUPPLEMENTAL_DATA    [@id 23] (*RFC4680*)
   | KEY_UPDATE           [@id 24] (*TLS 1.3*)
+  | MESSAGE_HASH         [@id 254] (*TLS 1.3*)
   [@@uint8_t] [@@sexp]
 ]
 
