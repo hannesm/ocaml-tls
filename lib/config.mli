@@ -82,8 +82,8 @@ val server :
   ?acceptable_cas : X509.distinguished_name list ->
   ?authenticator  : X509.Authenticator.a ->
   ?session_cache  : session_cache ->
-  ?alpn_protocols : string list ->
   ?psk_cache      : psk_cache ->
+  ?alpn_protocols : string list ->
   ?groups         : Dh.group list ->
   unit -> server
 

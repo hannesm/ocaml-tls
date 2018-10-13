@@ -63,6 +63,7 @@ let alert_of_fatal = function
   | `InvalidClientHello _ -> Packet.HANDSHAKE_FAILURE
   | `InappropriateFallback -> Packet.INAPPROPRIATE_FALLBACK
   | `NoApplicationProtocol -> Packet.NO_APPLICATION_PROTOCOL
+  | `HelloRetryRequest -> Packet.HANDSHAKE_FAILURE (* TODO check *)
   | `InvalidMessage -> Packet.HANDSHAKE_FAILURE
 
 let alert_of_failure = function

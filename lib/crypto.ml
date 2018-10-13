@@ -1,5 +1,6 @@
 
 open Nocrypto
+open Nocrypto.Uncommon
 
 open Ciphersuite
 
