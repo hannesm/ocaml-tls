@@ -89,6 +89,11 @@ let validate_alert (lvl, typ) =
   | WARNING, RECORD_OVERFLOW -> raise_unknown "record_overflow must always be fatal"
   | WARNING, DECOMPRESSION_FAILURE -> raise_unknown "decompression_failure must always be fatal"
   | WARNING, HANDSHAKE_FAILURE -> raise_unknown "handshake_failure must always be fatal"
+  | WARNING, BAD_CERTIFICATE -> raise_unknown "bad_certificate must always be fatal"
+  | WARNING, UNSUPPORTED_CERTIFICATE -> raise_unknown "unsupported_certificate must always be fatal"
+  | WARNING, CERTIFICATE_REVOKED -> raise_unknown "certificate_revoked must always be fatal"
+  | WARNING, CERTIFICATE_UNKNOWN -> raise_unknown "certificate_unknown must always be fatal"
+  | WARNING, ILLEGAL_PARAMETER -> raise_unknown "illegal_parameter must always be fatal"
   | WARNING, UNKNOWN_CA -> raise_unknown "unknown_ca must always be fatal"
   | WARNING, ACCESS_DENIED -> raise_unknown "access_denied must always be fatal"
   | WARNING, DECODE_ERROR -> raise_unknown "decode_error must always be fatal"
@@ -96,13 +101,18 @@ let validate_alert (lvl, typ) =
   | WARNING, PROTOCOL_VERSION -> raise_unknown "protocol_version must always be fatal"
   | WARNING, INSUFFICIENT_SECURITY -> raise_unknown "insufficient_security must always be fatal"
   | WARNING, INTERNAL_ERROR -> raise_unknown "internal_error must always be fatal"
+  | WARNING, INAPPROPRIATE_FALLBACK -> raise_unknown "inappropriate_fallback must always be fatal"
   | WARNING, MISSING_EXTENSION -> raise_unknown "missing_extension must always be fatal"
   | WARNING, UNSUPPORTED_EXTENSION -> raise_unknown "unsupported_extension must always be fatal"
+  | WARNING, UNRECOGNIZED_NAME -> raise_unknown "unrecognized_name must always be fatal"
+  | WARNING, BAD_CERTIFICATE_STATUS_RESPONSE -> raise_unknown "bad_certificate_status_response must always be fatal"
+  | WARNING, UNKNOWN_PSK_IDENTITY -> raise_unknown "unknown_psk_identity must always be fatal"
+  | WARNING, CERTIFICATE_REQUIRED -> raise_unknown "certificate_required must always be fatal"
+  | WARNING, NO_APPLICATION_PROTOCOL -> raise_unknown "no_application_protocol must always be fatal"
 
   (* those are always warnings *)
   | FATAL, USER_CANCELED -> raise_unknown "user_canceled must always be a warning"
   | FATAL, NO_RENEGOTIATION -> raise_unknown "no_renegotiation must always be a warning"
-  | FATAL, END_OF_EARLY_DATA -> raise_unknown "end_of_early_data must always be a warning"
 
   | lvl, typ -> (lvl, typ)
 
@@ -689,8 +699,6 @@ let parse_handshake = catch @@ fun buf ->
     | Some CERTIFICATE_REQUEST -> CertificateRequest payload
     | Some CLIENT_KEY_EXCHANGE -> parse_client_key_exchange payload
     | Some FINISHED -> Finished payload
-    | Some SERVER_CONFIGURATION -> let sc = parse_server_configuration payload in
-                                   ServerConfiguration sc
     | Some ENCRYPTED_EXTENSIONS -> let ee = parse_extensions parse_server_extension payload in
                                    EncryptedExtensions ee
     | Some KEY_UPDATE -> if len payload <> 0 then raise_trailing_bytes "key update" else KeyUpdate

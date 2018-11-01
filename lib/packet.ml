@@ -31,7 +31,6 @@ type alert_level =
 [%%cenum
 type alert_type =
   | CLOSE_NOTIFY                    [@id 0]   (*RFC5246*)
-  | END_OF_EARLY_DATA               [@id 1]   (*TLS 1.3*)
   | UNEXPECTED_MESSAGE              [@id 10]  (*RFC5246*)
   | BAD_RECORD_MAC                  [@id 20]  (*RFC5246*)
   | DECRYPTION_FAILED               [@id 21]  (*RFC5246*)
@@ -56,13 +55,14 @@ type alert_type =
   | INAPPROPRIATE_FALLBACK          [@id 86]  (*draft-ietf-tls-downgrade-scsv*)
   | USER_CANCELED                   [@id 90]  (*RFC5246*)
   | NO_RENEGOTIATION                [@id 100] (*RFC5246*)
-  | MISSING_EXTENSION               [@id 109] (*TLS 1.3*)
+  | MISSING_EXTENSION               [@id 109] (*RFC8446*)
   | UNSUPPORTED_EXTENSION           [@id 110] (*RFC5246*)
   | CERTIFICATE_UNOBTAINABLE        [@id 111] (*RFC6066*)
   | UNRECOGNIZED_NAME               [@id 112] (*RFC6066*)
   | BAD_CERTIFICATE_STATUS_RESPONSE [@id 113] (*RFC6066*)
   | BAD_CERTIFICATE_HASH_VALUE      [@id 114] (*RFC6066*)
   | UNKNOWN_PSK_IDENTITY            [@id 115] (*RFC4279*)
+  | CERTIFICATE_REQUIRED            [@id 116] (*RFC8446*)
   | NO_APPLICATION_PROTOCOL         [@id 120] (*RFC7301*)
   [@@uint8_t] [@@sexp]
 ]
@@ -74,22 +74,21 @@ type handshake_type =
   | CLIENT_HELLO         [@id 1]
   | SERVER_HELLO         [@id 2]
   | HELLO_VERIFY_REQUEST [@id 3] (*RFC6347*)
-  | SESSION_TICKET       [@id 4] (*RFC4507, TLS 1.3*)
-  | END_OF_EARLY_DATA    [@id 5] (*TLS 1.3*)
-  | ENCRYPTED_EXTENSIONS [@id 8] (*TLS 1.3*)
+  | SESSION_TICKET       [@id 4] (*RFC4507, RFC8446*)
+  | END_OF_EARLY_DATA    [@id 5] (*RFC8446*)
+  | ENCRYPTED_EXTENSIONS [@id 8] (*RFC8446*)
   | CERTIFICATE          [@id 11]
   | SERVER_KEY_EXCHANGE  [@id 12]
   | CERTIFICATE_REQUEST  [@id 13]
   | SERVER_HELLO_DONE    [@id 14]
   | CERTIFICATE_VERIFY   [@id 15]
   | CLIENT_KEY_EXCHANGE  [@id 16]
-  | SERVER_CONFIGURATION [@id 17] (*TLS 1.3*)
   | FINISHED             [@id 20]
   | CERTIFICATE_URL      [@id 21] (*RFC4366*)
   | CERTIFICATE_STATUS   [@id 22] (*RFC4366*)
   | SUPPLEMENTAL_DATA    [@id 23] (*RFC4680*)
-  | KEY_UPDATE           [@id 24] (*TLS 1.3*)
-  | MESSAGE_HASH         [@id 254] (*TLS 1.3*)
+  | KEY_UPDATE           [@id 24] (*RFC8446*)
+  | MESSAGE_HASH         [@id 254] (*RFC8446*)
   [@@uint8_t] [@@sexp]
 ]
 
@@ -131,24 +130,39 @@ type extension_type =
   | CLIENT_AUTHZ                           [@id 7]  (*RFC5878*)
   | SERVER_AUTHZ                           [@id 8]  (*RFC5878*)
   | CERT_TYPE                              [@id 9]  (*RFC6091*)
-  | SUPPORTED_GROUPS                       [@id 10] (*RFC4492, TLS 1.3*)
+  | SUPPORTED_GROUPS                       [@id 10] (*RFC4492, RFC8446*)
   | EC_POINT_FORMATS                       [@id 11] (*RFC4492*)
   | SRP                                    [@id 12] (*RFC5054*)
   | SIGNATURE_ALGORITHMS                   [@id 13] (*RFC5246*)
-  | USE_SRP                                [@id 14] (*RFC5764*)
+  | USE_SRTP                               [@id 14] (*RFC5764*)
   | HEARTBEAT                              [@id 15] (*RFC6520*)
   | APPLICATION_LAYER_PROTOCOL_NEGOTIATION [@id 16] (*RFC7301*)
   | STATUS_REQUEST_V2                      [@id 17] (*RFC6961*)
   | SIGNED_CERTIFICATE_TIMESTAMP           [@id 18] (*RFC6962*)
   | CLIENT_CERTIFICATE_TYPE                [@id 19] (*RFC7250*)
   | SERVER_CERTIFICATE_TYPE                [@id 20] (*RFC7250*)
-  | PADDING                                [@id 21] (*draft-ietf-tls-padding*)
+  | PADDING                                [@id 21] (*RFC7685*)
   | ENCRYPT_THEN_MAC                       [@id 22] (*RFC7366*)
-  | EXTENDED_MASTER_SECRET                 [@id 23] (*draft-ietf-tls-session-hash*)
-  | SESSIONTICKET_TLS                      [@id 35] (*RFC4507*)
-  | KEY_SHARE                              [@id 40] (*TLS 1.3*)
-  | PRE_SHARED_KEY                         [@id 41] (*TLS 1.3*)
-  | EARLY_DATA                             [@id 42] (*TLS 1.3*)
+  | EXTENDED_MASTER_SECRET                 [@id 23] (*RFC7627*)
+  | TOKEN_BINDING                          [@id 24] (*RFC8472*)
+  | CACHED_INFO                            [@id 25] (*RFC7924*)
+  | TLS_LTS                                [@id 26] (*draft-gutmann-tls-lts*)
+  | COMPRESSED_CERTIFICATE                 [@id 27] (*draft-ietf-tls-certificate-compression*)
+  | RECORD_SIZE_LIMIT                      [@id 28] (*RFC8449*)
+  | PWD_PROTECT                            [@id 29] (*RFC-harkins-tls-dragonfly-03*)
+  | PWD_CLEAR                              [@id 30] (*RFC-harkins-tls-dragonfly-03*)
+  | PASSWORD_SALT                          [@id 31] (*RFC-harkins-tls-dragonfly-03*)
+  | SESSION_TICKET                         [@id 35] (*RFC4507*)
+  | PRE_SHARED_KEY                         [@id 41] (*RFC8446*)
+  | EARLY_DATA                             [@id 42] (*RFC8446*)
+  | SUPPORTED_VERSIONS                     [@id 43] (*RFC8446*)
+  | COOKIE                                 [@id 44] (*RFC8446*)
+  | PSK_KEY_EXCHANGE_MODES                 [@id 45] (*RFC8446*)
+  | CERTIFICATE_AUTHORITIES                [@id 47] (*RFC8446*)
+  | OID_FILTERS                            [@id 48] (*RFC8446*)
+  | POST_HANDSHAKE_AUTH                    [@id 49] (*RFC8446*)
+  | SIGNATURE_ALGORITHMS_CERT              [@id 50] (*RFC8446*)
+  | KEY_SHARE                              [@id 51] (*RFC8446*)
   | RENEGOTIATION_INFO                     [@id 0xFF01] (*RFC5746*)
   | DRAFT_SUPPORT                          [@id 0xFF02] (*draft*)
   [@@uint16_t] [@@sexp]
@@ -227,49 +241,21 @@ type ec_curve_type =
 
 [%%cenum
 type named_group =
-  | SECT163K1 [@id 1]
-  | SECT163R1 [@id 2]
-  | SECT163R2 [@id 3]
-  | SECT193R1 [@id 4]
-  | SECT193R2 [@id 5]
-  | SECT233K1 [@id 6]
-  | SECT233R1 [@id 7]
-  | SECT239K1 [@id 8]
-  | SECT283K1 [@id 9]
-  | SECT283R1 [@id 10]
-  | SECT409K1 [@id 11]
-  | SECT409R1 [@id 12]
-  | SECT571K1 [@id 13]
-  | SECT571R1 [@id 14]
-  | SECP160K1 [@id 15]
-  | SECP160R1 [@id 16]
-  | SECP160R2 [@id 17]
-  | SECP192K1 [@id 18]
-  | SECP192R1 [@id 19]
-  | SECP224K1 [@id 20]
-  | SECP224R1 [@id 21]
-  | SECP256K1 [@id 22]
+  (* OBSOLETE_RESERVED 0x0001 - 0x0016 *)
   | SECP256R1 [@id 23]
   | SECP384R1 [@id 24]
   | SECP521R1 [@id 25]
-  | BRAINPOOLP256R1 [@id 26] (*RFC7027*)
-  | BRAINPOOLP384R1 [@id 27] (*RFC7027*)
-  | BRAINPOOLP512R1 [@id 28] (*RFC7027*)
-  | ECDH_X25519     [@id 29] (*TLS 1.3*)
-  | ECDH_X448       [@id 30] (*TLS 1.3*)
-  | FFDHE2048       [@id 256] (*TLS 1.3*)
-  | FFDHE3072       [@id 257] (*TLS 1.3*)
-  | FFDHE4096       [@id 258] (*TLS 1.3*)
-  | FFDHE6144       [@id 259] (*TLS 1.3*)
-  | FFDHE8192       [@id 260] (*TLS 1.3*)
-
-  | FFDHE_PRIVATE_USE1 [@id 0x01FC] (*TLS 1.3*)
-  | FFDHE_PRIVATE_USE2 [@id 0x01FD] (*TLS 1.3*)
-  | FFDHE_PRIVATE_USE3 [@id 0x01FE] (*TLS 1.3*)
-  | FFDHE_PRIVATE_USE4 [@id 0x01FF] (*TLS 1.3*)
-  (* reserved / ECDHE_PRIVATE_USE = 0xFE00..0xFEFF*)
-  | ARBITRARY_EXPLICIT_PRIME_CURVES [@id 0xFF01]
-  | ARBITRARY_EXPLICIT_CHAR2_CURVES [@id 0xFF02]
+  (* OBSOLETE_RESERVED 0x001A - 0x001C *)
+  | X25519          [@id 29] (*RFC8446*)
+  | X448            [@id 30] (*RFC8446*)
+  | FFDHE2048       [@id 256] (*RFC8446*)
+  | FFDHE3072       [@id 257] (*RFC8446*)
+  | FFDHE4096       [@id 258] (*RFC8446*)
+  | FFDHE6144       [@id 259] (*RFC8446*)
+  | FFDHE8192       [@id 260] (*RFC8446*)
+  (* FFDHE_PRIVATE_USE 0x01FC - 0x01FF *)
+  (* ECDHE_PRIVATE_USE 0xFE00 - 0xFEFF *)
+  (* OBSOLETE_RESERVED 0xFF01 - 0xFF02 *)
   [@@uint16_t] [@@sexp]
 ]
 
@@ -287,11 +273,7 @@ let ks_len = function
   | FFDHE3072
   | FFDHE4096
   | FFDHE6144
-  | FFDHE8192
-  | FFDHE_PRIVATE_USE1
-  | FFDHE_PRIVATE_USE2
-  | FFDHE_PRIVATE_USE3
-  | FFDHE_PRIVATE_USE4 -> 2
+  | FFDHE8192 -> 2
   | _ -> 1
 
 [%%cenum

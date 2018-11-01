@@ -401,7 +401,6 @@ let assemble_handshake hs =
     | EncryptedExtensions ee ->
        let cs = assemble_extensions assemble_server_extension ee in
        (cs, ENCRYPTED_EXTENSIONS)
-    | ServerConfiguration sc -> (assemble_server_config sc, SERVER_CONFIGURATION)
     | KeyUpdate -> (create 0, KEY_UPDATE)
   in
   let pay_len = len payload in
