@@ -218,7 +218,7 @@ let answer_client_hello state ch raw log =
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
 
     let log = Cstruct.concat [ log ; ee_raw ; cert_raw ] in
-    signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify" log (Some sigalgs) state.config.Config.hashes pr >>= fun signed ->
+    signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify" log (Some sigalgs) state.config.Config.signature_algorithms pr >>= fun signed ->
     let cv = CertificateVerify signed in
     let cv_raw = Writer.assemble_handshake cv in
 

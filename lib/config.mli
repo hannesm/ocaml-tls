@@ -22,19 +22,19 @@ type psk_cache = PreSharedKeyID.t -> epoch_data option
 
 (** configuration parameters *)
 type config = private {
-  ciphers           : Ciphersuite.ciphersuite list ; (** ordered list (regarding preference) of supported cipher suites *)
+  ciphers : Ciphersuite.ciphersuite list ; (** ordered list (regarding preference) of supported cipher suites *)
   protocol_versions : tls_version * tls_version ; (** supported protocol versions (min, max) *)
-  hashes            : Hash.hash list ; (** ordered list of supported hash algorithms (regarding preference) *)
-  use_reneg         : bool ; (** endpoint should accept renegotiation requests *)
-  authenticator     : X509.Authenticator.t option ; (** optional X509 authenticator *)
-  peer_name         : string option ; (** optional name of other endpoint (used for SNI RFC4366) *)
-  own_certificates  : own_cert ; (** optional default certificate chain and other certificate chains *)
-  acceptable_cas    : X509.Distinguished_name.t list ; (** ordered list of acceptable certificate authorities *)
-  session_cache     : session_cache ;
-  psk_cache         : psk_cache ;
-  cached_session    : epoch_data option ;
-  alpn_protocols    : string list ; (** optional ordered list of accepted alpn_protocols *)
-  groups            : group list ;
+  signature_algorithms : signature_algorithm list ; (** ordered list of supported signature algorithms (regarding preference) *)
+  use_reneg : bool ; (** endpoint should accept renegotiation requests *)
+  authenticator : X509.Authenticator.t option ; (** optional X509 authenticator *)
+  peer_name : string option ; (** optional name of other endpoint (used for SNI RFC4366) *)
+  own_certificates : own_cert ; (** optional default certificate chain and other certificate chains *)
+  acceptable_cas : X509.Distinguished_name.t list ; (** ordered list of acceptable certificate authorities *)
+  session_cache : session_cache ;
+  psk_cache : psk_cache ;
+  cached_session : epoch_data option ;
+  alpn_protocols : string list ; (** optional ordered list of accepted alpn_protocols *)
+  groups : group list ;
 }
 
 val config_of_sexp : Sexplib.Sexp.t -> config
@@ -58,33 +58,33 @@ val sexp_of_server : server -> Sexplib.Sexp.t
     [client] configuration with the given parameters.
     @raise Invalid_argument if the configuration is invalid *)
 val client :
-  authenticator   : X509.Authenticator.t ->
-  ?peer_name      : string ->
-  ?ciphers        : Ciphersuite.ciphersuite list ->
-  ?version        : tls_version * tls_version ->
-  ?hashes         : Hash.hash list ->
-  ?reneg          : bool ->
-  ?certificates   : own_cert ->
+  authenticator : X509.Authenticator.t ->
+  ?peer_name : string ->
+  ?ciphers : Ciphersuite.ciphersuite list ->
+  ?version : tls_version * tls_version ->
+  ?signature_algorithms : signature_algorithm list ->
+  ?reneg : bool ->
+  ?certificates : own_cert ->
   ?cached_session : epoch_data ->
   ?alpn_protocols : string list ->
-  ?groups         : Dh.group list ->
+  ?groups : Dh.group list ->
   unit -> client
 
 (** [server ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?alpn_protocols]
     is [server] configuration with the given parameters.
     @raise Invalid_argument if the configuration is invalid *)
 val server :
-  ?ciphers        : Ciphersuite.ciphersuite list ->
-  ?version        : tls_version * tls_version ->
-  ?hashes         : Hash.hash list ->
-  ?reneg          : bool ->
-  ?certificates   : own_cert ->
+  ?ciphers : Ciphersuite.ciphersuite list ->
+  ?version : tls_version * tls_version ->
+  ?signature_algorithms : signature_algorithm list ->
+  ?reneg : bool ->
+  ?certificates : own_cert ->
   ?acceptable_cas : X509.Distinguished_name.t list ->
-  ?authenticator  : X509.Authenticator.t ->
+  ?authenticator : X509.Authenticator.t ->
   ?session_cache  : session_cache ->
-  ?psk_cache      : psk_cache ->
+  ?psk_cache : psk_cache ->
   ?alpn_protocols : string list ->
-  ?groups         : Dh.group list ->
+  ?groups : Dh.group list ->
   unit -> server
 
 (** [peer client name] is [client] with [name] as [peer_name] *)
@@ -101,13 +101,11 @@ val peer : client -> string -> client
 
 (** {1 Utility functions} *)
 
-(** [default_hashes] is a list of hash algorithms used by default *)
-val default_hashes  : Hash.hash list
+(** [default_signature_algorithms] is a list of signature algorithms used by default *)
+val default_signature_algorithms  : signature_algorithm list
 
-(** [supported_hashes] is a list of supported hash algorithms by this library *)
-val supported_hashes  : Hash.hash list
-
-val tls13_hashes : Hash.hash list
+(** [supported_signature_algorithms] is a list of supported signature algorithms by this library *)
+val supported_signature_algorithms  : signature_algorithm list
 
 (** [min_dh_size] is minimal diffie hellman group size in bits (currently 1024) *)
 val min_dh_size : int

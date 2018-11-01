@@ -19,7 +19,7 @@ let alert_of_authentication_failure = function
 let alert_of_error = function
   | `NoConfiguredVersion _ -> Packet.PROTOCOL_VERSION
   | `NoConfiguredCiphersuite _ -> Packet.HANDSHAKE_FAILURE
-  | `NoConfiguredHash _ -> Packet.HANDSHAKE_FAILURE
+  | `NoConfiguredSignatureAlgorithm _ -> Packet.HANDSHAKE_FAILURE
   | `AuthenticationFailure err -> alert_of_authentication_failure err
   | `NoMatchingCertificateFound _ -> Packet.UNRECOGNIZED_NAME
   | `NoCertificateConfigured -> Packet.HANDSHAKE_FAILURE

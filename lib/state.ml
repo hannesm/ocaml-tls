@@ -120,7 +120,7 @@ type client_handshake_state =
   | AwaitCertificate_DHE_RSA of session_data * hs_log (* certificate expected with DHE_RSA key exchange *)
   | AwaitServerKeyExchange_DHE_RSA of session_data * hs_log (* server key exchange expected with DHE_RSA *)
   | AwaitCertificateRequestOrServerHelloDone of session_data * Cstruct_sexp.t * Cstruct_sexp.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
-  | AwaitServerHelloDone of session_data * (Hash.hash * Packet.signature_algorithm_type) list option * Cstruct_sexp.t * Cstruct_sexp.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
+  | AwaitServerHelloDone of session_data * signature_algorithm list option * Cstruct_sexp.t * Cstruct_sexp.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
   | AwaitServerChangeCipherSpec of session_data * crypto_context * Cstruct_sexp.t * hs_log (* change cipher spec expected *)
   | AwaitServerChangeCipherSpecResume of session_data * crypto_context * crypto_context * hs_log (* change cipher spec expected *)
   | AwaitServerFinished of session_data * Cstruct_sexp.t * hs_log (* finished expected with a hmac over all handshake packets *)
@@ -197,7 +197,7 @@ type error = [
   | `AuthenticationFailure of V_err.t
   | `NoConfiguredCiphersuite of Ciphersuite.ciphersuite list
   | `NoConfiguredVersion of tls_version
-  | `NoConfiguredHash of Hash.hash list
+  | `NoConfiguredSignatureAlgorithm of signature_algorithm list
   | `NoMatchingCertificateFound of string
   | `NoCertificateConfigured
   | `CouldntSelectCertificate
@@ -210,7 +210,7 @@ type client_hello_errors = [
   | `NotSetExtension of client_extension list
   | `HasSignatureAlgorithmsExtension
   | `NoSignatureAlgorithmsExtension
-  | `NoGoodSignatureAlgorithms of (Hash.hash * Packet.signature_algorithm_type) list
+  | `NoGoodSignatureAlgorithms of signature_algorithm list
   | `NoKeyShareExtension
   | `NoSupportedGroupExtension
   | `NotSetSupportedGroup of Packet.named_group list

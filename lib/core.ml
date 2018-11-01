@@ -96,6 +96,49 @@ type psk_identity = Cstruct.t [@@deriving sexp]
 
 type group = Nocrypto.Dh.group [@@deriving sexp] (* for now *)
 
+type signature_algorithm = [
+  | `RSA_PKCS1_MD5
+  | `RSA_PKCS1_SHA1
+  | `RSA_PKCS1_SHA224
+  | `RSA_PKCS1_SHA256
+  | `RSA_PKCS1_SHA384
+  | `RSA_PKCS1_SHA512
+(*  | `ECDSA_SECP256R1_SHA1
+  | `ECDSA_SECP256R1_SHA256
+  | `ECDSA_SECP256R1_SHA384
+    | `ECDSA_SECP256R1_SHA512 *)
+  | `RSA_PSS_RSAENC_SHA256
+  | `RSA_PSS_RSAENC_SHA384
+  | `RSA_PSS_RSAENC_SHA512
+(*  | `ED25519
+  | `ED448
+  | `RSA_PSS_PSS_SHA256
+  | `RSA_PSS_PSS_SHA384
+    | `RSA_PSS_PSS_SHA512 *)
+] [@@deriving sexp]
+
+let hash_of_signature_algorithm = function
+  | `RSA_PKCS1_MD5 -> `MD5
+  | `RSA_PKCS1_SHA1 -> `SHA1
+  | `RSA_PKCS1_SHA224 -> `SHA224
+  | `RSA_PKCS1_SHA256 -> `SHA256
+  | `RSA_PKCS1_SHA384 -> `SHA384
+  | `RSA_PKCS1_SHA512 -> `SHA512
+  | `RSA_PSS_RSAENC_SHA256 -> `SHA256
+  | `RSA_PSS_RSAENC_SHA384 -> `SHA384
+  | `RSA_PSS_RSAENC_SHA512 -> `SHA512
+
+let signature_scheme_of_signature_algorithm = function
+  | `RSA_PKCS1_MD5 -> `PKCS1
+  | `RSA_PKCS1_SHA1 -> `PKCS1
+  | `RSA_PKCS1_SHA224 -> `PKCS1
+  | `RSA_PKCS1_SHA256 -> `PKCS1
+  | `RSA_PKCS1_SHA384 -> `PKCS1
+  | `RSA_PKCS1_SHA512 -> `PKCS1
+  | `RSA_PSS_RSAENC_SHA256 -> `PSS
+  | `RSA_PSS_RSAENC_SHA384 -> `PSS
+  | `RSA_PSS_RSAENC_SHA512 -> `PSS
+
 type client_extension = [
   | `Hostname of string
   | `MaxFragmentLength of max_fragment_length
@@ -103,7 +146,7 @@ type client_extension = [
   | `ECPointFormats of ec_point_format list
   | `SecureRenegotiation of Cstruct_sexp.t
   | `Padding of int
-  | `SignatureAlgorithms of (Hash.hash * signature_algorithm_type) list
+  | `SignatureAlgorithms of signature_algorithm list
   | `ExtendedMasterSecret
   | `ALPN of string list
   | `KeyShare of (named_group * Cstruct_sexp.t) list

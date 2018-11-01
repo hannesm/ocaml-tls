@@ -134,7 +134,7 @@ let answer_certificate state (session : session_data) exts es ss certs raw log =
   return ({ state with machina = Client13 st }, [])
 
 let answer_certificate_verify (state : handshake_state) (session : session_data) exts es ss cv raw log =
-  verify_digitally_signed state.protocol_version ~context_string:"TLS 1.3, server CertificateVerify" state.config.hashes cv log session.peer_certificate >>= fun () ->
+  verify_digitally_signed state.protocol_version ~context_string:"TLS 1.3, server CertificateVerify" state.config.signature_algorithms cv log session.peer_certificate >>= fun () ->
   let st = AwaitServerFinished13 (session, exts, es, ss, log <+> raw) in
   return ({ state with machina = Client13 st }, [])
 

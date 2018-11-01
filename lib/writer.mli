@@ -13,13 +13,13 @@ val assemble_dh_parameters : Core.dh_parameters -> Cstruct.t
 
 val assemble_digitally_signed : Cstruct.t -> Cstruct.t
 
-val assemble_digitally_signed_1_2 : Nocrypto.Hash.hash -> Packet.signature_algorithm_type -> Cstruct.t -> Cstruct.t
+val assemble_digitally_signed_1_2 : Core.signature_algorithm -> Cstruct.t -> Cstruct.t
 
 val assemble_certificate_request : Packet.client_certificate_type list -> Cstruct.t list -> Cstruct.t
 
-val assemble_certificate_request_1_2 : Packet.client_certificate_type list -> (Nocrypto.Hash.hash * Packet.signature_algorithm_type) list -> Cstruct.t list -> Cstruct.t
+val assemble_certificate_request_1_2 : Packet.client_certificate_type list -> Core.signature_algorithm list -> Cstruct.t list -> Cstruct.t
 
-val assemble_certificate_request_1_3 : Cstruct.t -> (Nocrypto.Hash.hash * Packet.signature_algorithm_type) list -> Cstruct.t list -> (Cstruct.t * Cstruct.t) list -> Cstruct.t
+val assemble_certificate_request_1_3 : Cstruct.t -> Core.signature_algorithm list -> Cstruct.t list -> (Cstruct.t * Cstruct.t) list -> Cstruct.t
 
 val assemble_certificates : Cstruct.t list -> Cstruct.t
 

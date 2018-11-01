@@ -242,19 +242,17 @@ let rw_ds_tests =
     (fun i f -> "RW digitally signed " ^ string_of_int i >:: readerwriter_digitally_signed f)
     rw_ds_params
 
-let readerwriter_digitally_signed_1_2 (h, s, params) _ =
-  let buf = Writer.assemble_digitally_signed_1_2 h s params in
+let readerwriter_digitally_signed_1_2 (sigalg, params) _ =
+  let buf = Writer.assemble_digitally_signed_1_2 sigalg params in
   match Reader.parse_digitally_signed_1_2 buf with
-  | Ok (h', s', params') ->
-      assert_equal h h' ;
-      assert_equal s s' ;
+  | Ok (sigalg', params') ->
+      assert_equal sigalg sigalg' ;
       assert_cs_eq params params' ;
       (* lets get crazy and do it one more time *)
-      let buf' = Writer.assemble_digitally_signed_1_2 h' s' params' in
+      let buf' = Writer.assemble_digitally_signed_1_2 sigalg' params' in
       (match Reader.parse_digitally_signed_1_2 buf' with
-      | Ok (h'', s'', params'') ->
-          assert_equal h h'' ;
-          assert_equal s s'' ;
+      | Ok (sigalg'', params'') ->
+          assert_equal sigalg sigalg'' ;
           assert_cs_eq params params''
       | Error _ -> assert_failure "inner read and write digitally signed 1.2 broken")
   | Error _ -> assert_failure "read and write digitally signed 1.2 broken"
@@ -268,10 +266,12 @@ let rw_ds_1_2_params =
   let a = list_to_cstruct [ 0; 1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15 ] in
   let emp = list_to_cstruct [] in
   let cs = [ a ; a <+> a ; emp ; emp <+> a ] in
-  let hashes = [ `MD5 ; `SHA1 ; `SHA224 ; `SHA256 ; `SHA384 ; `SHA512 ] in
-  let sign = Packet.([ ANONYMOUS ; RSA ; DSA ; ECDSA ]) in
-  let h_s = cartesian_product (fun h s -> (h, s)) hashes sign in
-  cartesian_product (fun (h, s) c -> (h, s, c)) h_s cs
+  let sig_algs = [
+    `RSA_PKCS1_MD5 ; `RSA_PKCS1_SHA1 ; `RSA_PKCS1_SHA224 ; `RSA_PKCS1_SHA256 ;
+    `RSA_PKCS1_SHA384 ; `RSA_PKCS1_SHA512 ;
+    `RSA_PSS_RSAENC_SHA256 ; `RSA_PSS_RSAENC_SHA384 ; `RSA_PSS_RSAENC_SHA512
+  ] in
+  cartesian_product (fun sigalg c -> (sigalg, c)) sig_algs cs
 
 let rw_ds_1_2_tests =
   List.mapi
@@ -305,7 +305,7 @@ let rw_handshake_cstruct_data hs _ =
       (* lets get crazy and do it one more time *)
       let buf' = Writer.assemble_handshake hs' in
       (match Reader.parse_handshake buf' with
-      | Ok hs'' -> Readertests.cmp_handshake_cstruct hs hs'
+      | Ok hs'' -> Readertests.cmp_handshake_cstruct hs hs''
       | Error _ -> assert_failure "handshake cstruct data inner failed")
   | Error _ -> assert_failure "handshake cstruct data failed"
 
@@ -387,7 +387,7 @@ let rw_handshake_client_hello_vals =
                              `Hostname "foobarblubb" ;
                              `SupportedGroups Packet.([SECP521R1; SECP384R1]) ;
                              `ECPointFormats Packet.([UNCOMPRESSED ; ANSIX962_COMPRESSED_PRIME ;   ANSIX962_COMPRESSED_CHAR2 ]) ;
-                             `SignatureAlgorithms [(`MD5, Packet.RSA)] ;
+                             `SignatureAlgorithms [`RSA_PKCS1_MD5] ;
                              `ALPN ["h2"; "http/1.1"]
                            ] } ;
 
@@ -403,7 +403,7 @@ let rw_handshake_client_hello_vals =
                              `Hostname "foobarblubb" ;
                              `SupportedGroups Packet.([SECP521R1; SECP384R1]) ;
                              `ECPointFormats Packet.([UNCOMPRESSED ; ANSIX962_COMPRESSED_PRIME ;   ANSIX962_COMPRESSED_CHAR2 ]) ;
-                             `SignatureAlgorithms [(`SHA1, Packet.ANONYMOUS); (`MD5, Packet.RSA)] ;
+                             `SignatureAlgorithms [`RSA_PKCS1_SHA1; `RSA_PKCS1_SHA512] ;
                              `ALPN ["h2"; "http/1.1"]
                       ] } ;
 
@@ -414,7 +414,7 @@ let rw_handshake_client_hello_vals =
                              `Hostname "foobarblubb" ;
                              `SupportedGroups Packet.([SECP521R1; SECP384R1]) ;
                              `ECPointFormats Packet.([UNCOMPRESSED ; ANSIX962_COMPRESSED_PRIME ;   ANSIX962_COMPRESSED_CHAR2 ]) ;
-                             `SignatureAlgorithms [(`MD5, Packet.ANONYMOUS); (`SHA1, Packet.RSA)] ;
+                             `SignatureAlgorithms [`RSA_PKCS1_MD5; `RSA_PKCS1_SHA256] ;
                              `SecureRenegotiation client_random ;
                              `ALPN ["h2"; "http/1.1"]
                       ] } ;

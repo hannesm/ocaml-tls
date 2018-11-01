@@ -86,7 +86,7 @@ let answer_client_certificate_DHE_RSA state session dh_sent certs raw log =
 
 let answer_client_certificate_verify state session sctx cctx verify raw log =
   let sigdata = Cs.appends log in
-  verify_digitally_signed state.protocol_version state.config.hashes verify sigdata session.peer_certificate >|= fun () ->
+  verify_digitally_signed state.protocol_version state.config.signature_algorithms verify sigdata session.peer_certificate >|= fun () ->
   let machina = AwaitClientChangeCipherSpec (session, sctx, cctx, log @ [raw]) in
   ({ state with machina = Server machina }, [])
 
@@ -277,9 +277,8 @@ let answer_client_hello_common state reneg ch raw =
             let data = assemble_certificate_request [Packet.RSA_SIGN] cas in
             CertificateRequest data
          | TLS_1_2 ->
-            let sigalgs = List.map (fun h -> (h, Packet.RSA)) config.hashes in
             let data =
-              assemble_certificate_request_1_2 [Packet.RSA_SIGN] sigalgs cas
+              assemble_certificate_request_1_2 [Packet.RSA_SIGN] config.signature_algorithms cas
             in
             CertificateRequest data
        in
@@ -297,7 +296,7 @@ let answer_client_hello_common state reneg ch raw =
     let data = session.client_random <+> session.server_random <+> written in
 
     private_key session >>= fun priv ->
-    signature version data sig_algs config.hashes priv >|= fun sgn ->
+    signature version data sig_algs config.signature_algorithms priv >|= fun sgn ->
     let kex = ServerKeyExchange (written <+> sgn) in
     let hs = Writer.assemble_handshake kex in
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake kex ;
