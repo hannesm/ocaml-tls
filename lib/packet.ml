@@ -187,48 +187,52 @@ type early_data_type =
   [@@uint8_t] [@@sexp]
 ]
 
-(* RFC 5246 *)
 [%%cenum
-type signature_algorithm_type =
-  | ANONYMOUS [@id 0]
-  | RSA       [@id 1]
-  | DSA       [@id 2]
-  | ECDSA     [@id 3]
-  | RSAPSS    [@id 4] (*TLS 1.3*)
-  | EDDSA     [@id 5] (*TLS 1.3*)
-  [@@uint8_t] [@@sexp]
+type signature_alg =
+  | RSA_PKCS1_MD5    [@id 0x0101] (* deprecated, TLS 1.2 only *)
+  | RSA_PKCS1_SHA1   [@id 0x0201] (* deprecated, TLS 1.2 only *)
+  | RSA_PKCS1_SHA224 [@id 0x0301]
+  | RSA_PKCS1_SHA256 [@id 0x0401]
+  | RSA_PKCS1_SHA384 [@id 0x0501]
+  | RSA_PKCS1_SHA512 [@id 0x0601]
+  | ECDSA_SECP256R1_SHA1 [@id 0x0203] (* deprecated, TLS 1.2 only *)
+  | ECDSA_SECP256R1_SHA256 [@id 0x0403]
+  | ECDSA_SECP256R1_SHA384 [@id 0x0503]
+  | ECDSA_SECP256R1_SHA512 [@id 0x0603]
+  | RSA_PSS_RSAENC_SHA256 [@id 0x0804]
+  | RSA_PSS_RSAENC_SHA384 [@id 0x0805]
+  | RSA_PSS_RSAENC_SHA512 [@id 0x0806]
+  | ED25519 [@id 0x0807]
+  | ED448 [@id 0x0808]
+  | RSA_PSS_PSS_SHA256 [@id 0x0809]
+  | RSA_PSS_PSS_SHA384 [@id 0x080a]
+  | RSA_PSS_PSS_SHA512 [@id 0x080b]
+  (* private use 0xFE00 - 0xFFFF *)
+  [@@uint16_t] [@@sexp]
 ]
 
-[%%cenum
-type hash_algorithm =
-  | NULL      [@id 0] (* actually useful for EDDSA where no hashing is needed upfront! *)
-  | MD5       [@id 1]
-  | SHA       [@id 2]
-  | SHA224    [@id 3]
-  | SHA256    [@id 4]
-  | SHA384    [@id 5]
-  | SHA512    [@id 6]
-  [@@uint8_t] [@@sexp]
-]
+let to_signature_alg = function
+  | `RSA_PKCS1_MD5 -> RSA_PKCS1_MD5
+  | `RSA_PKCS1_SHA1 -> RSA_PKCS1_SHA1
+  | `RSA_PKCS1_SHA224 -> RSA_PKCS1_SHA224
+  | `RSA_PKCS1_SHA256 -> RSA_PKCS1_SHA256
+  | `RSA_PKCS1_SHA384 -> RSA_PKCS1_SHA384
+  | `RSA_PKCS1_SHA512 -> RSA_PKCS1_SHA512
+  | `RSA_PSS_RSAENC_SHA256 -> RSA_PSS_RSAENC_SHA256
+  | `RSA_PSS_RSAENC_SHA384 -> RSA_PSS_RSAENC_SHA384
+  | `RSA_PSS_RSAENC_SHA512 -> RSA_PSS_RSAENC_SHA512
 
-(** [hash_algorithm_of_tag tag] is [hash_algorithm] for the given [tag] *)
-let hash_algorithm_of_tag = function
-  | `MD5    -> MD5
-  | `SHA1   -> SHA
-  | `SHA224 -> SHA224
-  | `SHA256 -> SHA256
-  | `SHA384 -> SHA384
-  | `SHA512 -> SHA512
-
-(** [tag_of_hash_algorithm hash_algorithm] is [tag] for the given [hash_algorithm] *)
-let tag_of_hash_algorithm = function
-  | MD5    -> Some `MD5
-  | SHA    -> Some `SHA1
-  | SHA224 -> Some `SHA224
-  | SHA256 -> Some `SHA256
-  | SHA384 -> Some `SHA384
-  | SHA512 -> Some `SHA512
-  | NULL   -> None
+let of_signature_alg = function
+  | RSA_PKCS1_MD5 -> Some `RSA_PKCS1_MD5
+  | RSA_PKCS1_SHA1 -> Some `RSA_PKCS1_SHA1
+  | RSA_PKCS1_SHA224 -> Some `RSA_PKCS1_SHA224
+  | RSA_PKCS1_SHA256 -> Some `RSA_PKCS1_SHA256
+  | RSA_PKCS1_SHA384 -> Some `RSA_PKCS1_SHA384
+  | RSA_PKCS1_SHA512 -> Some `RSA_PKCS1_SHA512
+  | RSA_PSS_RSAENC_SHA256 -> Some `RSA_PSS_RSAENC_SHA256
+  | RSA_PSS_RSAENC_SHA384 -> Some `RSA_PSS_RSAENC_SHA384
+  | RSA_PSS_RSAENC_SHA512 -> Some `RSA_PSS_RSAENC_SHA512
+  | _ -> None
 
 (* EC RFC4492*)
 [%%cenum

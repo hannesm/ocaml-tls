@@ -1248,10 +1248,10 @@ let good_client_hellos =
 
           (* signature algorithm *)
           ([1; 0; 0; 46; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 6; 0; 13; 0; 2; 0; 0] , { ch with extensions = [`SignatureAlgorithms []] } ) ;
-          ([1; 0; 0; 48; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 8; 0; 13; 0; 4; 0; 2; 1; 0] , { ch with extensions = [`SignatureAlgorithms [(`MD5, Packet.ANONYMOUS)]] } ) ;
-          ([1; 0; 0; 50; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 10; 0; 13; 0; 6; 0; 4; 2; 0; 1; 1] , { ch with extensions = [`SignatureAlgorithms [(`SHA1, Packet.ANONYMOUS); (`MD5, Packet.RSA)]] } ) ;
+          ([1; 0; 0; 48; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 8; 0; 13; 0; 4; 0; 2; 1; 1] , { ch with extensions = [`SignatureAlgorithms [`RSA_PKCS1_MD5]] } ) ;
+          ([1; 0; 0; 50; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 10; 0; 13; 0; 6; 0; 4; 2; 1; 1; 1] , { ch with extensions = [`SignatureAlgorithms [`RSA_PKCS1_SHA1; `RSA_PKCS1_MD5]] }) ;
           (* unknown one *)
-          ([1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 13; 0; 8; 0; 6; 42; 42; 1; 0; 1; 1] , { ch with extensions = [`SignatureAlgorithms [(`MD5, Packet.ANONYMOUS); (`MD5, Packet.RSA)]] } ) ;
+          ([1; 0; 0; 52; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 12; 0; 13; 0; 8; 0; 6; 42; 42; 2; 1; 1; 1] , { ch with extensions = [`SignatureAlgorithms [`RSA_PKCS1_SHA1; `RSA_PKCS1_MD5]] } ) ;
 
           (* ALPN *)
           ([1; 0; 0; 58; 3; 3] @ rand @ [(* session id *) 0; (* cipher *) 0; 0; (* comp *) 0; (* exts *) 0; 18; 0; 16; 0; 14; 0; 12; (* h2 *) 2; 104; 50; (* http/1.1*) 8; 104; 116; 116; 112; 47; 49; 46; 49] , { ch with extensions = [`ALPN ["h2"; "http/1.1"]] } ) ;
@@ -1284,21 +1284,20 @@ let good_client_hellos =
 
           (
             [ 0x01; (* client hello *)
-              0x00; 0x01; 0xe2; (* length *)
+              0x00; 0x01; 0xce; (* length *)
               0x03; 0x03; (* protocol version *)
               0xb7; 0x36; 0xeb; 0x21; 0xec; 0x81; 0x4d; 0x01; 0xfc; 0xf4; 0xe2; 0x06; 0x9a; 0x34; 0xb7; 0x21; 0xe1; 0x23; 0x6f; 0xbe; 0x50; 0xbf; 0xfe; 0x33; 0x9b; 0xc9; 0x5b; 0x20; 0x0e; 0x15; 0x02; 0x27; (* random *)
               0x00; (* session id *)
               0x00; 0xa0; (* ciphersuites *)
               0xc0; 0x30; 0xc0; 0x2c; 0xc0; 0x28; 0xc0; 0x24; 0xc0; 0x14; 0xc0; 0x0a; 0xc0; 0x22; 0xc0; 0x21; 0x00; 0xa3; 0x00; 0x9f; 0x00; 0x6b; 0x00; 0x6a; 0x00; 0x39; 0x00; 0x38; 0x00; 0x88; 0x00; 0x87; 0xc0; 0x32; 0xc0; 0x2e; 0xc0; 0x2a; 0xc0; 0x26; 0xc0; 0x0f; 0xc0; 0x05; 0x00; 0x9d; 0x00; 0x3d; 0x00; 0x35; 0x00; 0x84; 0xc0; 0x12; 0xc0; 0x08; 0xc0; 0x1c; 0xc0; 0x1b; 0x00; 0x16; 0x00; 0x13; 0xc0; 0x0d; 0xc0; 0x03; 0x00; 0x0a; 0xc0; 0x2f; 0xc0; 0x2b; 0xc0; 0x27; 0xc0; 0x23; 0xc0; 0x13; 0xc0; 0x09; 0xc0; 0x1f; 0xc0; 0x1e; 0x00; 0xa2; 0x00; 0x9e; 0x00; 0x67; 0x00; 0x40; 0x00; 0x33; 0x00; 0x32; 0x00; 0x9a; 0x00; 0x99; 0x00; 0x45; 0x00; 0x44; 0xc0; 0x31; 0xc0; 0x2d; 0xc0; 0x29; 0xc0; 0x25; 0xc0; 0x0e; 0xc0; 0x04; 0x00; 0x9c; 0x00; 0x3c; 0x00; 0x2f; 0x00; 0x96; 0x00; 0x41; 0x00; 0x07; 0xc0; 0x11; 0xc0; 0x07; 0xc0; 0x0c; 0xc0; 0x02; 0x00; 0x05; 0x00; 0x04; 0x00; 0x15; 0x00; 0x12; 0x00; 0x09; 0x00; 0x14; 0x00; 0x11; 0x00; 0x08; 0x00; 0x06; 0x00; 0x03; 0x00; 0xff;
               0x01; 0x00; (* compression *)
-              0x01; 0x19; (* extensions *)
+              0x01; 0x05; (* extensions *)
               0x00; 0x0b; 0x00; 0x04; 0x03; 0x00; 0x01; 0x02; (* ec point formats *)
               0x00; 0x0a; 0x00; 0x08; (* ec curves *)
               0x00; 0x06; 0x00; 0x19; 0x00; 0x18; 0x00; 0x17;
               (* 0x00; 0x23; 0x00; 0x00; *)
-              0x00; 0x0d; 0x00; 0x20; (* signature algorithms *)
-              0x00; 0x1e; 0x06; 0x01; 0x06; 0x02; 0x06; 0x03; 0x05; 0x01; 0x05; 0x02; 0x05; 0x03; 0x04; 0x01; 0x04; 0x02; 0x04; 0x03; 0x03; 0x01; 0x03; 0x02; 0x03; 0x03; 0x02; 0x01; 0x02; 0x02; 0x02; 0x03;
-              (* 0x00; 0x0f; 0x00; 0x01; 0x01; *)
+              0x00; 0x0d; 0x00; 0x0c; (* signature algorithms *)
+              0x00; 0x0a; 0x06; 0x01; 0x05; 0x01; 0x04; 0x01; 0x03; 0x01; 0x02; 0x01;
               0x00; 0x15; 0x00; 0xcb; (* padding *)
               0x00; 0x00;
               0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00; 0x00;
@@ -1324,21 +1323,11 @@ let good_client_hellos =
               extensions = [`ECPointFormats Packet.([UNCOMPRESSED; ANSIX962_COMPRESSED_PRIME; ANSIX962_COMPRESSED_CHAR2]);
                             `SupportedGroups Packet.([SECP521R1; SECP384R1; SECP256R1]);
                             `SignatureAlgorithms
-                              [(`SHA512, Packet.RSA) ;
-                               (`SHA512, Packet.DSA) ;
-                               (`SHA512, Packet.ECDSA) ;
-                               (`SHA384, Packet.RSA) ;
-                               (`SHA384, Packet.DSA) ;
-                               (`SHA384, Packet.ECDSA) ;
-                               (`SHA256, Packet.RSA) ;
-                               (`SHA256, Packet.DSA) ;
-                               (`SHA256, Packet.ECDSA) ;
-                               (`SHA224, Packet.RSA) ;
-                               (`SHA224, Packet.DSA) ;
-                               (`SHA224, Packet.ECDSA) ;
-                               (`SHA1, Packet.RSA) ;
-                               (`SHA1, Packet.DSA) ;
-                               (`SHA1, Packet.ECDSA)] ;
+                              [`RSA_PKCS1_SHA512 ;
+                               `RSA_PKCS1_SHA384 ;
+                               `RSA_PKCS1_SHA256 ;
+                               `RSA_PKCS1_SHA224 ;
+                               `RSA_PKCS1_SHA1 ] ;
                             `Padding 203 ;
                             `ALPN ["h2"; "http/1.1"] ] } );
 
@@ -1365,11 +1354,11 @@ let good_client_hellos =
                       extensions = [ `SecureRenegotiation (Cstruct.create 0) ;
                                      `Hostname "127.0.0.1" ;
                                      `SignatureAlgorithms
-                                       [(`SHA512, Packet.RSA) ;
-                                        (`SHA384, Packet.RSA) ;
-                                        (`SHA256, Packet.RSA) ;
-                                        (`SHA1, Packet.RSA) ;
-                                        (`MD5, Packet.RSA)] ;
+                                       [`RSA_PKCS1_SHA512 ;
+                                        `RSA_PKCS1_SHA384 ;
+                                        `RSA_PKCS1_SHA256 ;
+                                        `RSA_PKCS1_SHA1 ;
+                                        `RSA_PKCS1_MD5] ;
                                       `ALPN ["h2"; "http/1.1"] ]
             }
           )

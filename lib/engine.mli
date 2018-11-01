@@ -57,7 +57,7 @@ type error = [
   | `AuthenticationFailure of X509.Validation.validation_error
   | `NoConfiguredCiphersuite of Ciphersuite.ciphersuite list
   | `NoConfiguredVersion of Core.tls_version
-  | `NoConfiguredHash of Nocrypto.Hash.hash list
+  | `NoConfiguredSignatureAlgorithm of Core.signature_algorithm list
   | `NoMatchingCertificateFound of string
   | `NoCertificateConfigured
   | `CouldntSelectCertificate
@@ -70,7 +70,7 @@ type client_hello_errors = [
   | `NotSetExtension of Core.client_extension list
   | `HasSignatureAlgorithmsExtension
   | `NoSignatureAlgorithmsExtension
-  | `NoGoodSignatureAlgorithms of (Nocrypto.Hash.hash * Packet.signature_algorithm_type) list
+  | `NoGoodSignatureAlgorithms of Core.signature_algorithm list
   | `NoKeyShareExtension
   | `NoSupportedGroupExtension
   | `NotSetSupportedGroup of Packet.named_group list

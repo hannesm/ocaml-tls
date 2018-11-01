@@ -24,20 +24,19 @@ let psk_cache_of_sexp _ = fun _ -> None
 let sexp_of_psk_cache _ = Sexplib.Sexp.Atom "PSK_CACHE"
 
 type config = {
-  ciphers           : Ciphersuite.ciphersuite list ;
+  ciphers : Ciphersuite.ciphersuite list ;
   protocol_versions : tls_version * tls_version ;
-  hashes            : Hash.hash list ;
-  (* signatures        : Packet.signature_algorithm_type list ; *)
-  use_reneg         : bool ;
-  authenticator     : X509.Authenticator.a option ;
-  peer_name         : string option ;
-  own_certificates  : own_cert ;
-  acceptable_cas    : X509.distinguished_name list ;
-  session_cache     : session_cache ;
-  psk_cache         : psk_cache ;
-  cached_session    : epoch_data option ;
-  alpn_protocols    : string list ;
-  groups            : group list ;
+  signature_algorithms : signature_algorithm list ;
+  use_reneg : bool ;
+  authenticator : X509.Authenticator.a option ;
+  peer_name : string option ;
+  own_certificates : own_cert ;
+  acceptable_cas : X509.distinguished_name list ;
+  session_cache : session_cache ;
+  psk_cache : psk_cache ;
+  cached_session : epoch_data option ;
+  alpn_protocols : string list ;
+  groups : group list ;
 } [@@deriving sexp]
 
 module Ciphers = struct
@@ -90,14 +89,11 @@ module Ciphers = struct
   let psk_of = List.filter Ciphersuite.ciphersuite_psk
 end
 
-let default_hashes =
-  [ `SHA512 ; `SHA384 ; `SHA256 ; `SHA224 ; `SHA1 ]
+let default_signature_algorithms =
+  [ `RSA_PKCS1_SHA512 ; `RSA_PKCS1_SHA384 ; `RSA_PKCS1_SHA256 ; `RSA_PKCS1_SHA1 ]
 
-let supported_hashes =
-  default_hashes @ [ `MD5 ]
-
-let tls13_hashes =
-  [ `SHA512 ; `SHA384 ; `SHA256 ]
+let supported_signature_algorithms =
+  default_signature_algorithms @ [ `RSA_PKCS1_MD5 ]
 
 let min_dh_size = 1024
 
@@ -110,19 +106,19 @@ let supported_groups =
   [ ffdhe8192 ; ffdhe6144 ; ffdhe4096 ; ffdhe3072 ; ffdhe2048 ]
 
 let default_config = {
-  ciphers           = Ciphers.default ;
+  ciphers = Ciphers.default ;
   protocol_versions = (TLS_1_0, TLS_1_3) ;
-  hashes            = default_hashes ;
-  use_reneg         = false ;
-  authenticator     = None ;
-  peer_name         = None ;
-  own_certificates  = `None ;
-  acceptable_cas    = [] ;
-  session_cache     = (fun _ -> None) ;
-  cached_session    = None ;
-  alpn_protocols    = [] ;
-  groups            = supported_groups ;
-  psk_cache         = (fun _ -> None) ;
+  signature_algorithms = default_signature_algorithms ;
+  use_reneg = false ;
+  authenticator = None ;
+  peer_name = None ;
+  own_certificates = `None ;
+  acceptable_cas = [] ;
+  session_cache = (fun _ -> None) ;
+  cached_session = None ;
+  alpn_protocols = [] ;
+  groups = supported_groups ;
+  psk_cache = (fun _ -> None) ;
 }
 
 let invalid msg = invalid_arg ("Tls.Config: invalid configuration: " ^ msg)
@@ -130,11 +126,11 @@ let invalid msg = invalid_arg ("Tls.Config: invalid configuration: " ^ msg)
 let validate_common config =
   let (v_min, v_max) = config.protocol_versions in
   if v_max < v_min then invalid "bad version range" ;
-  ( match config.hashes with
+  ( match config.signature_algorithms with
     | [] when v_max >= TLS_1_2 ->
-       invalid "TLS 1.2 configured but no hashes provided"
-    | hs when not (List_set.subset hs supported_hashes) ->
-       invalid "Some hash algorithms are not supported"
+       invalid "TLS 1.2 configured but no signature algorithms provided"
+    | hs when not (List_set.subset hs supported_signature_algorithms) ->
+       invalid "Some signature algorithms are not supported"
     | _ -> () ) ;
   if not (List_set.is_proper_set config.ciphers) then
     invalid "set of ciphers is not a proper set" ;
@@ -256,36 +252,36 @@ let with_acceptable_cas conf acceptable_cas = { conf with acceptable_cas }
 let (<?>) ma b = match ma with None -> b | Some a -> a
 
 let client
-  ~authenticator ?peer_name ?ciphers ?version ?hashes ?reneg ?certificates ?cached_session ?alpn_protocols ?groups () =
+  ~authenticator ?peer_name ?ciphers ?version ?signature_algorithms ?reneg ?certificates ?cached_session ?alpn_protocols ?groups () =
   let config =
     { default_config with
-        authenticator     = Some authenticator ;
-        ciphers           = ciphers        <?> default_config.ciphers ;
-        protocol_versions = version        <?> default_config.protocol_versions ;
-        hashes            = hashes         <?> default_config.hashes ;
-        use_reneg         = reneg          <?> default_config.use_reneg ;
-        own_certificates  = certificates   <?> default_config.own_certificates ;
-        peer_name         = peer_name ;
-        cached_session    = cached_session ;
-        alpn_protocols    = alpn_protocols <?> default_config.alpn_protocols ;
-        groups            = groups        <?> default_config.groups ;
+        authenticator = Some authenticator ;
+        ciphers = ciphers <?> default_config.ciphers ;
+        protocol_versions = version <?> default_config.protocol_versions ;
+        signature_algorithms = signature_algorithms <?> default_config.signature_algorithms ;
+        use_reneg = reneg <?> default_config.use_reneg ;
+        own_certificates  = certificates <?> default_config.own_certificates ;
+        peer_name = peer_name ;
+        cached_session = cached_session ;
+        alpn_protocols = alpn_protocols <?> default_config.alpn_protocols ;
+        groups = groups <?> default_config.groups ;
     } in
   ( validate_common config ; validate_client config ; config )
 
 let server
-  ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups () =
+  ?ciphers ?version ?signature_algorithms ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups () =
   let config =
     { default_config with
-        ciphers           = ciphers        <?> default_config.ciphers ;
-        protocol_versions = version        <?> default_config.protocol_versions ;
-        hashes            = hashes         <?> default_config.hashes ;
-        use_reneg         = reneg          <?> default_config.use_reneg ;
-        own_certificates  = certificates   <?> default_config.own_certificates ;
-        acceptable_cas    = acceptable_cas <?> default_config.acceptable_cas ;
-        authenticator     = authenticator ;
-        session_cache     = session_cache  <?> default_config.session_cache ;
-        alpn_protocols    = alpn_protocols <?> default_config.alpn_protocols ;
-        psk_cache         = psk_cache      <?> default_config.psk_cache ;
-        groups            = groups         <?> default_config.groups ;
+        ciphers = ciphers <?> default_config.ciphers ;
+        protocol_versions = version <?> default_config.protocol_versions ;
+        signature_algorithms = signature_algorithms <?> default_config.signature_algorithms ;
+        use_reneg = reneg <?> default_config.use_reneg ;
+        own_certificates = certificates <?> default_config.own_certificates ;
+        acceptable_cas = acceptable_cas <?> default_config.acceptable_cas ;
+        authenticator = authenticator ;
+        session_cache = session_cache  <?> default_config.session_cache ;
+        alpn_protocols = alpn_protocols <?> default_config.alpn_protocols ;
+        psk_cache = psk_cache <?> default_config.psk_cache ;
+        groups = groups <?> default_config.groups ;
     } in
   ( validate_common config ; validate_server config ; config )

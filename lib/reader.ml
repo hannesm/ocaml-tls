@@ -230,18 +230,13 @@ let parse_ec_point_format buf =
   else
     formats
 
-let parse_hash_sig buf =
-  let parsef buf =
-    let hash_tag = function
-      | None -> None
-      | Some h -> tag_of_hash_algorithm h
-    in
-    match hash_tag (int_to_hash_algorithm (get_uint8 buf 0)),
-          int_to_signature_algorithm_type (get_uint8 buf 1)
-    with
-    | Some h, Some s -> (Some (h, s), shift buf 2)
-    | _              -> (None       , shift buf 2)
-  in
+let parse_signature_algorithm buf =
+  match int_to_signature_alg (BE.get_uint16 buf 0) with
+  | Some sig_alg -> of_signature_alg sig_alg
+  | _            -> None
+
+let parse_signature_algorithms buf =
+  let parsef buf = parse_signature_algorithm buf, shift buf 2 in
   let count = BE.get_uint16 buf 0 in
   if count mod 2 <> 0 then
     raise_wrong_length "signature hash"
@@ -362,7 +357,7 @@ let parse_client_extension raw =
        in
        check length
     | Some SIGNATURE_ALGORITHMS ->
-       let algos, rt = parse_hash_sig buf in
+       let algos, rt = parse_signature_algorithms buf in
        if len rt <> 0 then
          raise_trailing_bytes "signature algorithms"
        else
@@ -545,7 +540,7 @@ let parse_certificate_request =
 
 let parse_certificate_request_1_2_exn buf =
   let certificate_types, buf' = parse_certificate_types buf in
-  let sigs, buf' = parse_hash_sig buf' in
+  let sigs, buf' = parse_signature_algorithms buf' in
   let cas, buf' = parse_cas buf' in
   if len buf' <> 0 then
     raise_trailing_bytes "certificate request"
@@ -565,7 +560,7 @@ let parse_cert_extension buf =
 let parse_certificate_request_1_3_exn buf =
   let conlen = get_uint8 buf 0 in
   let context, rt = split (shift buf 1) conlen in
-  let sigs, rt = parse_hash_sig rt in
+  let sigs, rt = parse_signature_algorithms rt in
   let cas, rt = parse_cas rt in
   let extlen = BE.get_uint16 rt 0 in
   let extdata, rt = split (shift rt 2) extlen in
@@ -602,21 +597,11 @@ let parse_digitally_signed =
   catch parse_digitally_signed_exn
 
 let parse_digitally_signed_1_2 = catch @@ fun buf ->
-  (* hash algorithm *)
-  let hash = get_uint8 buf 0 in
-  (* signature algorithm *)
-  let sign = get_uint8 buf 1 in
-  let hash_tag = function
-    | None -> None
-    | Some h -> tag_of_hash_algorithm h
-  in
-  (* XXX project packet-level algorithm_type into something from Ciphersuite. *)
-  match hash_tag (int_to_hash_algorithm hash),
-        int_to_signature_algorithm_type sign with
-  | Some hash', Some sign' ->
-     let signature = parse_digitally_signed_exn (shift buf 2) in
-     (hash', sign', signature)
-  | _ , _                  -> raise_unknown "hash or signature algorithm"
+  match parse_signature_algorithm buf with
+  | Some sig_alg ->
+    let signature = parse_digitally_signed_exn (shift buf 2) in
+    (sig_alg, signature)
+  | None -> raise_unknown "hash or signature algorithm"
 
 let parse_session_ticket_1_3_exn buf =
   let lifetime = BE.get_uint32 buf 0 in

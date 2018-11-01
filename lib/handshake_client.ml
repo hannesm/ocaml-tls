@@ -17,32 +17,27 @@ let default_client_hello config =
   let version = max_protocol_version config.protocol_versions in
   let extensions, psk, secrets = match version with
     | TLS_1_0 | TLS_1_1 -> ([], false, [])
-    | TLS_1_2 ->
-       let supported = List.map (fun h -> (h, Packet.RSA)) config.hashes in
-       ([`SignatureAlgorithms supported], false, [])
+    | TLS_1_2 -> (* TODO: filter only PKCS1 ones? *)
+      ([`SignatureAlgorithms config.signature_algorithms], false, [])
     | TLS_1_3 ->
-       let sig_alg =
-         List.fold_left
-           (fun acc h ->
-            (h, Packet.RSA) :: (h, Packet.RSAPSS) :: acc)
-           [] config.hashes
-       and groups =
+      let sig_alg = config.signature_algorithms (* TODO: filter deprecated ones *)
+      and groups =
          List.map Ciphersuite.group_to_any_group config.groups
-       and keyshares, secrets =
-         let secrets, shares = List.split (List.map Dh.gen_key config.groups) in
-         (List.combine
-            (List.map Ciphersuite.group_to_any_group config.groups)
-            shares,
-          List.combine config.groups secrets)
-       in
-       let exts =
+      and keyshares, secrets =
+        let secrets, shares = List.split (List.map Dh.gen_key config.groups) in
+        (List.combine
+           (List.map Ciphersuite.group_to_any_group config.groups)
+           shares,
+         List.combine config.groups secrets)
+      in
+      let exts =
          [`SignatureAlgorithms sig_alg ; `SupportedGroups groups ; `KeyShare keyshares ; `Draft draft ]
-       in
-       let psk = match config.cached_session with
-         | Some { psk_id ; _ } when Cstruct.len psk_id > 0 -> [`PreSharedKey [ psk_id ]]
-         | _ -> []
-       in
-       (exts @ psk, List.length psk > 0, secrets)
+      in
+      let psk = match config.cached_session with
+        | Some { psk_id ; _ } when Cstruct.len psk_id > 0 -> [`PreSharedKey [ psk_id ]]
+        | _ -> []
+      in
+      (exts @ psk, List.length psk > 0, secrets)
   in
   let alpn = match config.alpn_protocols with
     | [] -> []
@@ -258,7 +253,7 @@ let answer_server_key_exchange_DHE_RSA state session kex raw log =
 
   dh_params kex >>= fun (dh_params, raw_dh_params, leftover) ->
   let sigdata = session.client_random <+> session.server_random <+> raw_dh_params in
-  verify_digitally_signed state.protocol_version state.config.hashes leftover sigdata session.peer_certificate >>= fun () ->
+  verify_digitally_signed state.protocol_version state.config.signature_algorithms leftover sigdata session.peer_certificate >>= fun () ->
   let group, shared = Crypto.dh_params_unpack dh_params in
   guard (Dh.modulus_size group >= Config.min_dh_size) (`Fatal `InvalidDH)
   >>= fun () ->
@@ -314,7 +309,7 @@ let answer_server_hello_done state session sigalgs kex premaster raw log =
        let to_sign = log @ [ raw ; ccert ; ckex ] in
        let data = Cs.appends to_sign in
        let ver = state.protocol_version
-       and my_sigalgs = state.config.hashes in
+       and my_sigalgs = state.config.signature_algorithms in
        signature ver data sigalgs my_sigalgs p >|= fun (signature) ->
        let cert_verify = CertificateVerify signature in
        let ccert_verify = Writer.assemble_handshake cert_verify in

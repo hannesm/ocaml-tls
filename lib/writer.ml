@@ -102,10 +102,9 @@ let assemble_hostname host =
 let assemble_hostnames hosts =
   assemble_list Two assemble_hostname hosts
 
-let assemble_hash_signature (h, s) =
+let assemble_hash_signature sigalg =
   let buf = create 2 in
-  set_uint8 buf 0 (hash_algorithm_to_int (hash_algorithm_of_tag h));
-  set_uint8 buf 1 (signature_algorithm_type_to_int s);
+  BE.set_uint16 buf 0 (signature_alg_to_int (to_signature_alg sigalg)) ;
   buf
 
 let assemble_signature_algorithms s =
@@ -350,8 +349,8 @@ let assemble_digitally_signed signature =
   BE.set_uint16 lenbuf 0 (len signature);
   lenbuf <+> signature
 
-let assemble_digitally_signed_1_2 hashalgo sigalgo signature =
-  (assemble_hash_signature (hashalgo, sigalgo)) <+>
+let assemble_digitally_signed_1_2 sigalg signature =
+  (assemble_hash_signature sigalg) <+>
     (assemble_digitally_signed signature)
 
 let assemble_session_ticket_1_3 lifetime id =

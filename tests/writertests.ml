@@ -217,8 +217,8 @@ let ds_tests =
     (fun i f -> "Assemble digitally signed " ^ string_of_int i >:: ds_assembler f)
     ds_assembler_tests
 
-let ds_1_2_assembler (h, s, p, res) _ =
-  let buf = Writer.assemble_digitally_signed_1_2 h s p in
+let ds_1_2_assembler (sigalg, p, res) _ =
+  let buf = Writer.assemble_digitally_signed_1_2 sigalg p in
   assert_cs_eq buf res
 
 let ds_1_2_assembler_tests =
@@ -227,9 +227,9 @@ let ds_1_2_assembler_tests =
   let le2 = list_to_cstruct [ 0; 32 ] in
   let emp, empl = (list_to_cstruct [], list_to_cstruct [0; 0]) in
   [
-    ( `MD5, Packet.RSA, a , list_to_cstruct [1; 1] <+> le <+> a ) ;
-    ( `SHA1, Packet.DSA, a <+> a , list_to_cstruct [2; 2] <+> le2 <+> a <+> a ) ;
-    ( `SHA256, Packet.ECDSA, emp , list_to_cstruct [4; 3] <+> empl )
+    ( `RSA_PKCS1_MD5, a , list_to_cstruct [1; 1] <+> le <+> a ) ;
+    ( `RSA_PKCS1_SHA1, a <+> a , list_to_cstruct [2; 1] <+> le2 <+> a <+> a ) ;
+    ( `RSA_PSS_RSAENC_SHA256, emp , list_to_cstruct [8; 4] <+> empl )
   ]
 
 let ds_1_2_tests =
@@ -317,25 +317,15 @@ let handshake_assembler_tests =
                    ciphersuites = Packet.([TLS_NULL_WITH_NULL_NULL ; TLS_RSA_WITH_NULL_MD5 ; TLS_RSA_WITH_NULL_SHA ; TLS_RSA_EXPORT_WITH_RC4_40_MD5]);
                    extensions = [
                             `SignatureAlgorithms
-                              [(`SHA512, Packet.RSA) ;
-                               (`SHA512, Packet.DSA) ;
-                               (`SHA512, Packet.ECDSA) ;
-                               (`SHA384, Packet.RSA) ;
-                               (`SHA384, Packet.DSA) ;
-                               (`SHA384, Packet.ECDSA) ;
-                               (`SHA256, Packet.RSA) ;
-                               (`SHA256, Packet.DSA) ;
-                               (`SHA256, Packet.ECDSA) ;
-                               (`SHA224, Packet.RSA) ;
-                               (`SHA224, Packet.DSA) ;
-                               (`SHA224, Packet.ECDSA) ;
-                               (`SHA1, Packet.RSA) ;
-                               (`SHA1, Packet.DSA) ;
-                               (`SHA1, Packet.ECDSA)] ] },
-     [ 1; 0; 0; 85; 3; 3 ] @ a_l @ a_l @ [ 0; 0; 8; 0; 0; 0; 1; 0; 2; 0; 3; 1; 0 ; 0; 0x24 ;
+                              [`RSA_PKCS1_SHA512 ;
+                               `RSA_PKCS1_SHA384 ;
+                               `RSA_PKCS1_SHA256 ;
+                               `RSA_PKCS1_SHA224 ;
+                               `RSA_PKCS1_SHA1 ] ] },
+     [ 1; 0; 0; 65; 3; 3 ] @ a_l @ a_l @ [ 0; 0; 8; 0; 0; 0; 1; 0; 2; 0; 3; 1; 0 ; 0; 0x10 ;
 
-              0x00; 0x0d; 0x00; 0x20; (* signature algorithms *)
-              0x00; 0x1e; 0x06; 0x01; 0x06; 0x02; 0x06; 0x03; 0x05; 0x01; 0x05; 0x02; 0x05; 0x03; 0x04; 0x01; 0x04; 0x02; 0x04; 0x03; 0x03; 0x01; 0x03; 0x02; 0x03; 0x03; 0x02; 0x01; 0x02; 0x02; 0x02; 0x03 ] ) ;
+              0x00; 0x0d; 0x00; 0x0c; (* signature algorithms *)
+              0x00; 0x0a; 0x06; 0x01; 0x05; 0x01; 0x04; 0x01; 0x03; 0x01; 0x02; 0x01 ] ) ;
 
 
    ( ClientHello { client_version = Supported TLS_1_2 ;
