@@ -284,7 +284,7 @@ let signature version ?context_string data sig_algs hashes private_key =
        let module PSS = Rsa.PSS(H) in
        let data = H.digest data in (* XXX See #407 https://github.com/tlswg/tls13-spec/issues/407 *)
        let to_sign = H.digest (prefix <+> ctx <+> data) in
-       let signature = PSS.sign ~key:private_key (`Message to_sign) in
+       let signature = PSS.sign ~key:private_key to_sign in
        Writer.assemble_digitally_signed_1_2 hash_algo Packet.RSAPSS signature
      | `PKCS hash_algo -> (* XXX: remove!!! *)
        let hash = Hash.digest hash_algo data in
@@ -354,7 +354,7 @@ let verify_digitally_signed version ?context_string hashes data signature_data c
               let data = H.digest signature_data in
               H.digest (pre <+> con <+> data)
             in
-            guard (PSS.verify ~key:pubkey ~signature (`Message data))
+            guard (PSS.verify ~key:pubkey ~signature data)
               (`Fatal `RSASignatureMismatch)
          | Ok _ -> fail (`Fatal `NotRSASignature)
          | Error re -> fail (`Fatal (`ReaderError re)))
