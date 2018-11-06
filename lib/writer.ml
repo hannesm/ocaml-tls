@@ -236,12 +236,12 @@ let assemble_client_extension e =
     | `SupportedVersions vs ->
       (assemble_supported_versions vs, SUPPORTED_VERSIONS)
     | `PostHandshakeAuthentication ->
-      (empty, POST_HANDSHAKE_AUTH)
+      (Utils.Cs.empty, POST_HANDSHAKE_AUTH)
     | x -> assemble_extension x
   in
   let buf = create 4 in
   BE.set_uint16 buf 0 (extension_type_to_int typ);
-  BE.set_uint16 buf 2 (Cstruct.len pay);
+  BE.set_uint16 buf 2 (len pay);
   buf <+> pay
 
 let assemble_server_extension e =
