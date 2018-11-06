@@ -197,6 +197,9 @@ let assemble_early_data (edi : early_data) =
   set_uint8 conlen 0 (len edi.context) ;
   clen <+> edi.configuration_id <+> cs <+> extl <+> edi.extensions <+> conlen <+> edi.context
 
+let assemble_supported_versions vs =
+  assemble_list One assemble_any_protocol_version vs
+
 let assemble_extension = function
   | `ECPointFormats formats ->
      (assemble_ec_point_formats formats, EC_POINT_FORMATS)
@@ -214,22 +217,24 @@ let assemble_extension = function
 let assemble_client_extension e =
   let pay, typ = match e with
     | `SupportedGroups groups ->
-       (assemble_supported_groups groups, SUPPORTED_GROUPS)
+      (assemble_supported_groups groups, SUPPORTED_GROUPS)
     | `Hostname name -> (assemble_hostnames [name], SERVER_NAME)
     | `Padding x ->
-       let buf = create x in
-       memset buf 0 ;
-       (buf, PADDING)
+      let buf = create x in
+      memset buf 0 ;
+      (buf, PADDING)
     | `SignatureAlgorithms s ->
       (assemble_signature_algorithms s, SIGNATURE_ALGORITHMS)
     | `ALPN protocols ->
       (assemble_alpn_protocols protocols, APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
     | `KeyShare ks ->
-       (assemble_list Two assemble_keyshare_entry ks, KEY_SHARE)
+      (assemble_list Two assemble_keyshare_entry ks, KEY_SHARE)
     | `PreSharedKey ids ->
-       (assemble_list Two assemble_psk ids, PRE_SHARED_KEY)
+      (assemble_list Two assemble_psk ids, PRE_SHARED_KEY)
     | `EarlyDataIndication edi ->
-       (assemble_early_data edi, EARLY_DATA)
+      (assemble_early_data edi, EARLY_DATA)
+    | `SupportedVersions vs ->
+      (assemble_supported_versions vs, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
   in
   let buf = create 4 in
@@ -247,6 +252,7 @@ let assemble_server_extension e =
       (assemble_keyshare_entry (ng, ks), KEY_SHARE)
     | `PreSharedKey psk -> (assemble_psk psk, PRE_SHARED_KEY)
     | `EarlyDataIndication -> (create 0, EARLY_DATA)
+    | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
   in
   let buf = create 4 in

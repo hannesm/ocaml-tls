@@ -153,6 +153,7 @@ type client_extension = [
   | `EarlyDataIndication of early_data
   | `PreSharedKey of psk_identity list
   | `Draft of int
+  | `SupportedVersions of tls_any_version list
   | `UnknownExtension of (int * Cstruct.t)
 ] [@@deriving sexp]
 
@@ -167,6 +168,7 @@ type server_extension = [
   | `EarlyDataIndication
   | `PreSharedKey of psk_identity
   | `Draft of int
+  | `SelectedVersion of tls_version
   | `UnknownExtension of (int * Cstruct.t)
 ] [@@deriving sexp]
 

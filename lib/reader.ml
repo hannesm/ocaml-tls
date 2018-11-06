@@ -41,13 +41,14 @@ let parse_version_exn buf =
      let major, minor = version in
      raise_unknown @@ "version " ^ string_of_int major ^ "." ^ string_of_int minor
 
-let parse_any_version_exn buf =
+let parse_any_version_opt buf =
   let version = parse_version_int buf in
-  match tls_any_version_of_pair version with
-  | Some x -> x
-  | None   ->
-     let major, minor = version in
-     raise_unknown @@ "version " ^ string_of_int major ^ "." ^ string_of_int minor
+  tls_any_version_of_pair version, shift buf 2
+
+let parse_any_version_exn buf =
+  match parse_any_version_opt buf with
+  | Some x, _ -> x
+  | None, _ -> raise_unknown @@ Printf.sprintf "version %02X" (get_uint8 buf 0)
 
 let parse_version = catch parse_version_exn
 
@@ -197,6 +198,13 @@ let parse_fragment_length buf =
     raise_trailing_bytes "fragment length"
   else
     int_to_max_fragment_length (get_uint8 buf 0)
+
+let parse_supported_version buf =
+  parse_any_version_opt buf
+
+let parse_supported_versions buf =
+  let len = get_uint8 buf 0 in
+  parse_count_list parse_supported_version (shift buf 1) [] len
 
 let parse_named_group buf =
   let typ = BE.get_uint16 buf 0 in
@@ -362,6 +370,12 @@ let parse_client_extension raw =
     | Some EARLY_DATA ->
        let ed = parse_early_data buf in
        `EarlyDataIndication ed
+    | Some SUPPORTED_VERSIONS ->
+      let versions, rt = parse_supported_versions buf in
+      if len rt <> 0 then
+        raise_trailing_bytes "supportde versions"
+      else
+        `SupportedVersions versions
     | Some x -> parse_extension buf x
     | None -> `UnknownExtension (etype, buf)
   in
@@ -401,6 +415,9 @@ let parse_server_extension raw =
       (match parse_alpn_protocols buf with
        | [protocol] -> `ALPN protocol
        | _ -> raise_unknown "bad ALPN (none or multiple names)")
+    | Some SUPPORTED_VERSIONS ->
+      let version = parse_version_exn buf in
+      `SelectedVersion version
     | Some x -> parse_extension buf x
     | None -> `UnknownExtension (etype, buf)
   in
@@ -442,6 +459,7 @@ let parse_server_hello buf =
   let extensions =
     if len rt' == 0 then [] else parse_extensions parse_server_extension rt'
   in
+  (* TODO: look through extensions for SelectedVersion and report this as server_version *)
   ServerHello { server_version ; server_random ; sessionid ; ciphersuite ; extensions }
 
 let parse_certificates_exn buf =
