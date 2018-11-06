@@ -376,6 +376,11 @@ let parse_client_extension raw =
         raise_trailing_bytes "supportde versions"
       else
         `SupportedVersions versions
+    | Some POST_HANDSHAKE_AUTH ->
+      if len buf = 0 then
+        `PostHandshakeAuthentication
+      else
+        raise_unknown "non-empty post handshake authentication"
     | Some x -> parse_extension buf x
     | None -> `UnknownExtension (etype, buf)
   in

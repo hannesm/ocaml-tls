@@ -105,6 +105,7 @@ let to_client_ext_type = function
   | `PreSharedKey _        -> `PreSharedKey
   | `Draft _               -> `Draft
   | `SupportedVersions _   -> `SupportedVersion
+  | `PostHandshakeAuthentication -> `PostHandshakeAuthentication
 
 let to_server_ext_type = function
   | `Hostname              -> `Hostname
