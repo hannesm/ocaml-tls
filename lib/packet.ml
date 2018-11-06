@@ -272,14 +272,6 @@ type ec_point_format =
   [@@uint8_t] [@@sexp]
 ]
 
-let ks_len = function
-  | FFDHE2048
-  | FFDHE3072
-  | FFDHE4096
-  | FFDHE6144
-  | FFDHE8192 -> 2
-  | _ -> 1
-
 [%%cenum
 type ec_basis_type =
   | TRINOMIAL   [@id 0]
