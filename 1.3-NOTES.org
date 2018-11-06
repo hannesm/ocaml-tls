@@ -1,0 +1,33 @@
+* <2018-10-13 Sat> rebase tls13 branch, fix built, start re-reading changes and rfc 8446
+* <2018-11-01 Thu> reading RFC 8446, wire formats
+- revised alert types
+- revised handshake types
+- revised supported_groups
+--> should these contain only supported things, or everything from iana?
+----> former is more concise, but doesn't let us print anything
+-----> but latter only increases size for no good value!
+* <2018-11-06 Tue>
+adjusting extensions and hellos:
+- server_hello.version is always 0x03 0x03, but a SupportedVersions extension present
+  --> in the business logic, I don't want to lookup in extensions, but parser should do this!
+- writer does ..create XX; memset <- use newer cstruct and get rid of memset
+- order of extensions: client hello requires PSK to be last (from 4.2)!
+- sigalgs_cert (4.2.3: if not present, use sigalg)
+- OID filter (4.2.5): list of <oid, values> pairs - server says client cert must contain oid with any <value>, KU/EKU matchers are documented
+- hello retry request contains special random and also extensions! be aware!
+- TODO: PSK, early data indication, HRR, cookie
+- HRR is a SERVER_HELLO with some magic
+- COOKIE extension may be present in SH/HRR even if CH didn't contain it
+- Table 4.2 (allowed extensions) is partial for CH (which may include more since it may want to negotiate earlier protocol versions)
+- in certificate (4.4.2) - what is the certificateType doing there? is it on the wire?
+ --> there's now server_certificate_type and client_certificate_type extensions!
+- Appendix D for vesion negotiation -- 5.1 says "first client hello 0x0301", followed by "0x0303"
+- protected record layer has type always application data (= 23)!
+ - the body of a protected record:
+   - content (TLSPlaintext.length)
+   - type (one byte)
+   - zeroes (lengh_of_padding)
+- zero length appdata is fine, alert and handshake not!
+- max len: 2 ^ 14 + 1 (content type) + 255 (max AEAD expansion)
+- rekey after: AES-GCM 2^24.5 (~24million), chacha: seq wrap
+- rolling hash during handshake (less memory usage, don't keep entirely log)
