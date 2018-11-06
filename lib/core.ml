@@ -233,14 +233,6 @@ type hello_retry_request = {
   extensions : server_extension list
 } [@@deriving sexp]
 
-type server_configuration = {
-  configuration_id : Cstruct.t ;
-  expiration_date : Cstruct.t ;
-  key_share : (group * Cstruct.t) ;
-  early_data_type : early_data_type ;
-  extensions : Cstruct.t ; (* XXX: configuration_extension list *)
-} [@@deriving sexp]
-
 type tls_handshake =
   | HelloRequest
   | HelloRetryRequest of hello_retry_request
@@ -255,7 +247,6 @@ type tls_handshake =
   | CertificateVerify of Cstruct_sexp.t
   | Finished of Cstruct_sexp.t
   | SessionTicket of Cstruct_sexp.t
-  | ServerConfiguration of server_configuration
   | KeyUpdate
   [@@deriving sexp]
 

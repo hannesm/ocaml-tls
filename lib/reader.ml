@@ -608,23 +608,6 @@ let parse_hello_retry_request buf =
   | None, _ -> raise_unknown "ciphersuite"
   | _, None -> raise_unknown "selected group"
 
-let parse_server_configuration buf =
-  let cfgidlen = BE.get_uint16 buf 0 in
-  let configuration_id, rest = split (shift buf 2) cfgidlen in
-  let expiration_date, rest = split rest 4 in
-  let key_share, rest = parse_keyshare_entry rest in
-  let early_data_type = get_uint8 rest 0 in
-  let extensions = shift rest 1 in
-  match key_share, int_to_early_data_type early_data_type with
-  | Some (g, ks), Some early_data_type ->
-    (match Ciphersuite.any_group_to_group g with
-     | Some g ->
-       let key_share = (g, ks) in
-       { configuration_id ; expiration_date ; key_share ; early_data_type ; extensions }
-     | None -> raise_unknown "key share")
-  | None, _ -> raise_unknown "key share"
-  | _, None -> raise_unknown "early data type"
-
 let parse_handshake_frame buf =
   if len buf < 4 then
     (None, buf)
@@ -646,24 +629,22 @@ let parse_handshake = catch @@ fun buf ->
   else
     let payload = sub buf 4 length in
     match handshake_type with
-    | Some HELLO_REQUEST -> if len payload <> 0 then
-                              raise_trailing_bytes "hello request"
-                            else
-                              HelloRequest
+    | Some HELLO_REQUEST ->
+      if len payload = 0 then HelloRequest else raise_trailing_bytes "hello request"
     | Some CLIENT_HELLO -> parse_client_hello payload
     | Some SERVER_HELLO -> parse_server_hello payload
     | Some CERTIFICATE -> Certificate payload
     | Some CERTIFICATE_VERIFY -> CertificateVerify payload
     | Some SERVER_KEY_EXCHANGE -> ServerKeyExchange payload
-    | Some SERVER_HELLO_DONE -> if len payload <> 0 then
-                                  raise_trailing_bytes "server hello done"
-                                else
-                                  ServerHelloDone
+    | Some SERVER_HELLO_DONE ->
+      if len payload = 0 then ServerHelloDone else raise_trailing_bytes "server hello done"
     | Some CERTIFICATE_REQUEST -> CertificateRequest payload
     | Some CLIENT_KEY_EXCHANGE -> parse_client_key_exchange payload
     | Some FINISHED -> Finished payload
-    | Some ENCRYPTED_EXTENSIONS -> let ee = parse_extensions parse_server_extension payload in
-                                   EncryptedExtensions ee
-    | Some KEY_UPDATE -> if len payload <> 0 then raise_trailing_bytes "key update" else KeyUpdate
+    | Some ENCRYPTED_EXTENSIONS ->
+      let ee = parse_extensions parse_server_extension payload in
+      EncryptedExtensions ee
+    | Some KEY_UPDATE ->
+      if len payload = 0 then KeyUpdate else raise_trailing_bytes "key update"
     | Some SESSION_TICKET -> SessionTicket payload
     | None  -> raise_unknown @@ "handshake type" ^ string_of_int typ
