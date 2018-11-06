@@ -243,7 +243,6 @@ let parse_signature_algorithms buf =
   else
     parse_count_list parsef (shift buf 2) [] (count / 2)
 
-
 let parse_alpn_protocol raw =
   let length = get_uint8 raw 0 in
   let buf = sub raw 1 length in
@@ -256,7 +255,6 @@ let parse_alpn_protocols buf =
     raise_trailing_bytes "alpn"
   else
     parse_list parse_alpn_protocol (sub buf 2 length) []
-
 
 let parse_extension buf = function
   | MAX_FRAGMENT_LENGTH ->
@@ -275,43 +273,25 @@ let parse_extension buf = function
   | EXTENDED_MASTER_SECRET ->
       if len buf > 0 then
          raise_trailing_bytes "extended master secret"
-       else
-         `ExtendedMasterSecret
+      else
+        `ExtendedMasterSecret
   | DRAFT_SUPPORT ->
       if len buf <> 2 then
          raise_trailing_bytes "extended master secret"
-       else
-         `Draft (BE.get_uint16 buf 0)
+      else
+        `Draft (BE.get_uint16 buf 0)
   | x -> `UnknownExtension (extension_type_to_int x, buf)
 
 let parse_keyshare_entry buf =
-  let parse_share l data =
+  let parse_share data =
     let size = BE.get_uint16 data 0 in
-    let share, left = split (shift data 2) size in
-    match l with
-    | 1 ->
-      let l = get_uint8 share 0 in
-      if len share <> l + 1 then
-        raise_trailing_bytes "keyshare"
-      else
-        (sub share 1 l, left)
-    | 2 ->
-      let l = BE.get_uint16 share 0 in
-      if len share <> l + 2 then
-        raise_trailing_bytes "keyshare"
-      else
-        (sub share 2 l, left)
-    | 0 -> (share, left)
-    | _ -> raise_unknown "keyshare"
+    split (shift data 2) size
   in
-  match parse_named_group buf with
-  | Some g, rest ->
-     let ksl = ks_len g in
-     let share, left = parse_share ksl rest in
-     (Some (g, share), left)
-  | None, rest ->
-     let _, left = parse_share 0 rest in
-     (None, left)
+  let g, rest = parse_named_group buf in
+  let share, left = parse_share rest in
+  match g with
+  | None -> None, left
+  | Some g -> Some (g, share), left
 
 let parse_presharedkey buf =
   let len = BE.get_uint16 buf 0 in

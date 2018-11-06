@@ -162,14 +162,8 @@ let assemble_supported_groups groups =
 
 let assemble_keyshare_entry (ng, ks) =
   let g = assemble_named_group ng in
-  let kslen = ks_len ng in
-  let l = create (2 + kslen) in
-  let ksl = len ks in
-  BE.set_uint16 l 0 (kslen + ksl) ;
-  (match kslen with
-   | 1 -> set_uint8 l 2 ksl
-   | 2 -> BE.set_uint16 l 2 ksl
-   | _ -> assert false) ;
+  let l = create 2 in
+  BE.set_uint16 l 0 (len ks) ;
   g <+> l <+> ks
 
 let assemble_psk psk =
