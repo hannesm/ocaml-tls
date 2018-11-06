@@ -378,15 +378,6 @@ let assemble_hello_retry_request hrr =
   let exts = assemble_extensions assemble_server_extension hrr.extensions in
   v <+> cs <+> ng <+> exts
 
-let assemble_server_config sc =
-  let clen = create 2 in
-  BE.set_uint16 clen 0 (len sc.configuration_id) ;
-  let ng = Ciphersuite.group_to_any_group (fst sc.key_share) in
-  let ks = assemble_keyshare_entry (ng, snd sc.key_share) in
-  let edt = create 1 in
-  set_uint8 edt 0 (early_data_type_to_int sc.early_data_type) ;
-  clen <+> sc.configuration_id <+> ks <+> edt <+> sc.extensions
-
 let assemble_handshake hs =
   let (payload, payload_type) =
     match hs with

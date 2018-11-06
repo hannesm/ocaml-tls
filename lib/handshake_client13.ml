@@ -186,7 +186,6 @@ let handle_handshake cs hs buf =
       | AwaitServerEncryptedExtensions13 (sd, exts, es, ss, log), EncryptedExtensions ee ->
          answer_encrypted_extensions hs sd exts es ss ee buf log
       | AwaitServerFinishedMaybeAuth13 (sd, exts, es, ss, log), CertificateRequest _ -> assert false (* process CR *)
-      | AwaitServerFinishedMaybeAuth13 (sd, exts, es, ss, log), ServerConfiguration _ -> assert false (* preserve SC *)
       | AwaitServerFinishedMaybeAuth13 (sd, exts, es, ss, log), Certificate cs ->
          (match parse_certificates_1_3 cs with
           | Ok (con, cs) -> guard (Cs.null con) (`Fatal `InvalidMessage) >>= fun () ->
