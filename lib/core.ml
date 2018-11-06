@@ -154,6 +154,7 @@ type client_extension = [
   | `PreSharedKey of psk_identity list
   | `Draft of int
   | `SupportedVersions of tls_any_version list
+  | `PostHandshakeAuthentication
   | `UnknownExtension of (int * Cstruct.t)
 ] [@@deriving sexp]
 

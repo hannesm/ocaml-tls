@@ -235,6 +235,8 @@ let assemble_client_extension e =
       (assemble_early_data edi, EARLY_DATA)
     | `SupportedVersions vs ->
       (assemble_supported_versions vs, SUPPORTED_VERSIONS)
+    | `PostHandshakeAuthentication ->
+      (empty, POST_HANDSHAKE_AUTH)
     | x -> assemble_extension x
   in
   let buf = create 4 in
