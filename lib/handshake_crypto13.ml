@@ -8,7 +8,7 @@ let expand_label hash prk label hashvalue length =
   let info =
     let len = Cstruct.create 2 in
     Cstruct.BE.set_uint16 len 0 length ;
-    let label = Cstruct.of_string ("TLS 1.3, " ^ label) in
+    let label = Cstruct.of_string ("tls13 " ^ label) in
     let llen = Cstruct.create 1 in
     Cstruct.set_uint8 llen 0 (Cstruct.len label) ;
     let hashlen = Cstruct.create 1 in
