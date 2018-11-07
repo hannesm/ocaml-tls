@@ -21,6 +21,7 @@ let () =
     Pkg.mllib ~cond:lwt "lwt/tls-lwt.mllib" ;
     Pkg.mllib ~cond:mirage "mirage/tls-mirage.mllib" ;
     Pkg.test "tests/unittestrunner" ;
+    Pkg.test "tests/key_derivation" ;
     Pkg.test ~run:false "tests/feedback" ;
     Pkg.test ~run:false ~cond:lwt "lwt/examples/starttls_server" ;
     Pkg.test ~run:false ~cond:lwt "lwt/examples/echo_server" ;

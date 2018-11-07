@@ -31,3 +31,18 @@ adjusting extensions and hellos:
 - max len: 2 ^ 14 + 1 (content type) + 255 (max AEAD expansion)
 - rekey after: AES-GCM 2^24.5 (~24million), chacha: seq wrap
 - rolling hash during handshake (less memory usage, don't keep entirely log)
+* <2018-11-07 Wed>
+technical debt:
+- lib/control (replace with result and Rresult)
+- newer Cstruct releases contain (a) memset 0 on create (b) empty / null, ...
+- Engine interface should use result
+- Tracing ~~> Logs
+- Mirage layer uses (Lwt) exceptions, not always result type
+- Module "Core"
+- Is it worth having huge amounts of enums (e.g. ciphersuites)? could as well implement only those support
+- build system
+- allocation of lots of small Cstruct.t in writer + other places
+figuring out:
+- ciphersuites for 1.3 has new magic values
+- don't include kex anymore (done by CH extension)
+- key schedule is different from draft11

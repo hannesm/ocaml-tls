@@ -36,6 +36,7 @@ depends: [
   "hkdf"
   "cstruct-unix" {with-test & >= "3.0.0"}
   "ounit" {with-test}
+  "alcotest" {with-test}
 ]
 depopts: [
   "lwt"

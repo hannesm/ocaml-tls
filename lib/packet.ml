@@ -456,6 +456,11 @@ type any_ciphersuite =
   | TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256 [@id 0x00C4] (*RFC5932*)
   | TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256 [@id 0x00C5] (*RFC5932*)
   | TLS_EMPTY_RENEGOTIATION_INFO_SCSV        [@id 0x00FF] (*RFC5746*)
+  | TLS_AES_128_GCM_SHA256                   [@id 0x1301] (*RFC8446*)
+  | TLS_AES_256_GCM_SHA384                   [@id 0x1302] (*RFC8446*)
+  | TLS_CHACHA20_POLY1305_SHA256             [@id 0x1303] (*RFC8446*)
+  | TLS_AES_128_CCM_SHA256                   [@id 0x1304] (*RFC8446*)
+  | TLS_AES_128_CCM_8_SHA256                 [@id 0x1305] (*RFC8446*)
   | TLS_FALLBACK_SCSV                        [@id 0x5600] (*draft-ietf-tls-downgrade-scsv*)
   (* from RFC 4492 *)
   | TLS_ECDH_ECDSA_WITH_NULL_SHA                 [@id 0xC001]
