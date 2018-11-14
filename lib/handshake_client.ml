@@ -116,7 +116,7 @@ let common_server_hello_machina state (sh : server_hello) (ch : client_hello) ra
 let answer_server_hello state (ch : client_hello) sh secrets raw log =
   let validate_version requested (lo, _) server_version =
     guard (version_ge requested server_version && server_version >= lo)
-      (`Error (`NoConfiguredVersion server_version))
+      (`Error (`NoConfiguredVersions [ server_version ]))
   in
 
   let cfg = state.config in
@@ -208,14 +208,14 @@ let validate_keytype_usage certificate ciphersuite =
        supports_extended_key_usage ~not_present:true cert `Any)
       (`Fatal `InvalidCertificateExtendedUsage)
 
-let answer_certificate_RSA state session cs raw log =
+let answer_certificate_RSA state (session : session_data) cs raw log =
   let cfg = state.config in
   validate_chain cfg.authenticator cs (host_name_opt cfg.peer_name) >>= fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
   validate_keytype_usage peer_certificate session.ciphersuite >>= fun () ->
   let session = { session with received_certificates ; peer_certificate ; peer_certificate_chain ; trust_anchor } in
   ( match session.client_version with
     | Supported v -> return v
-    | x           -> fail (`Fatal (`NoVersion x)) (* TODO: get rid of this... *)
+    | x           -> fail (`Fatal (`NoVersions [ x ])) (* TODO: get rid of this... *)
   ) >>= fun version ->
   let ver = Writer.assemble_protocol_version version in
   let premaster = ver <+> Rng.generate 46 in
@@ -229,7 +229,7 @@ let answer_certificate_RSA state session cs raw log =
   in
   ({ state with machina = Client machina }, [])
 
-let answer_certificate_DHE_RSA state session cs raw log =
+let answer_certificate_DHE_RSA state (session : session_data) cs raw log =
   let cfg = state.config in
   validate_chain cfg.authenticator cs (host_name_opt cfg.peer_name) >>= fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
   validate_keytype_usage peer_certificate session.ciphersuite >|= fun () ->
@@ -237,7 +237,7 @@ let answer_certificate_DHE_RSA state session cs raw log =
   let machina = AwaitServerKeyExchange_DHE_RSA (session, log @ [raw]) in
   ({ state with machina = Client machina }, [])
 
-let answer_server_key_exchange_DHE_RSA state session kex raw log =
+let answer_server_key_exchange_DHE_RSA state (session : session_data) kex raw log =
   let dh_params kex =
     match Reader.parse_dh_parameters kex with
     | Ok data  -> return data
@@ -260,7 +260,7 @@ let answer_server_key_exchange_DHE_RSA state session kex raw log =
                 in
                 return ({ state with machina = Client machina }, [])
 
-let answer_certificate_request state session cr kex pms raw log =
+let answer_certificate_request state (session : session_data) cr kex pms raw log =
   let cfg = state.config in
   ( match state.protocol_version with
     | TLS_1_0 | TLS_1_1 ->
@@ -290,7 +290,7 @@ let answer_certificate_request state session cr kex pms raw log =
   let machina = AwaitServerHelloDone (session, sigalgs, kex, pms, log @ [raw]) in
   ({ state with machina = Client machina }, [])
 
-let answer_server_hello_done state session sigalgs kex premaster raw log =
+let answer_server_hello_done state (session : session_data) sigalgs kex premaster raw log =
   let kex = ClientKeyExchange kex in
   let ckex = Writer.assemble_handshake kex in
 
@@ -347,7 +347,7 @@ let answer_server_hello_done state session sigalgs kex premaster raw log =
        `Change_enc (Some client_ctx);
        `Record (Packet.HANDSHAKE, raw_fin)])
 
-let answer_server_finished state session client_verify fin log =
+let answer_server_finished state (session : session_data) client_verify fin log =
   let computed =
     Handshake_crypto.finished state.protocol_version session.ciphersuite session.master_secret "server finished" log
   in
@@ -355,9 +355,9 @@ let answer_server_finished state session client_verify fin log =
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
   let machina = Established
   and session = { session with renegotiation = (client_verify, computed) } in
-  ({ state with machina = Client machina ; session = session :: state.session }, [])
+  ({ state with machina = Client machina ; session = `TLS session :: state.session }, [])
 
-let answer_server_finished_resume state session fin raw log =
+let answer_server_finished_resume state (session : session_data) fin raw log =
   let client, server =
     let checksum = Handshake_crypto.finished state.protocol_version session.ciphersuite session.master_secret in
     (checksum "client finished" (log @ [raw]), checksum "server finished" log)
@@ -370,7 +370,7 @@ let answer_server_finished_resume state session fin raw log =
   let finished = Finished client in
   let raw_finished = Writer.assemble_handshake finished in
   Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake finished ;
-  ({ state with machina = Client machina ; session = session :: state.session },
+  ({ state with machina = Client machina ; session = `TLS session :: state.session },
    [`Record (Packet.HANDSHAKE, raw_finished)])
 
 let answer_hello_request state =
@@ -384,7 +384,7 @@ let answer_hello_request state =
   in
 
   match state.config.use_reneg, state.session with
-  | true , x :: _ ->
+  | true , `TLS x :: _ ->
     let ext = `SecureRenegotiation (fst x.renegotiation) in
     return (produce_client_hello x state.config [ext])
   | true , _      -> fail (`Fatal `InvalidSession) (* I'm pretty sure this can be an assert false *)

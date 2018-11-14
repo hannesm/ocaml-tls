@@ -55,7 +55,7 @@ val server : Config.server -> state
 type error = [
   | `AuthenticationFailure of X509.Validation.validation_error
   | `NoConfiguredCiphersuite of Ciphersuite.ciphersuite list
-  | `NoConfiguredVersion of Core.tls_version
+  | `NoConfiguredVersions of Core.tls_version list
   | `NoConfiguredSignatureAlgorithm of Core.signature_algorithm list
   | `NoMatchingCertificateFound of string
   | `NoCertificateConfigured
@@ -81,7 +81,7 @@ type client_hello_errors = [
 type fatal = [
   | `NoSecureRenegotiation
   | `NoSupportedGroup
-  | `NoVersion of Core.tls_any_version
+  | `NoVersions of Core.tls_any_version list
   | `ReaderError of Reader.error
   | `NoCertificateReceived
   | `NotRSACertificate

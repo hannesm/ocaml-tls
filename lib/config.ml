@@ -37,6 +37,7 @@ let sexp_of_psk_cache _ = Sexplib.Sexp.Atom "PSK_CACHE"
 
 type config = {
   ciphers : Ciphersuite.ciphersuite list ;
+  ciphers13 : Ciphersuite.ciphersuite13 list ;
   protocol_versions : tls_version * tls_version ;
   signature_algorithms : signature_algorithm list ;
   use_reneg : bool ;
@@ -99,6 +100,15 @@ module Ciphers = struct
   let fs = fs_of default
 
   let psk_of = List.filter Ciphersuite.ciphersuite_psk
+
+  let default13 = [
+    `TLS_AES_128_GCM_SHA256 ;
+    `TLS_AES_256_GCM_SHA384 ;
+    (* `TLS_CHACHA20_POLY1305_SHA256 ; *)
+    `TLS_AES_128_CCM_SHA256 ;
+    (* `TLS_AES_128_CCM_8_SHA256 *)
+  ]
+
 end
 
 let default_signature_algorithms =
@@ -119,6 +129,7 @@ let supported_groups =
 
 let default_config = {
   ciphers = Ciphers.default ;
+  ciphers13 = Ciphers.default13 ;
   protocol_versions = (TLS_1_0, TLS_1_3) ;
   signature_algorithms = default_signature_algorithms ;
   use_reneg = false ;
@@ -261,11 +272,12 @@ let with_acceptable_cas conf acceptable_cas = { conf with acceptable_cas }
 let (<?>) ma b = match ma with None -> b | Some a -> a
 
 let client
-  ~authenticator ?peer_name ?ciphers ?version ?signature_algorithms ?reneg ?certificates ?cached_session ?alpn_protocols ?groups () =
+  ~authenticator ?peer_name ?ciphers ?ciphers13 ?version ?signature_algorithms ?reneg ?certificates ?cached_session ?alpn_protocols ?groups () =
   let config =
     { default_config with
         authenticator = Some authenticator ;
         ciphers = ciphers <?> default_config.ciphers ;
+        ciphers13 = ciphers13 <?> default_config.ciphers13 ;
         protocol_versions = version <?> default_config.protocol_versions ;
         signature_algorithms = signature_algorithms <?> default_config.signature_algorithms ;
         use_reneg = reneg <?> default_config.use_reneg ;
@@ -278,10 +290,11 @@ let client
   ( validate_common config ; validate_client config ; config )
 
 let server
-  ?ciphers ?version ?signature_algorithms ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups () =
+  ?ciphers ?ciphers13 ?version ?signature_algorithms ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups () =
   let config =
     { default_config with
         ciphers = ciphers <?> default_config.ciphers ;
+        ciphers13 = ciphers13 <?> default_config.ciphers13 ;
         protocol_versions = version <?> default_config.protocol_versions ;
         signature_algorithms = signature_algorithms <?> default_config.signature_algorithms ;
         use_reneg = reneg <?> default_config.use_reneg ;

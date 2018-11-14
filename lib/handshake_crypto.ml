@@ -61,7 +61,7 @@ let divide_keyblock key mac iv buf =
   in
   (c_mac, s_mac, c_key, s_key, c_iv, s_iv)
 
-let derive_master_secret version session premaster log =
+let derive_master_secret version (session : session_data) premaster log =
   let prf = pseudo_random_function version session.ciphersuite 48 premaster in
   if session.extended_ms then
     let session_hash =
@@ -72,7 +72,7 @@ let derive_master_secret version session premaster log =
   else
     prf "master secret" (session.client_random <+> session.server_random)
 
-let initialise_crypto_ctx version session =
+let initialise_crypto_ctx version (session : session_data) =
   let open Ciphersuite in
   let client_random = session.client_random
   and server_random = session.server_random

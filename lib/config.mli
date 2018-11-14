@@ -23,6 +23,7 @@ type psk_cache = PreSharedKeyID.t -> epoch_data option
 (** configuration parameters *)
 type config = private {
   ciphers : Ciphersuite.ciphersuite list ; (** ordered list (regarding preference) of supported cipher suites *)
+  ciphers13 : Ciphersuite.ciphersuite13 list ;
   protocol_versions : tls_version * tls_version ; (** supported protocol versions (min, max) *)
   signature_algorithms : signature_algorithm list ; (** ordered list of supported signature algorithms (regarding preference) *)
   use_reneg : bool ; (** endpoint should accept renegotiation requests *)
@@ -61,6 +62,7 @@ val client :
   authenticator : X509.Authenticator.t ->
   ?peer_name : string ->
   ?ciphers : Ciphersuite.ciphersuite list ->
+  ?ciphers13 : Ciphersuite.ciphersuite13 list ->
   ?version : tls_version * tls_version ->
   ?signature_algorithms : signature_algorithm list ->
   ?reneg : bool ->
@@ -75,6 +77,7 @@ val client :
     @raise Invalid_argument if the configuration is invalid *)
 val server :
   ?ciphers : Ciphersuite.ciphersuite list ->
+  ?ciphers13 : Ciphersuite.ciphersuite13 list ->
   ?version : tls_version * tls_version ->
   ?signature_algorithms : signature_algorithm list ->
   ?reneg : bool ->
@@ -151,6 +154,7 @@ module Ciphers : sig
   val psk_of : ciphersuite list -> ciphersuite list
   (** [psk_of ciphers] selects all ciphersuites which use a pre-shared key. *)
 
+  val default13 : ciphersuite13 list
 end
 
 (** {1 Internal use only} *)

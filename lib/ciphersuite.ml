@@ -97,6 +97,14 @@ let hash13 = function
   | `TLS_AES_128_CCM_SHA256 -> `SHA256
   (*  | `TLS_AES_128_CCM_8_SHA256 -> `SHA256 *)
 
+let any_ciphersuite_to_ciphersuite13 = function
+  | Packet.TLS_AES_128_GCM_SHA256 -> Some `TLS_AES_128_GCM_SHA256
+  | Packet.TLS_AES_256_GCM_SHA384 -> Some `TLS_AES_256_GCM_SHA384
+  (*  | Packet.TLS_CHACHA20_POLY1305_SHA256 -> Some `TLS_CHACHA20_POLY1305_SHA256 *)
+  | Packet.TLS_AES_128_CCM_SHA256 -> Some `TLS_AES_128_CCM_SHA256
+  (*  | Packet.TLS_AES_128_CCM_8_SHA256 -> Some `TLS_AES_128_CCM_8_SHA256 *)
+  | _                                          -> None
+
 type ciphersuite = [
   ciphersuite13
   | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
@@ -158,12 +166,7 @@ let any_ciphersuite_to_ciphersuite = function
   | Packet.TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> Some `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384
   | Packet.TLS_DHE_PSK_WITH_AES_128_CCM        -> Some `TLS_DHE_PSK_WITH_AES_128_CCM
   | Packet.TLS_DHE_PSK_WITH_AES_256_CCM        -> Some `TLS_DHE_PSK_WITH_AES_256_CCM
-  | Packet.TLS_AES_128_GCM_SHA256 -> Some `TLS_AES_128_GCM_SHA256
-  | Packet.TLS_AES_256_GCM_SHA384 -> Some `TLS_AES_256_GCM_SHA384
-  (*  | Packet.TLS_CHACHA20_POLY1305_SHA256 -> Some `TLS_CHACHA20_POLY1305_SHA256 *)
-  | Packet.TLS_AES_128_CCM_SHA256 -> Some `TLS_AES_128_CCM_SHA256
-  (*  | Packet.TLS_AES_128_CCM_8_SHA256 -> Some `TLS_AES_128_CCM_8_SHA256 *)
-  | _                                          -> None
+  | x -> any_ciphersuite_to_ciphersuite13 x
 
 let ciphersuite_to_any_ciphersuite = function
   | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> Packet.TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
@@ -233,6 +236,7 @@ let get_kex_privprot = function
   | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> (DHE_PSK, AEAD AES_256_GCM)
   | `TLS_DHE_PSK_WITH_AES_128_CCM        -> (DHE_PSK, AEAD AES_128_CCM)
   | `TLS_DHE_PSK_WITH_AES_256_CCM        -> (DHE_PSK, AEAD AES_256_CCM)
+  | _ -> invalid_arg "should not happen"
 
 (** [ciphersuite_kex ciphersuite] is [kex], first projection of [get_kex_privprot] *)
 let ciphersuite_kex c = fst (get_kex_privprot c)

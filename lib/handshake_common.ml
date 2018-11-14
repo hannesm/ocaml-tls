@@ -185,6 +185,7 @@ let client_hello_valid (ch : client_hello) =
   let version_good = function
     | Supported TLS_1_2 | TLS_1_X _ -> `Ok
     | Supported TLS_1_3 ->
+      (* TODO needs to be fixed, this will never happen (client_version is TLS_1_2 (or something else) in a 1.3 hello) *)
       ( let good_sig_alg =
           List.exists (fun sa -> List.mem sa Config.supported_signature_algorithms)
         in
