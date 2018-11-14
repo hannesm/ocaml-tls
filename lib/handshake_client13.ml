@@ -164,7 +164,7 @@ let answer_finished state (session : session_data) exts es ss fin raw log =
 
   Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (Finished myfin);
 
-  ({ state with machina ; session = sd :: state.session },
+  ({ state with machina ; session = `TLS sd :: state.session },
    [ `Change_dec (Some server_app_ctx) ;
      `Record (Packet.HANDSHAKE, mfin) ;
      `Change_enc (Some client_app_ctx) ])

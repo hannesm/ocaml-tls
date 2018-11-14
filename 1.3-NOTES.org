@@ -75,3 +75,4 @@ calls out to:
 - unencrypted CCS may be received at any point (byte value 0x01) - should be ignored
 * <2018-11-14 Wed>
 - tls version negotiation changes
+- separated session_data and session_data13, both may need some cleaning (psk_id in session_data)

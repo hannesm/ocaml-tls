@@ -17,7 +17,7 @@ let alert_of_authentication_failure = function
   | _ -> Packet.BAD_CERTIFICATE
 
 let alert_of_error = function
-  | `NoConfiguredVersion _ -> Packet.PROTOCOL_VERSION
+  | `NoConfiguredVersions _ -> Packet.PROTOCOL_VERSION
   | `NoConfiguredCiphersuite _ -> Packet.HANDSHAKE_FAILURE
   | `NoConfiguredSignatureAlgorithm _ -> Packet.HANDSHAKE_FAILURE
   | `AuthenticationFailure err -> alert_of_authentication_failure err
@@ -44,7 +44,7 @@ let alert_of_fatal = function
   | `NotRSACertificate -> Packet.BAD_CERTIFICATE
   | `InvalidCertificateUsage -> Packet.BAD_CERTIFICATE
   | `InvalidCertificateExtendedUsage -> Packet.BAD_CERTIFICATE
-  | `NoVersion _ -> Packet.PROTOCOL_VERSION
+  | `NoVersions _ -> Packet.PROTOCOL_VERSION
   | `InvalidDH -> Packet.INSUFFICIENT_SECURITY
   | `BadFinished -> Packet.HANDSHAKE_FAILURE
   | `HandshakeFragmentsNotEmpty -> Packet.HANDSHAKE_FAILURE
@@ -634,11 +634,11 @@ let epoch state =
   let hs = state.handshake in
   match hs.session with
   | []           -> `InitialEpoch
-  | session :: _ ->
+  | `TLS session :: _ ->
      let own_random , peer_random =
        match hs.machina with
-       | Client _ | Client13 _ -> session.client_random , session.server_random
-       | Server _ | Server13 _ -> session.server_random , session.client_random
+       | Client _ -> session.client_random , session.server_random
+       | Server _ -> session.server_random , session.client_random
      in
      `Epoch {
         protocol_version       = hs.protocol_version ;
@@ -656,6 +656,32 @@ let epoch state =
         master_secret          = session.master_secret ;
         session_id             = session.session_id ;
         extended_ms            = session.extended_ms ;
+        alpn_protocol          = session.alpn_protocol ;
+        resumption_secret      = session.resumption_secret ;
+        psk_id                 = session.psk_id ;
+      }
+  | `TLS13 session :: _ ->
+     let own_random , peer_random =
+       match hs.machina with
+       | Client13 _ -> session.client_random , session.server_random
+       | Server13 _ -> session.server_random , session.client_random
+     in
+     `Epoch {
+        protocol_version       = hs.protocol_version ;
+        ciphersuite            = (session.ciphersuite :> Ciphersuite.ciphersuite) ;
+        peer_random ;
+        peer_certificate       = session.peer_certificate ;
+        peer_certificate_chain = session.peer_certificate_chain ;
+        peer_name              = Config.(hs.config.peer_name) ;
+        trust_anchor           = session.trust_anchor ;
+        own_random ;
+        own_certificate        = session.own_certificate ;
+        own_private_key        = session.own_private_key ;
+        own_name               = session.own_name ;
+        received_certificates  = session.received_certificates ;
+        master_secret          = session.master_secret ;
+        session_id             = Cstruct.create 0 ;
+        extended_ms            = true ;
         alpn_protocol          = session.alpn_protocol ;
         resumption_secret      = session.resumption_secret ;
         psk_id                 = session.psk_id ;

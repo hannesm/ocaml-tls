@@ -13,11 +13,7 @@ let answer_client_hello state ch raw log =
 
   (* TODO: if early_data 0RTT *)
   let ciphers =
-    let open Ciphersuite in
-    let supported =
-      filter_map ~f:any_ciphersuite_to_ciphersuite ch.ciphersuites
-    in
-    List.filter ciphersuite_tls13 supported
+    filter_map ~f:Ciphersuite.any_ciphersuite_to_ciphersuite13 ch.ciphersuites
   in
 
   ( match map_find ~f:(function `SignatureAlgorithms sa -> Some sa | _ -> None) ch.extensions with
@@ -37,14 +33,8 @@ let answer_client_hello state ch raw log =
        in
        return (filter_map ~f ks) ) >>= fun keyshares ->
 
-  let my_dhe_psk, my_psk, my_ciphers =
-    let my_ciphers = List.filter Ciphersuite.ciphersuite_tls13 state.config.Config.ciphers in
-    let psk, my_ciphers = List.partition Ciphersuite.ciphersuite_psk my_ciphers in
-    let my_dhe_psk, my_psk = List.partition Ciphersuite.ciphersuite_fs psk in
-    (my_dhe_psk, my_psk, my_ciphers)
-  in
-
-  let base_server_hello ?epoch ciphersuite extensions =
+  let base_server_hello ?epoch kex cipher extensions =
+    let ciphersuite = (cipher :> Ciphersuite.ciphersuite) in
     let sh =
       { server_version = TLS_1_3 ;
         server_random = Nocrypto.Rng.generate 32 ;
@@ -52,9 +42,24 @@ let answer_client_hello state ch raw log =
         ciphersuite ;
         extensions }
     in
-    let session =
-      let s = match epoch with None -> empty_session | Some e -> session_of_epoch e in
-      { s with ciphersuite ; client_random = ch.client_random ; client_version = ch.client_version ; server_random = sh.server_random ; extended_ms = true }
+    let session : session_data13 =
+      (* let s = match epoch with None -> empty_session13 | Some e -> session_of_epoch13 e in *)
+      { server_random = sh.server_random ;
+        client_random = ch.client_random ;
+        ciphersuite = cipher ;
+        kex ;
+        peer_certificate_chain = [] ;
+        peer_certificate = None ;
+        trust_anchor = None ;
+        received_certificates = [] ;
+        own_certificate = [] ;
+        own_private_key = None ;
+        master_secret = Cstruct.create 0 ;
+        own_name = None ;
+        client_auth = false ;
+        alpn_protocol = None ;
+        resumption_secret = Cstruct.create 0 ;
+        psk_id = Cstruct.create 0 }
     in
     (sh, session)
   and resumed_session =
@@ -68,26 +73,32 @@ let answer_client_hello state ch raw log =
       | x::_ -> x
       | [] -> None
   and keyshare group =
-    let (_, keyshare) = List.find (fun (g, _) -> g = group) keyshares in
-    keyshare
+    snd (List.find (fun (g, _) -> g = group) keyshares)
   in
 
   Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version TLS_1_3 ;
 
+  (* KEX to use:
+    - if client has keyshare (+supportedgroup) ext, we can use (EC)DHE (if we have the same)
+    - if client has presharedkey ext, plus PSK is in our databse, we can use PSK!
+    - if client has keyshare (+supportedgroup) + presharedkey, we can use (EC)DHE-PSK
+
+     error conditions:
+      - no KS found that meets our demands -> HRR
+      - TODO: what if KS found, but not part of supportedgroup?
+      - what is PSK + KS + SG found, but PSK does not match --> (EC)DHE *)
   match
     resumed_session,
     first_match (List.map fst keyshares) state.config.Config.groups,
-    first_match ciphers my_dhe_psk,
-    first_match ciphers my_psk,
-    first_match ciphers my_ciphers
+    first_match ciphers state.config.Config.ciphers13
   with
-  | Some epoch, Some group, Some dhe_psk_cipher, _, _ ->
-    (* DHE_PSK *)
-    trace_cipher dhe_psk_cipher ;
+  | Some epoch, Some group, _ -> invalid_arg "NYI"
+(*    (* DHE_PSK *)
+    (* trace_cipher dhe_psk_cipher ; *)
     let keyshare = keyshare group in
     let secret, my_share = Nocrypto.Dh.gen_key group in
 
-    let sh, session = base_server_hello ~epoch dhe_psk_cipher [`PreSharedKey epoch.psk_id ; `KeyShare (group, my_share)] in
+    let sh, session = base_server_hello ~epoch `DHE_PSK dhe_psk_cipher [`PreSharedKey epoch.psk_id ; `KeyShare (group, my_share)] in
     let sh_raw = Writer.assemble_handshake (ServerHello sh) in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
@@ -130,12 +141,12 @@ let answer_client_hello state ch raw log =
        `Change_dec (Some client_ctx) ;
        `Record (Packet.HANDSHAKE, ee_raw) ;
        `Record (Packet.HANDSHAKE, fin_raw) ;
-       `Change_enc (Some server_app_ctx) ] )
+       `Change_enc (Some server_app_ctx) ] ) *)
 
-  | Some epoch, _, _, Some psk_cipher, _ ->
-    (* PSK *)
+  | Some epoch, None, _ -> invalid_arg "NYI"
+(*    (* PSK *)
     trace_cipher psk_cipher ;
-    let sh, session = base_server_hello ~epoch psk_cipher [`PreSharedKey epoch.psk_id] in
+    let sh, session = base_server_hello ~epoch `PSK psk_cipher [`PreSharedKey epoch.psk_id] in
     let sh_raw = Writer.assemble_handshake (ServerHello sh) in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
@@ -176,11 +187,11 @@ let answer_client_hello state ch raw log =
        `Change_dec (Some client_ctx) ;
        `Record (Packet.HANDSHAKE, ee_raw) ;
        `Record (Packet.HANDSHAKE, fin_raw) ;
-       `Change_enc (Some server_app_ctx) ] )
+       `Change_enc (Some server_app_ctx) ] ) *)
 
-  | _, Some group, _, _, Some cipher ->
-    (* full handshake *)
-    trace_cipher cipher ;
+  | None, Some group, Some cipher ->
+    (* DHE - full handshake *)
+    (* trace_cipher cipher ; *)
     let keyshare = keyshare group in
     (* XXX: for-each ciphers there should be a suitable group (skipping for now since we only have DHE) *)
     (* XXX: check sig_algs for signatures in certificate chain *)
@@ -192,7 +203,7 @@ let answer_client_hello state ch raw log =
      | Some shared -> return shared) >>= fun es ->
     let ss = es in
 
-    let sh, session = base_server_hello cipher [`KeyShare (group, public)] in
+    let sh, session = base_server_hello `DHE cipher [`KeyShare (group, public)] in
     let sh_raw = Writer.assemble_handshake (ServerHello sh) in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
@@ -255,7 +266,11 @@ let answer_client_hello state ch raw log =
        `Record (Packet.HANDSHAKE, fin_raw) ;
        `Change_enc (Some server_app_ctx) ] )
 
-  | _, None, _, _, Some cipher when Cs.null log ->
+  | None, None, None
+  | None, Some _, None
+  | None, None, Some _ -> invalid_arg "NYI"
+
+(*  | _, None, _, _, Some cipher when Cs.null log ->
     ( match first_match groups state.config.Config.groups with
       | None -> fail (`Fatal `NoSupportedGroup)
       | Some group ->
@@ -278,9 +293,9 @@ let answer_client_hello state ch raw log =
     fail (`Fatal `InvalidMessage)
 
   | _, _, _, _, None ->
-    fail (`Error (`NoConfiguredCiphersuite ciphers))
+    fail (`Error (`NoConfiguredCiphersuite ciphers)) *)
 
-let answer_client_finished state fin (sd : session_data) dec_ctx raw log =
+let answer_client_finished state fin (sd : session_data13) dec_ctx raw log =
   let data = finished sd.ciphersuite sd.master_secret false log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
@@ -290,9 +305,9 @@ let answer_client_finished state fin (sd : session_data) dec_ctx raw log =
       | None -> []
       | Some cc -> [`Change_dec (Some cc)]
     and st, sd =
-      if Ciphersuite.ciphersuite_psk sd.ciphersuite then
-        ([], sd)
-      else
+      match sd.kex with
+      | `PSK -> ([], sd)
+      | `DHE_PSK | `DHE ->
         let st, psk_id =
           let rand = Nocrypto.Rng.generate 48 in
           let buf = Writer.assemble_session_ticket_1_3 0l rand in
@@ -305,7 +320,7 @@ let answer_client_finished state fin (sd : session_data) dec_ctx raw log =
   in
   ({ state with
      machina = Server13 Established13 ;
-     session = sd :: state.session },
+     session = `TLS13 sd :: state.session },
    ret)
 
 let answer_client_hello_retry state oldch ch hrr raw log =

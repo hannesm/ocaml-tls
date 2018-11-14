@@ -128,6 +128,25 @@ type client_handshake_state =
   | Established (* handshake successfully completed *)
   [@@deriving sexp]
 
+type session_data13 = {
+  server_random          : Cstruct.t ; (* 32 bytes random from the server hello *)
+  client_random          : Cstruct.t ; (* 32 bytes random from the client hello *)
+  ciphersuite            : Ciphersuite.ciphersuite13 ;
+  kex                    : [ `DHE | `DHE_PSK | `PSK ] ;
+  peer_certificate_chain : X509.t list ;
+  peer_certificate       : X509.t option ;
+  trust_anchor           : X509.t option ;
+  received_certificates  : X509.t list ;
+  own_certificate        : X509.t list ;
+  own_private_key        : Nocrypto.Rsa.priv option ;
+  master_secret          : master_secret ;
+  own_name               : string option ;
+  client_auth            : bool ;
+  alpn_protocol          : string option ; (* selected alpn protocol after handshake *)
+  resumption_secret      : Cstruct.t ;
+  psk_id                 : Cstruct.t ;
+} [@@deriving sexp]
+
 type client13_handshake_state =
   | AwaitServerHello13 of client_hello * (Dh.group * Dh.secret) list * Cstruct.t
   | AwaitServerEncryptedExtensions13 of session_data * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
@@ -141,7 +160,7 @@ type server13_handshake_state =
   | AwaitClientHello13 of client_hello * hello_retry_request * Cstruct.t
   | AwaitClientCertificate13 (* optional *)
   | AwaitClientCertificateVerify13 (* optional *)
-  | AwaitClientFinished13 of session_data * crypto_context option * Cstruct.t
+  | AwaitClientFinished13 of session_data13 * crypto_context option * Cstruct.t
   | Established13
   [@@deriving sexp]
 
@@ -154,7 +173,7 @@ type handshake_machina_state =
 
 (* state during a handshake, used in the handlers *)
 type handshake_state = {
-  session          : session_data list ;
+  session          : [ `TLS of session_data | `TLS13 of session_data13 ] list ;
   protocol_version : tls_version ;
   machina          : handshake_machina_state ; (* state machine state *)
   config           : Config.config ; (* given config *)
