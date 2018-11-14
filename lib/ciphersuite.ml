@@ -76,6 +76,29 @@ let key_length iv pp =
      | Some () -> (keylen, ivlen, maclen)
 
 type ciphersuite13 = [
+  | `TLS_AES_128_GCM_SHA256
+  | `TLS_AES_256_GCM_SHA384
+  (* | `TLS_CHACHA20_POLY1305_SHA256 *)
+  | `TLS_AES_128_CCM_SHA256
+  (* | `TLS_AES_128_CCM_8_SHA256 *)
+] [@@deriving sexp]
+
+let privprot13 = function
+  | `TLS_AES_128_GCM_SHA256 -> AES_128_GCM
+  | `TLS_AES_256_GCM_SHA384 -> AES_256_GCM
+  (*  | `TLS_CHACHA20_POLY1305_SHA256 -> CHACHA20_POLY1305 *)
+  | `TLS_AES_128_CCM_SHA256 -> AES_128_CCM
+  (*  | `TLS_AES_128_CCM_8_SHA256 -> AES_128_CCM_8 *)
+
+let hash13 = function
+  | `TLS_AES_128_GCM_SHA256 -> `SHA256
+  | `TLS_AES_256_GCM_SHA384 -> `SHA384
+  (*  | `TLS_CHACHA20_POLY1305_SHA256 -> `SHA256 *)
+  | `TLS_AES_128_CCM_SHA256 -> `SHA256
+  (*  | `TLS_AES_128_CCM_8_SHA256 -> `SHA256 *)
+
+type ciphersuite = [
+  ciphersuite13
   | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
   | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
   | `TLS_DHE_RSA_WITH_AES_256_CCM
@@ -88,28 +111,6 @@ type ciphersuite13 = [
   | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384
   | `TLS_DHE_PSK_WITH_AES_128_CCM
   | `TLS_DHE_PSK_WITH_AES_256_CCM
-] [@@deriving sexp]
-
-let hash_of = function
-  | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> `SHA256
-  | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> `SHA384
-  | `TLS_DHE_RSA_WITH_AES_256_CCM -> `SHA256
-  | `TLS_DHE_RSA_WITH_AES_128_CCM -> `SHA256
-
-  | `TLS_PSK_WITH_AES_128_GCM_SHA256 -> `SHA256
-  | `TLS_PSK_WITH_AES_256_GCM_SHA384 -> `SHA384
-  | `TLS_PSK_WITH_AES_128_CCM -> `SHA256
-  | `TLS_PSK_WITH_AES_256_CCM -> `SHA256
-
-  | `TLS_DHE_PSK_WITH_AES_128_GCM_SHA256 -> `SHA256
-  | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> `SHA384
-  | `TLS_DHE_PSK_WITH_AES_128_CCM -> `SHA256
-  | `TLS_DHE_PSK_WITH_AES_256_CCM -> `SHA256
-
-  | _ -> assert false
-
-type ciphersuite = [
-  ciphersuite13
   | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
   | `TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
   | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA
@@ -157,6 +158,11 @@ let any_ciphersuite_to_ciphersuite = function
   | Packet.TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> Some `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384
   | Packet.TLS_DHE_PSK_WITH_AES_128_CCM        -> Some `TLS_DHE_PSK_WITH_AES_128_CCM
   | Packet.TLS_DHE_PSK_WITH_AES_256_CCM        -> Some `TLS_DHE_PSK_WITH_AES_256_CCM
+  | Packet.TLS_AES_128_GCM_SHA256 -> Some `TLS_AES_128_GCM_SHA256
+  | Packet.TLS_AES_256_GCM_SHA384 -> Some `TLS_AES_256_GCM_SHA384
+  (*  | Packet.TLS_CHACHA20_POLY1305_SHA256 -> Some `TLS_CHACHA20_POLY1305_SHA256 *)
+  | Packet.TLS_AES_128_CCM_SHA256 -> Some `TLS_AES_128_CCM_SHA256
+  (*  | Packet.TLS_AES_128_CCM_8_SHA256 -> Some `TLS_AES_128_CCM_8_SHA256 *)
   | _                                          -> None
 
 let ciphersuite_to_any_ciphersuite = function
@@ -188,44 +194,13 @@ let ciphersuite_to_any_ciphersuite = function
   | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> Packet.TLS_DHE_PSK_WITH_AES_256_GCM_SHA384
   | `TLS_DHE_PSK_WITH_AES_128_CCM        -> Packet.TLS_DHE_PSK_WITH_AES_128_CCM
   | `TLS_DHE_PSK_WITH_AES_256_CCM        -> Packet.TLS_DHE_PSK_WITH_AES_256_CCM
+  | `TLS_AES_128_GCM_SHA256 -> Packet.TLS_AES_128_GCM_SHA256
+  | `TLS_AES_256_GCM_SHA384 -> Packet.TLS_AES_256_GCM_SHA384
+  (*  | `TLS_CHACHA20_POLY1305_SHA256 -> Packet.TLS_CHACHA20_POLY1305_SHA256 *)
+  | `TLS_AES_128_CCM_SHA256 -> Packet.TLS_AES_128_CCM_SHA256
+  (*  | `TLS_AES_128_CCM_8_SHA256 -> Packet.TLS_AES_128_CCM_8_SHA256 *)
 
 let ciphersuite_to_string x= Packet.any_ciphersuite_to_string (ciphersuite_to_any_ciphersuite x)
-
-let privprot13 = function
-  | `TLS_DHE_RSA_WITH_AES_128_CCM        -> AES_128_CCM
-  | `TLS_DHE_RSA_WITH_AES_256_CCM        -> AES_256_CCM
-  | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> AES_128_GCM
-  | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> AES_256_GCM
-
-  | `TLS_PSK_WITH_AES_128_GCM_SHA256     -> AES_128_GCM
-  | `TLS_PSK_WITH_AES_256_GCM_SHA384     -> AES_256_GCM
-  | `TLS_PSK_WITH_AES_128_CCM            -> AES_128_CCM
-  | `TLS_PSK_WITH_AES_256_CCM            -> AES_256_CCM
-
-  | `TLS_DHE_PSK_WITH_AES_128_GCM_SHA256 -> AES_128_GCM
-  | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> AES_256_GCM
-  | `TLS_DHE_PSK_WITH_AES_128_CCM        -> AES_128_CCM
-  | `TLS_DHE_PSK_WITH_AES_256_CCM        -> AES_256_CCM
-
-  | _ -> assert false
-
-let kex13 = function
-  | `TLS_DHE_RSA_WITH_AES_128_CCM        -> DHE_RSA
-  | `TLS_DHE_RSA_WITH_AES_256_CCM        -> DHE_RSA
-  | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> DHE_RSA
-  | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> DHE_RSA
-
-  | `TLS_PSK_WITH_AES_128_GCM_SHA256     -> PSK
-  | `TLS_PSK_WITH_AES_256_GCM_SHA384     -> PSK
-  | `TLS_PSK_WITH_AES_128_CCM            -> PSK
-  | `TLS_PSK_WITH_AES_256_CCM            -> PSK
-
-  | `TLS_DHE_PSK_WITH_AES_128_GCM_SHA256 -> DHE_PSK
-  | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> DHE_PSK
-  | `TLS_DHE_PSK_WITH_AES_128_CCM        -> DHE_PSK
-  | `TLS_DHE_PSK_WITH_AES_256_CCM        -> DHE_PSK
-
-  | _ -> assert false
 
 (** [get_kex_privprot ciphersuite] is [(kex, privacy_protection)] where it dissects the [ciphersuite] into a pair containing the key exchange method [kex], and its [privacy_protection] *)
 let get_kex_privprot = function
@@ -291,20 +266,11 @@ let ciphersuite_tls12_only = function
   | _                                    -> false
 
 let ciphersuite_tls13 = function
-  | `TLS_DHE_RSA_WITH_AES_128_CCM
-  | `TLS_DHE_RSA_WITH_AES_256_CCM
-  | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
-  | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
-
-  | `TLS_PSK_WITH_AES_128_GCM_SHA256
-  | `TLS_PSK_WITH_AES_256_GCM_SHA384
-  | `TLS_PSK_WITH_AES_128_CCM
-  | `TLS_PSK_WITH_AES_256_CCM
-
-  | `TLS_DHE_PSK_WITH_AES_128_GCM_SHA256
-  | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384
-  | `TLS_DHE_PSK_WITH_AES_128_CCM
-  | `TLS_DHE_PSK_WITH_AES_256_CCM        -> true
+  | `TLS_AES_128_GCM_SHA256
+  | `TLS_AES_256_GCM_SHA384
+  (*  | `TLS_CHACHA20_POLY1305_SHA256 *)
+  | `TLS_AES_128_CCM_SHA256
+  (*  | `TLS_AES_128_CCM_8_SHA256 *)     -> true
   | _                                    -> false
 
 let any_group_to_group =

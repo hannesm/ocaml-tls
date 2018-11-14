@@ -19,6 +19,12 @@ let pair_of_tls_version = function
   | TLS_1_2   -> (3, 3)
   | TLS_1_3   -> (3, 4)
 
+let compare_tls_version a b = match a, b with
+  | TLS_1_0, TLS_1_0 -> 0 | TLS_1_0, _ -> -1 | _, TLS_1_0 -> 1
+  | TLS_1_1, TLS_1_1 -> 0 | TLS_1_1, _ -> -1 | _, TLS_1_1 -> 1
+  | TLS_1_2, TLS_1_2 -> 0 | TLS_1_2, _ -> -1 | _, TLS_1_2 -> 1
+  | TLS_1_3, TLS_1_3 -> 0
+
 let tls_version_of_pair = function
   | (3, 1) -> Some TLS_1_0
   | (3, 2) -> Some TLS_1_1
@@ -40,12 +46,12 @@ let any_version_to_version = function
 
 let version_eq a b =
   match a with
-  | Supported x -> x = b
+  | Supported x -> compare_tls_version x b = 0
   | _           -> false
 
 let version_ge a b =
   match a with
-  | Supported x -> x >= b
+  | Supported x -> compare_tls_version x b = 1
   | SSL_3       -> false
   | TLS_1_X _   -> true
 

@@ -46,3 +46,32 @@ figuring out:
 - ciphersuites for 1.3 has new magic values
 - don't include kex anymore (done by CH extension)
 - key schedule is different from draft11
+* <2018-11-09 Fri>
+- yy extensions are driving me mad... should use gmap here!?
+- ordering is that PSK must be last (re-iterate from 4.2)
+** rewrap data flow:
+main entry: Engine.handle_tls : state -> buf -> ..
+calls out to:
+ - separate_records (which uses Reader.parse_record [guards record size and unencrypted version])
+ - recursive handle_records - using handle_raw_records:
+    - guards for version
+    - decrypt
+    - handle_packet -> hs_state, `change_enc/`change_dec/`record (then encrypted), app_data
+      - matches on packet type and calls type-specific function
+ -> ok (state, out, appdata) | fail
+** rewrap version negotiation:
+- used to be the case that we can just use the version information of the outer (unencrypted) layer
+- now need to use the one in our internal state (clear after the server hello)
+- ignore the outer version number!? (how to deal with older TLS versions?)
+  - according to appendix D:
+    The value of TLSPlaintext.legacy_record_version MUST be ignored by all
+    implementations Version negotiation is performed using only the handshake
+    versions (ClientHello.legacy_version and ServerHello.legacy_version, as well
+    as the ClientHello, HelloRetryRequest, and ServerHello "supported_versions"
+    extensions).  In order to maximize interoperability with older endpoints,
+    implementations that negotiate the use of TLS 1.0-1.2 SHOULD set the record
+    layer version number to the negotiated version for the ServerHello and all
+    records thereafter.
+- unencrypted CCS may be received at any point (byte value 0x01) - should be ignored
+* <2018-11-14 Wed>
+- tls version negotiation changes
