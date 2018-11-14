@@ -338,12 +338,31 @@ let answer_client_hello_common state reneg ch raw =
   ({ state with machina = Server machina },
    [`Record (Packet.HANDSHAKE, Cs.appends out_recs)])
 
-let agreed_version supported requested =
-  match supported_protocol_version supported requested with
+(* TODO could benefit from result monadd *)
+let agreed_version supported (client_hello : client_hello) =
+  let raw_client_versions =
+    match Utils.filter_map ~f:(function `SupportedVersions vs -> Some vs | _ -> None) client_hello.extensions with
+    | [] -> [client_hello.client_version]
+    | [vs] -> vs
+    | _ -> invalid_arg "bad supported version extension"
+  in
+  let supported_versions = List.fold_left (fun acc v ->
+      match any_version_to_version v with
+      | None -> acc
+      | Some v -> v :: acc) [] raw_client_versions
+  in
+  let client_versions = List.sort_uniq compare_tls_version supported_versions in
+  match
+    List.fold_left (fun r v ->
+        match supported_protocol_version supported v with
+        | None -> r
+        | Some v -> Some v)
+      None client_versions
+  with
   | Some x -> return x
-  | None   -> match requested with
-    | Supported v -> fail (`Error (`NoConfiguredVersion v))
-    | v -> fail (`Fatal (`NoVersion v))
+  | None   -> match supported_versions with
+    | [] -> fail (`Fatal (`NoVersions raw_client_versions))
+    | _ -> fail (`Error (`NoConfiguredVersions supported_versions))
 
 let answer_client_hello state (ch : client_hello) raw =
   let ensure_reneg ciphers their_data  =
@@ -418,7 +437,7 @@ let answer_client_hello state (ch : client_hello) raw =
      | Some session -> answer_resumption session state)
   in
 
-  agreed_version state.config.protocol_versions ch.client_version >>= function
+  agreed_version state.config.protocol_versions ch >>= function
    | TLS_1_3 when List.mem (`Draft draft) ch.extensions  ->
      Handshake_server13.answer_client_hello state ch raw (Cstruct.create 0)
    | TLS_1_3 -> process TLS_1_2

@@ -84,10 +84,12 @@ let session_of_epoch (epoch : epoch_data) : session_data = {
 }
 
 let supported_protocol_version (min, max) v =
-  match version_ge v min, version_ge v max with
-    | _   , true -> Some max
-    | true, _    -> any_version_to_version v
-    | _   , _    -> None
+  if compare_tls_version min v > 0 then
+    None
+  else if compare_tls_version v max > 0 then
+    None
+  else
+    Some v
 
 let to_client_ext_type = function
   | `Hostname _            -> `Hostname

@@ -196,7 +196,7 @@ end
 type error = [
   | `AuthenticationFailure of V_err.t
   | `NoConfiguredCiphersuite of Ciphersuite.ciphersuite list
-  | `NoConfiguredVersion of tls_version
+  | `NoConfiguredVersions of tls_version list
   | `NoConfiguredSignatureAlgorithm of signature_algorithm list
   | `NoMatchingCertificateFound of string
   | `NoCertificateConfigured
@@ -221,7 +221,7 @@ type client_hello_errors = [
 type fatal = [
   | `NoSecureRenegotiation
   | `NoSupportedGroup
-  | `NoVersion of tls_any_version
+  | `NoVersions of tls_any_version list
   | `ReaderError of Reader.error
   | `NoCertificateReceived
   | `NotRSACertificate
