@@ -122,23 +122,24 @@ let client_hello_valid ch =
        else
          fail HANDSHAKE_FAILURE *)
 
-  not (empty ch.ciphersuites)
-  &&
-
-  (List_set.is_proper_set ch.ciphersuites)
-  &&
-
+  match
+    empty ch.ciphersuites,
+    not (List_set.is_proper_set ch.ciphersuites),
   (* TODO: if ecc ciphersuite, require ellipticcurves and ecpointformats extensions! *)
-  List_set.is_proper_set (extension_types to_client_ext_type ch.extensions)
-  &&
-
-  ( match ch.client_version with
-    | Supported TLS_1_2 | TLS_1_X _                  -> true
-    | SSL_3 | Supported TLS_1_0 | Supported TLS_1_1  ->
+    not (List_set.is_proper_set (extension_types to_client_ext_type ch.extensions)),
+    ( match ch.client_version with
+      | Supported TLS_1_2 | TLS_1_X _                  -> true
+      | SSL_3 | Supported TLS_1_0 | Supported TLS_1_1  ->
         let has_sig_algo =
           List.exists (function `SignatureAlgorithms _ -> true | _ -> false)
             ch.extensions in
         not has_sig_algo )
+  with
+  | true, _, _, _ -> Printf.printf "ciphersuites are empty" ; false
+  | _, true, _, _ -> Printf.printf "ciphersuites are not a proper set" ; false
+  | _, _, true, _ -> Printf.printf "client extensions are not a proper set" ; false
+  | _, _, _, true -> Printf.printf "ssl, tls 1.0, or tls 1.1 with sigalg extension" ; false
+  | false, false, false, false -> true
 
 let server_hello_valid sh =
   List_set.is_proper_set (extension_types to_server_ext_type sh.extensions)
