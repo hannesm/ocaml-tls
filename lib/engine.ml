@@ -9,7 +9,9 @@ type state = State.state
 
 type error = State.error
 type fatal = State.fatal
-type failure = State.failure [@@deriving sexp]
+type failure = State.failure
+let sexp_of_failure = State.sexp_of_failure
+and failure_of_sexp = State.failure_of_sexp
 
 let alert_of_authentication_failure = function
   | `Leaf (`LeafCertificateExpired _) -> Packet.CERTIFICATE_EXPIRED
