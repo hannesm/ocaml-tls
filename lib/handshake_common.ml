@@ -136,7 +136,7 @@ let client_hello_valid ch =
         not has_sig_algo )
   with
   | true, _, _, _ -> Printf.printf "ciphersuites are empty\n%!" ; false
-  | _, true, _, _ -> Printf.printf "ciphersuites are not a proper set\n%!" ; false
+  | _, true, _, _ -> Printf.printf "ciphersuites are not a proper set\n%!" ; true (* cryptophone s5 + davdroid :/ *)
   | _, _, true, _ -> Printf.printf "client extensions are not a proper set\n%!" ; false
   | _, _, _, true -> Printf.printf "ssl, tls 1.0, or tls 1.1 with sigalg extension\n%!" ; false
   | false, false, false, false -> true
