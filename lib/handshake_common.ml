@@ -123,10 +123,10 @@ let client_hello_valid ch =
          fail HANDSHAKE_FAILURE *)
 
   match
-    empty ch.ciphersuites,
-    not (List_set.is_proper_set ch.ciphersuites),
+    not (empty ch.ciphersuites),
+    List_set.is_proper_set ch.ciphersuites,
   (* TODO: if ecc ciphersuite, require ellipticcurves and ecpointformats extensions! *)
-    not (List_set.is_proper_set (extension_types to_client_ext_type ch.extensions)),
+    List_set.is_proper_set (extension_types to_client_ext_type ch.extensions),
     ( match ch.client_version with
       | Supported TLS_1_2 | TLS_1_X _                  -> true
       | SSL_3 | Supported TLS_1_0 | Supported TLS_1_1  ->
@@ -135,11 +135,11 @@ let client_hello_valid ch =
             ch.extensions in
         not has_sig_algo )
   with
-  | true, _, _, _ -> Printf.printf "ciphersuites are empty\n%!" ; false
-  | _, true, _, _ -> Printf.printf "ciphersuites are not a proper set\n%!" ; true (* cryptophone s5 + davdroid :/ *)
-  | _, _, true, _ -> Printf.printf "client extensions are not a proper set\n%!" ; false
-  | _, _, _, true -> Printf.printf "ssl, tls 1.0, or tls 1.1 with sigalg extension\n%!" ; false
-  | false, false, false, false -> true
+  | false, _, _, _ -> Printf.printf "ciphersuites are empty\n%!" ; false
+  | _, false, _, _ -> Printf.printf "ciphersuites are not a proper set\n%!" ; true (* cryptophone s5 + davdroid :/ *)
+  | _, _, false, _ -> Printf.printf "client extensions are not a proper set\n%!" ; false
+  | _, _, _, false -> Printf.printf "ssl, tls 1.0, or tls 1.1 with sigalg extension\n%!" ; false
+  | true, true, true, true -> true
 
 let server_hello_valid sh =
   List_set.is_proper_set (extension_types to_server_ext_type sh.extensions)
