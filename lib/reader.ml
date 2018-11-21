@@ -327,7 +327,10 @@ let parse_early_data buf =
 let parse_client_extension raw =
   let etype = BE.get_uint16 raw 0 in
   let length = BE.get_uint16 raw 2 in
+  Printf.printf "etype %04X len %d\n%!" etype length ;
   let buf = sub raw 4 length in
+  Printf.printf "buf %d\n%!" (Cstruct.len buf) ;
+  Cstruct.hexdump buf ;
   let data =
     match int_to_extension_type etype with
     | Some SERVER_NAME ->
@@ -445,9 +448,11 @@ let parse_client_hello buf =
   let sessionid = if slen = 0 then None else Some (sub buf 35 slen) in
   let ciphersuites, rt = parse_any_ciphersuites (shift buf (35 + slen)) in
   let _, rt' = parse_compression_methods rt in
+  Printf.printf "here\n%!" ;
   let extensions =
     if len rt' == 0 then [] else parse_extensions parse_client_extension rt'
   in
+  Printf.printf "after extensions\n%!" ;
   ClientHello { client_version ; client_random ; sessionid ; ciphersuites ; extensions }
 
 let parse_server_hello buf =
@@ -631,6 +636,8 @@ let parse_handshake = catch @@ fun buf ->
     raise_trailing_bytes "handshake"
   else
     let payload = sub buf 4 length in
+    Printf.printf "payload is %d" length ;
+    Cstruct.hexdump payload ;
     match handshake_type with
     | Some HELLO_REQUEST ->
       if len payload = 0 then HelloRequest else raise_trailing_bytes "hello request"

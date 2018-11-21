@@ -76,3 +76,109 @@ calls out to:
 * <2018-11-14 Wed>
 - tls version negotiation changes
 - separated session_data and session_data13, both may need some cleaning (psk_id in session_data)
+* <2018-11-21 Wed>
+** tried OpenSSL interop (failed due to bug in supported_versions extension parser)
+** OpenSSL does not support FFDHE, s_client hello:
+(handshake-in
+ (ClientHello
+  ((client_version (Supported TLS_1_2))
+   (client_random
+     "\213G\
+    \n\131o^\165H\179s\246\162\
+    \n\211\233\239\214I\213\212\227m$\212Bh\174\143\245/\141\177")
+   (sessionid
+    ("\157\180\180p`\028\154\190\151\228\150\029\192{M@\"C\231ynu\018\156\197\017n\128}\231\137\134"))
+   (ciphersuites
+    (TLS_AES_256_GCM_SHA384 TLS_CHACHA20_POLY1305_SHA256
+     TLS_AES_128_GCM_SHA256 TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384
+     TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384
+     TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256
+     TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+     TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+     TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_DHE_RSA_WITH_AES_256_CBC_SHA
+     TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA
+     TLS_DHE_RSA_WITH_AES_128_CBC_SHA TLS_RSA_WITH_AES_256_GCM_SHA384
+     TLS_RSA_WITH_AES_128_GCM_SHA256 TLS_RSA_WITH_AES_256_CBC_SHA256
+     TLS_RSA_WITH_AES_128_CBC_SHA256 TLS_RSA_WITH_AES_256_CBC_SHA
+     TLS_RSA_WITH_AES_128_CBC_SHA TLS_EMPTY_RENEGOTIATION_INFO_SCSV))
+   (extensions
+    ((Hostname localhost)
+     (ECPointFormats
+      (UNCOMPRESSED ANSIX962_COMPRESSED_PRIME ANSIX962_COMPRESSED_CHAR2))
+     (SupportedGroups (X25519 SECP256R1 X448 SECP521R1 SECP384R1))
+     (UnknownExtension (35 "")) (UnknownExtension (22 ""))
+     ExtendedMasterSecret
+     (SignatureAlgorithms
+      (RSA_PSS_RSAENC_SHA256 RSA_PSS_RSAENC_SHA384 RSA_PSS_RSAENC_SHA512
+       RSA_PKCS1_SHA256 RSA_PKCS1_SHA384 RSA_PKCS1_SHA512 RSA_PKCS1_SHA224
+       RSA_PKCS1_SHA1))
+     (SupportedVersions
+      ((Supported TLS_1_3) (Supported TLS_1_2) (Supported TLS_1_1)
+       (Supported TLS_1_0) SSL_3))
+     (UnknownExtension (45 "\001\001"))
+     (KeyShare
+      ((X25519
+         " \226\
+        \n\211S\247\234kE\001\147\215\012!'>\173\189\\u\015\2177%\206\151h>\249\208\184e"))))))))
+** TODO unknown 22 (encrypt-then-mac) 35 (session-ticket) 45 (psk-key-exchange-modes)
+** GnuTLS 3.6.4 (installed to /opt), /opt/bin/gnutls-cli --insecure localhost:4433
+(handshake-in
+ (ClientHello
+  ((client_version (Supported TLS_1_2))
+   (client_random
+    "9/6>6\201\186t\190}m=\158\000\161K\191M>A\239)\bf\027OA\199\b\192\193\249")
+   (sessionid ())
+   (ciphersuites
+    (TLS_AES_256_GCM_SHA384 TLS_CHACHA20_POLY1305_SHA256
+     TLS_AES_128_GCM_SHA256 TLS_AES_128_CCM_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+     TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
+     TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+     TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA TLS_RSA_WITH_AES_256_GCM_SHA384
+     TLS_RSA_WITH_AES_256_CCM TLS_RSA_WITH_AES_256_CBC_SHA
+     TLS_RSA_WITH_AES_128_GCM_SHA256 TLS_RSA_WITH_AES_128_CCM
+     TLS_RSA_WITH_AES_128_CBC_SHA TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
+     TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 TLS_DHE_RSA_WITH_AES_256_CCM
+     TLS_DHE_RSA_WITH_AES_256_CBC_SHA TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+     TLS_DHE_RSA_WITH_AES_128_CCM TLS_DHE_RSA_WITH_AES_128_CBC_SHA))
+   (extensions
+    ((UnknownExtension (5 "\001\000\000\000\000"))
+     (SupportedGroups
+      (SECP256R1 SECP384R1 SECP521R1 X25519 FFDHE2048 FFDHE3072 FFDHE4096
+       FFDHE6144 FFDHE8192))
+     (ECPointFormats (UNCOMPRESSED))
+     (SignatureAlgorithms
+      (RSA_PKCS1_SHA256 RSA_PSS_RSAENC_SHA256 RSA_PKCS1_SHA384
+       RSA_PSS_RSAENC_SHA384 RSA_PKCS1_SHA512 RSA_PSS_RSAENC_SHA512
+       RSA_PKCS1_SHA1))
+     (UnknownExtension (22 "")) ExtendedMasterSecret
+     (UnknownExtension (35 ""))
+     (KeyShare
+      ((SECP256R1
+        "\004\253\155\194]\249<\006\011\203\bR$\251\012w\012GM\196!%\028\174\003\156\167\212)\128\226\tzGX\182\r3\185/]DT-,\164\226%_\183n\136\206\020w\231\155@\014\175\185\166\bU\242")
+       (X25519
+         "\210~\174\148\025o\1389\180_\238\135\001\239h\145(\178\184\201\
+        \n\198f\166Y\239c4\028\016$\\")))
+     (SupportedVersions
+      ((Supported TLS_1_3) (Supported TLS_1_2) (Supported TLS_1_1)
+       (Supported TLS_1_0)))
+     (SecureRenegotiation "") (Hostname localhost)
+     (UnknownExtension (45 "\002\001\000")) (UnknownExtension (28 "@\000")))))))
+** TODO unknown 5 (status request) 22 (encrypt-then-mac) 28 (record-size-limit) 35 (session-ticket) 45 (psk-key-exchange-modes)
+** getting there: /opt/bin/gnutls-cli --insecure --priority="NORMAL:+GROUP-FFDHE2048:-GROUP-SECP256R1:-GROUP-SECP384R1:-GROUP-SECP521R1:-GROUP-X25519" localhost:4433
+** server implementation can send valid encrypted data (finished missing, certificate wrong, ...)

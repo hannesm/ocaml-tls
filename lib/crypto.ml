@@ -143,15 +143,23 @@ let cbc_unpad data =
     if check 0 then Some res else None
   with Invalid_argument _ -> None
 
+let tag_len (type a) = function
+  | State.CCM cipher ->
+    let module C = (val cipher : Cipher_block.S.CCM with type key = a) in
+    C.block_size
+  | State.GCM cipher ->
+    let module C = (val cipher : Cipher_block.S.GCM with type key = a) in
+    C.block_size
+
 let encrypt_aead (type a) ~cipher ~key ~nonce ?adata data =
   match cipher with
   | State.CCM cipher ->
-     let module C = (val cipher : Cipher_block.S.CCM with type key = a) in
-     C.encrypt ~key ~nonce ?adata data
+    let module C = (val cipher : Cipher_block.S.CCM with type key = a) in
+    C.encrypt ~key ~nonce ?adata data
   | State.GCM cipher ->
-     let module C = (val cipher : Cipher_block.S.GCM with type key = a) in
-     let { C.message ; tag } = C.encrypt ~key ~iv:nonce ?adata data in
-     message <+> tag
+    let module C = (val cipher : Cipher_block.S.GCM with type key = a) in
+    let { C.message ; tag } = C.encrypt ~key ~iv:nonce ?adata data in
+    message <+> tag
 
 let decrypt_aead (type a) ~cipher ~key ~nonce ?adata data =
   match cipher with

@@ -27,66 +27,84 @@ let pp_hash_k_n ciphersuite =
   let k, n = kn pp in
   (pp, hash, k, n)
 
-let ctx cs lbl sec log =
-  let pp, hash, k, n = pp_hash_k_n cs in
-  let key purpose len =
-    expand_label hash sec (lbl ^ purpose) log len
+type t = {
+  secret : Cstruct.t option ;
+  cipher : Ciphersuite.ciphersuite13 ;
+  hash : Nocrypto.Hash.hash ;
+}
+
+let hkdflabel label context length =
+  let len =
+    let b = Cstruct.create 2 in
+    Cstruct.BE.set_uint16 b 0 length ;
+    b
+  and label =
+    let lbl = Cstruct.of_string ("tls13 " ^ label) in
+    let l = Cstruct.create 1 in
+    Cstruct.set_uint8 l 0 (Cstruct.len lbl) ;
+    l <+> lbl
+  and context =
+    let l = Cstruct.create 1 in
+    Cstruct.set_uint8 l 0 (Cstruct.len context) ;
+    l <+> context
   in
-  let ctx wr iv =
-    let secret = key wr k
-    and nonce = key iv n
-    in
-    { State.sequence = 0L ; cipher_st = Crypto.Ciphers.get_aead ~secret ~nonce pp }
+  len <+> label <+> context
+
+let derive_secret t label log =
+  match t.secret with
+  | None -> assert false
+  | Some prk ->
+    let ctx = Nocrypto.Hash.digest t.hash log in
+    let length = Nocrypto.Hash.digest_size t.hash in
+    let info = hkdflabel label ctx length in
+    let key = Hkdf.expand ~hash:t.hash ~prk ~info length in
+    trace ("derive_secret: " ^ label) key ;
+    key
+
+let empty cipher = {
+  secret = None ;
+  cipher ;
+  hash = Ciphersuite.hash13 cipher
+}
+
+let derive t secret =
+  let salt =
+    match t.secret with
+    | None -> Cstruct.empty
+    | Some _ -> derive_secret t "derived" Cstruct.empty
   in
-  (ctx "server write key" "server write iv",
-   ctx "client write key" "client write iv")
+  let secret = Hkdf.extract ~hash:t.hash ~salt secret in
+  trace "derive (extracted secret)" secret ;
+  { t with secret = Some secret }
 
-let hs_ctx cs log es =
-  let hash = Ciphersuite.hash13 cs in
-  let xes = Hkdf.extract ~hash es in
-  trace "xes" xes ;
-  let log = Hash.digest hash log in
-  ctx cs "handshake key expansion, " xes log
+let traffic_key cipher prk =
+  let _, hash, key_len, iv_len = pp_hash_k_n cipher in
+  let key_info = hkdflabel "key" Cstruct.empty key_len in
+  let key = Hkdf.expand ~hash ~prk ~info:key_info key_len in
+  let iv_info = hkdflabel "iv" Cstruct.empty iv_len in
+  let iv = Hkdf.expand ~hash ~prk ~info:iv_info iv_len in
+  (key, iv)
 
-let traffic_secret cs master_secret log =
-  let hash = Ciphersuite.hash13 cs in
-  let d = Hash.digest hash log
-  and l = Hash.digest_size hash
-  in
-  expand_label hash master_secret "traffic secret" d l
+let ctx t label log =
+  let secret = derive_secret t label log in
+  let secret, nonce = traffic_key t.cipher secret in
+  trace (label ^ " secret") secret ;
+  trace (label ^ " nonce") nonce ;
+  let pp = Ciphersuite.privprot13 t.cipher in
+  { State.sequence = 0L ; cipher_st = Crypto.Ciphers.get_aead ~secret ~nonce pp }
 
-let resumption_secret cs master_secret log =
-  let hash = Ciphersuite.hash13 cs in
-  let d = Hash.digest hash log
-  and l = Hash.digest_size hash
-  in
-  expand_label hash master_secret "resumption master secret" d l
+let hs_ctx t log =
+  ctx t "s hs traffic" log,
+  ctx t "c hs traffic" log
 
-let app_ctx cs log traffic_secret =
-  let hash = Ciphersuite.hash13 cs in
-  let log = Hash.digest hash log in
-  ctx cs "application data key expansion, " traffic_secret log
+let app_ctx t log =
+  ctx t "s ap traffic" log,
+  ctx t "c ap traffic" log
 
-let master_secret cs es ss hlog =
-  let hash = Ciphersuite.hash13 cs in
-  let module H = (val (Nocrypto.Hash.module_of hash)) in
-  let module HK = Hkdf.Make(H) in
-  let hlog = H.digest hlog in
-  let xss = HK.extract ss
-  and xes = HK.extract es
-  in
-  trace "xss" xss ;
-  trace "xes" xes ;
-  let l = H.digest_size in
-  let mss = expand_label hash xss "expanded static secret" hlog l in
-  let mes = expand_label hash xes "expanded ephemeral secret" hlog l in
-  let ms = HK.extract ~salt:mss mes in
-  trace "master secret" ms ;
-  ms
-
+(*
 let finished cs master_secret server data =
   let hash = Ciphersuite.hash13 cs in
   let label = if server then "server finished" else "client finished" in
   let key = expand_label hash master_secret label (Cstruct.create 0) (Hash.digest_size hash) in
   Hash.mac hash ~key (Hash.digest hash data)
-
+*)

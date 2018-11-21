@@ -83,7 +83,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
     let es = ss in
 
     let log = log <+> raw in
-    let server_ctx, client_ctx = hs_ctx (* sh. *) ciphersuite log es in
+    let server_ctx, client_ctx = invalid_arg "not here" (* hs_ctx (* sh. *) ciphersuite log es *) in
     let st = AwaitServerEncryptedExtensions13 (session, sh.extensions, es, ss, log) in
     ({ state with machina = Client13 st },
      [ `Change_enc (Some client_ctx) ;
@@ -140,7 +140,8 @@ let answer_certificate_verify (state : handshake_state) (session : session_data)
   return ({ state with machina = Client13 st }, [])
 
 let answer_finished state (session : session_data) exts es ss fin raw log =
-  let master_secret = master_secret (* session. *) ciphersuite es ss log in
+  invalid_arg "not here"
+(*  let master_secret = master_secret (* session. *) ciphersuite es ss log in
   Tracing.cs ~tag:"master-secret" master_secret ;
   let resumption_secret =
 (*    if Ciphersuite.ciphersuite_psk session.ciphersuite then
@@ -167,7 +168,7 @@ let answer_finished state (session : session_data) exts es ss fin raw log =
   ({ state with machina ; session = `TLS sd :: state.session },
    [ `Change_dec (Some server_app_ctx) ;
      `Record (Packet.HANDSHAKE, mfin) ;
-     `Change_enc (Some client_app_ctx) ])
+     `Change_enc (Some client_app_ctx) ]) *)
 
 let answer_session_ticket state _lifetime psk_id =
   (* XXX: do sth with lifetime *)

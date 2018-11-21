@@ -440,9 +440,8 @@ let answer_client_hello state (ch : client_hello) raw =
   in
 
   agreed_version state.config.protocol_versions ch >>= function
-   | TLS_1_3 when List.mem (`Draft draft) ch.extensions  ->
+   | TLS_1_3 ->
      Handshake_server13.answer_client_hello state ch raw (Cstruct.create 0)
-   | TLS_1_3 -> process TLS_1_2
    | protocol_version -> process protocol_version
 
 let answer_client_hello_reneg state (ch : client_hello) raw =

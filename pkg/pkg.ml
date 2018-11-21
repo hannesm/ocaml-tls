@@ -3,7 +3,7 @@
 #require "topkg"
 open Topkg
 
-let lwt = Conf.with_pkg ~default:false "lwt"
+let lwt = Conf.with_pkg ~default:true "lwt"
 let mirage = Conf.with_pkg ~default:false "mirage"
 
 let opams =
