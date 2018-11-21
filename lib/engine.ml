@@ -448,7 +448,7 @@ let maybe_app a b = match a, b with
 
 let assemble_records (version : tls_version) rs =
   let version = match version with
-    | TLS_1_3 -> TLS_1_0
+    | TLS_1_3 -> TLS_1_2
     | x -> x
   in
   Cs.appends (List.map (Writer.assemble_hdr version) rs)
