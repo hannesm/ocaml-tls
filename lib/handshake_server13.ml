@@ -196,12 +196,14 @@ let answer_client_hello state ch raw log =
     (* XXX: for-each ciphers there should be a suitable group (skipping for now since we only have DHE) *)
     (* XXX: check sig_algs for signatures in certificate chain *)
 
-    (* if acceptable, do server hello *)
+    let early_secret = Handshake_crypto13.(derive (empty cipher) (Cstruct.create 32)) in
+
+(* if acceptable, do server hello *)
     let secret, public = Nocrypto.Dh.gen_key group in
     (match Nocrypto.Dh.shared group secret keyshare with
      | None -> fail (`Fatal `InvalidDH)
      | Some shared -> return shared) >>= fun es ->
-    let ss = es in
+    let hs_secret = Handshake_crypto13.derive early_secret es in
 
     let sh, session = base_server_hello `DHE cipher [`KeyShare (group, public)] in
     let sh_raw = Writer.assemble_handshake (ServerHello sh) in
@@ -209,7 +211,7 @@ let answer_client_hello state ch raw log =
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
 
     let log = log <+> raw <+> sh_raw in
-    let server_ctx, client_ctx = hs_ctx cipher log es in
+    let server_ctx, client_ctx = hs_ctx hs_secret log in
 
     (* ONLY if client sent a `Hostname *)
     let ee = EncryptedExtensions [ `Hostname ] in
@@ -236,24 +238,23 @@ let answer_client_hello state ch raw log =
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
 
     let log = log <+> cv_raw in
-    let master_secret = master_secret cipher es ss log in
-    Tracing.cs ~tag:"master-secret" master_secret ;
-    let resumption_secret = resumption_secret cipher master_secret log in
+    let master_secret = Handshake_crypto13.derive hs_secret Cstruct.empty in
+    let ms = match master_secret.secret with None -> assert false | Some x -> x in
+    Tracing.cs ~tag:"master-secret" ms ;
+    (* let resumption_secret = resumption_secret cipher master_secret log in *)
 
-    let traffic_secret = traffic_secret cipher master_secret log in
-
-    let f_data = finished cipher master_secret true log in
+(*    let f_data = finished cipher master_secret true log in
     let fin = Finished f_data in
     let fin_raw = Writer.assemble_handshake fin in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake fin ;
 
-    let log = log <+> fin_raw in
-    let server_app_ctx, client_app_ctx = app_ctx cipher log traffic_secret in
+      let log = log <+> fin_raw in *)
+    let server_app_ctx, client_app_ctx = app_ctx master_secret log in
 
     guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
 
-    let session = { session with own_private_key = Some pr ; own_certificate =  crt ; master_secret ; resumption_secret } in
+    let session = { session with own_private_key = Some pr ; own_certificate =  crt ; master_secret = ms (* ; resumption_secret *) } in
     (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
     let st = AwaitClientFinished13 (session, Some client_app_ctx, log) in
     ({ state with machina = Server13 st },
@@ -263,7 +264,7 @@ let answer_client_hello state ch raw log =
        `Record (Packet.HANDSHAKE, ee_raw) ;
        `Record (Packet.HANDSHAKE, cert_raw) ;
        `Record (Packet.HANDSHAKE, cv_raw) ;
-       `Record (Packet.HANDSHAKE, fin_raw) ;
+       (*       `Record (Packet.HANDSHAKE, fin_raw) ; *)
        `Change_enc (Some server_app_ctx) ] )
 
   | None, None, None
@@ -296,7 +297,8 @@ let answer_client_hello state ch raw log =
     fail (`Error (`NoConfiguredCiphersuite ciphers)) *)
 
 let answer_client_finished state fin (sd : session_data13) dec_ctx raw log =
-  let data = finished sd.ciphersuite sd.master_secret false log in
+  invalid_arg "YI"
+(*  let data = finished sd.ciphersuite sd.master_secret false log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
   let ret, sd =
@@ -321,7 +323,7 @@ let answer_client_finished state fin (sd : session_data13) dec_ctx raw log =
   ({ state with
      machina = Server13 Established13 ;
      session = `TLS13 sd :: state.session },
-   ret)
+    ret) *)
 
 let answer_client_hello_retry state oldch ch hrr raw log =
   (* ch = oldch + keyshare for hrr.selected_group (6.3.1.3) *)

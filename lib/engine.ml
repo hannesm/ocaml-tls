@@ -126,7 +126,13 @@ let encrypt (version : tls_version) (st : crypto_state) ty buf =
               buf <+> t
             in
             let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
-            let buf = Crypto.encrypt_aead ~cipher:c.cipher ~key:c.cipher_secret ~nonce buf in
+            let adata = (* header *)
+              let len = Cstruct.len buf + Crypto.tag_len c.cipher in
+              let buf = Writer.assemble_hdr TLS_1_2 (Packet.APPLICATION_DATA, Cstruct.empty) in
+              Cstruct.BE.set_uint16 buf 3 len ;
+              buf
+            in
+            let buf = Crypto.encrypt_aead ~cipher:c.cipher ~adata ~key:c.cipher_secret ~nonce buf in
             (Some { ctx with sequence = Int64.succ ctx.sequence }, Packet.APPLICATION_DATA, buf)
          | _ -> assert false)
      | _ ->

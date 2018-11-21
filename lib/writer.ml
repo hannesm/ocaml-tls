@@ -23,7 +23,8 @@ let assemble_any_protocol_version version =
 
 let assemble_hdr version (content_type, payload) =
   let buf = create 5 in
-  set_uint8 buf 0 (content_type_to_int content_type);
+  let ct = content_type_to_int content_type in
+  set_uint8 buf 0 ct;
   assemble_protocol_version_int (shift buf 1) version;
   BE.set_uint16 buf 3 (len payload);
   buf <+> payload

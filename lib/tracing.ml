@@ -27,6 +27,6 @@ let sexpf ~tag ~f x = sexp ~tag @@ lazy (f x)
 
 let sexpfs ~tag ~f xs = if is_tracing () then List.iter (sexpf ~tag ~f) xs
 
-let cs ~tag = sexpf ~tag ~f:Cstruct_sexp.sexp_of_t
+let cs ~tag = sexpf ~tag ~f:(fun cs -> Cstruct.hexdump cs ; Cstruct_sexp.sexp_of_t cs)
 
 let css ~tag css = if is_tracing () then List.iter (cs ~tag) css
