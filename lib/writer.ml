@@ -320,9 +320,9 @@ let assemble_client_hello (cl : client_hello) : Cstruct.t =
   bbuf <+> extensions <+> extrapadding
 
 let assemble_server_hello (sh : server_hello) : Cstruct.t =
-  let version = match sh.server_version with
-    | TLS_1_3 -> TLS_1_2
-    | x -> x
+  let version, exts = match sh.server_version with
+    | TLS_1_3 -> TLS_1_2, `SelectedVersion TLS_1_3 :: sh.extensions
+    | x -> x, sh.extensions
   in
   let v = assemble_protocol_version version in
   let sid =
@@ -334,7 +334,7 @@ let assemble_server_hello (sh : server_hello) : Cstruct.t =
   let cs = assemble_ciphersuite sh.ciphersuite in
   (* useless compression method *)
   let cm = assemble_compression_method NULL in
-  let extensions = assemble_extensions assemble_server_extension sh.extensions in
+  let extensions = assemble_extensions assemble_server_extension exts in
   v <+> sh.server_random <+> sid <+> cs <+> cm <+> extensions
 
 let assemble_dh_parameters p =
