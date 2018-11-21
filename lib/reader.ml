@@ -204,7 +204,10 @@ let parse_supported_version buf =
 
 let parse_supported_versions buf =
   let len = get_uint8 buf 0 in
-  parse_count_list parse_supported_version (shift buf 1) [] len
+  if len mod 2 <> 0 then
+    raise_wrong_length "supported versions"
+  else
+    parse_count_list parse_supported_version (shift buf 1) [] (len / 2)
 
 let parse_named_group buf =
   let typ = BE.get_uint16 buf 0 in
