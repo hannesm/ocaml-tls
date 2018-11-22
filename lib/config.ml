@@ -112,7 +112,13 @@ module Ciphers = struct
 end
 
 let default_signature_algorithms =
-  [ `RSA_PKCS1_SHA512 ; `RSA_PKCS1_SHA384 ; `RSA_PKCS1_SHA256 ; `RSA_PKCS1_SHA1 ]
+  [ `RSA_PSS_RSAENC_SHA256 ;
+    `RSA_PSS_RSAENC_SHA384 ;
+    `RSA_PSS_RSAENC_SHA512 ;
+    `RSA_PKCS1_SHA256 ;
+    `RSA_PKCS1_SHA384 ;
+    `RSA_PKCS1_SHA512 ;
+    `RSA_PKCS1_SHA1 ]
 
 let supported_signature_algorithms =
   default_signature_algorithms @ [ `RSA_PKCS1_MD5 ]

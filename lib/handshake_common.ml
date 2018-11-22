@@ -236,6 +236,19 @@ let server_hello_valid (sh : server_hello) =
 
 let (<+>) = Cs.(<+>)
 
+let to_sign_1_3 context_string =
+  (* input is prepended by 64 * 0x20 (to avoid cross-version attacks) *)
+  (* input for signature now contains also a context string *)
+  let prefix = Cstruct.create 64 in
+  Cstruct.memset prefix 0x20 ;
+  let ctx =
+    let stop = Cstruct.create 1 (* trailing 0 byte *) in
+    match context_string with
+    | None -> stop
+    | Some x -> Cstruct.of_string x <+> stop
+  in
+  prefix <+> ctx
+
 let signature version ?context_string data client_sig_algs signature_algorithms private_key =
   match version with
   | TLS_1_0 | TLS_1_1 ->
@@ -259,36 +272,24 @@ let signature version ?context_string data client_sig_algs signature_algorithms 
   | TLS_1_3 ->
      (* RSA-PSS is used *)
      (* input is prepended by 64 * 0x20 (to avoid cross-version attacks) *)
-     (* input for signature now contains also a context string *)
-     let prefix = Cstruct.create 64 in
-     Cstruct.memset prefix 0x20 ;
-     let ctx =
-       let stop = Cstruct.create 1 in
-       Cstruct.memset stop 0 ; (* trailing 0 byte *)
-       match context_string with
-       | None -> stop
-       | Some x -> Cstruct.of_string x <+> stop
-     in
-     ( match client_sig_algs with
-       | None              -> return `RSA_PSS_RSAENC_SHA256
-       | Some client_algos ->
-         match first_match client_algos signature_algorithms with
-         | None -> fail (`Error (`NoConfiguredSignatureAlgorithm client_algos))
-         | Some sig_alg -> return sig_alg ) >|= fun sig_alg ->
-     let hash_algo = hash_of_signature_algorithm sig_alg in
-     match signature_scheme_of_signature_algorithm sig_alg with
-     | `PSS ->
-       let module H = (val (Hash.module_of hash_algo)) in
-       let module PSS = Rsa.PSS(H) in
-       let data = H.digest data in (* XXX See #407 https://github.com/tlswg/tls13-spec/issues/407 *)
-       let to_sign = H.digest (prefix <+> ctx <+> data) in
-       let signature = PSS.sign ~key:private_key to_sign in
-       Writer.assemble_digitally_signed_1_2 sig_alg signature
-     | `PKCS1 -> (* XXX: remove!!! *)
-       let hash = Hash.digest hash_algo data in
-       let cs = X509.Encoding.pkcs1_digest_info_to_cstruct (hash_algo, hash) in
-       let sign = Rsa.PKCS1.sig_encode ~key:private_key cs in
-       Writer.assemble_digitally_signed_1_2 sig_alg sign
+    (* input for signature now contains also a context string *)
+    let prefix = to_sign_1_3 context_string in
+    ( match client_sig_algs with
+      | None              -> return `RSA_PSS_RSAENC_SHA256
+      | Some client_algos ->
+        match first_match client_algos signature_algorithms with
+        | None -> fail (`Error (`NoConfiguredSignatureAlgorithm client_algos))
+        | Some sig_alg -> return sig_alg ) >>= fun sig_alg ->
+    let hash_algo = hash_of_signature_algorithm sig_alg in
+    match signature_scheme_of_signature_algorithm sig_alg with
+    | `PSS ->
+      let module H = (val (Hash.module_of hash_algo)) in
+      let module PSS = Rsa.PSS(H) in
+      let data = H.digest data in
+      let to_sign = prefix <+> data in
+      let signature = PSS.sign ~key:private_key to_sign in
+      return (Writer.assemble_digitally_signed_1_2 sig_alg signature)
+    | _ -> fail (`Error (`NoConfiguredSignatureAlgorithm [])) (*TODO different warning, types *)
 
 let peer_rsa_key = function
   | None -> fail (`Fatal `NoCertificateReceived)
@@ -341,28 +342,14 @@ let verify_digitally_signed version ?context_string sig_algs data signature_data
             let module H = (val (Hash.module_of hash_algo)) in
             let module PSS = Rsa.PSS(H) in
             let data =
-              let pre = Cstruct.create 64 in
-              Cstruct.memset pre 0x20 ;
-              let con =
-                let stop = Cstruct.create 1 in
-                Cstruct.memset stop 0 ;
-                match context_string with
-                | None -> stop
-                | Some x -> Cstruct.of_string x <+> stop
+              let prefix = to_sign_1_3 context_string
+              and data = H.digest signature_data
               in
-              let data = H.digest signature_data in
-              H.digest (pre <+> con <+> data)
+              prefix <+> data
             in
             guard (PSS.verify ~key:pubkey ~signature data) (`Fatal `RSASignatureMismatch)
           | `PKCS1 ->
-            let compare_hashes should data =
-              match X509.Encoding.pkcs1_digest_info_of_cstruct should with
-              | Some (hash_algo', target) when hash_algo = hash_algo' ->
-                guard (Crypto.digest_eq hash_algo ~target data) (`Fatal `RSASignatureMismatch)
-              | _ -> fail (`Fatal `HashAlgorithmMismatch)
-            in
-            decode_pkcs1_signature signature >>= fun raw ->
-            compare_hashes raw signature_data
+            invalid_arg "no"
         end
       | Error re -> fail (`Fatal (`ReaderError re)))
 
