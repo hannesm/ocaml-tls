@@ -67,11 +67,6 @@ let assemble_certificate c =
 let assemble_certificates cs =
   assemble_list Three assemble_certificate cs
 
-let assemble_certificates_1_3 context certs =
-  let l = create 1 in
-  set_uint8 l 0 (len context) ;
-  l <+> context <+> assemble_certificates certs
-
 let assemble_compression_method m =
   let buf = create 1 in
   set_uint8 buf 0 (compression_method_to_int m);
@@ -265,6 +260,20 @@ let assemble_server_extension e =
 
 let assemble_extensions assemble_e es =
   assemble_list ~none_if_empty:true Two assemble_e es
+
+let assemble_cert_ext (certificate, extensions) =
+  let cert = assemble_certificate certificate
+  and exts = assemble_list Two assemble_server_extension (* ?? *) extensions
+  in
+  cert <+> exts
+
+let assemble_certs_exts cs =
+  assemble_list Three assemble_cert_ext cs
+
+let assemble_certificates_1_3 context certs =
+  let l = create 1 in
+  set_uint8 l 0 (len context) ;
+  l <+> context <+> assemble_certs_exts (List.map (fun c -> c, []) certs)
 
 let assemble_client_hello (cl : client_hello) : Cstruct.t =
   let version = match cl.client_version with

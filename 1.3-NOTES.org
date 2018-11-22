@@ -182,3 +182,6 @@ calls out to:
 ** TODO unknown 5 (status request) 22 (encrypt-then-mac) 28 (record-size-limit) 35 (session-ticket) 45 (psk-key-exchange-modes)
 ** getting there: /opt/bin/gnutls-cli --insecure --priority="NORMAL:+GROUP-FFDHE2048:-GROUP-SECP256R1:-GROUP-SECP384R1:-GROUP-SECP521R1:-GROUP-X25519" localhost:4433
 ** server implementation can send valid encrypted data (finished missing, certificate wrong, ...)
+* <2018-11-22 Thu>
+** yay, got certificateverify to work, next step finished (and then we're all set :D)
+** glad to see no more PKCS1_5 in certificateverify! :)

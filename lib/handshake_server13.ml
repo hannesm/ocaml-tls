@@ -225,16 +225,18 @@ let answer_client_hello state ch raw log =
       | _ -> assert false
     in
     let certs = List.map X509.Encoding.cs_of_cert crt in
-    let cert = Certificate (Writer.assemble_certificates_1_3 (Cstruct.create 0) certs) in
+    let cert = Certificate (Writer.assemble_certificates_1_3 Cstruct.empty certs) in
     let cert_raw = Writer.assemble_handshake cert in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
 
     let log = Cstruct.concat [ log ; ee_raw ; cert_raw ] in
-    signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify" log (Some sigalgs) state.config.Config.signature_algorithms pr >>= fun signed ->
+    signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
+      log (Some sigalgs) state.config.Config.signature_algorithms pr >>= fun signed ->
     let cv = CertificateVerify signed in
     let cv_raw = Writer.assemble_handshake cv in
 
+    Tracing.cs ~tag:"cv" cv_raw ;
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
 
     let log = log <+> cv_raw in
