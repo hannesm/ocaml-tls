@@ -50,16 +50,19 @@ let hkdflabel label context length =
   in
   len <+> label <+> context
 
+let derive_secret_no_hash hash prk ?(ctx = Cstruct.empty) label =
+  let length = Nocrypto.Hash.digest_size hash in
+  let info = hkdflabel label ctx length in
+  let key = Hkdf.expand ~hash ~prk ~info length in
+  trace ("derive_secret: " ^ label) key ;
+  key
+
 let derive_secret t label log =
   match t.secret with
   | None -> assert false
   | Some prk ->
     let ctx = Nocrypto.Hash.digest t.hash log in
-    let length = Nocrypto.Hash.digest_size t.hash in
-    let info = hkdflabel label ctx length in
-    let key = Hkdf.expand ~hash:t.hash ~prk ~info length in
-    trace ("derive_secret: " ^ label) key ;
-    key
+    derive_secret_no_hash t.hash prk ~ctx label
 
 let empty cipher = {
   secret = None ;
@@ -85,8 +88,7 @@ let traffic_key cipher prk =
   let iv = Hkdf.expand ~hash ~prk ~info:iv_info iv_len in
   (key, iv)
 
-let ctx t label log =
-  let secret = derive_secret t label log in
+let ctx t label secret =
   let secret, nonce = traffic_key t.cipher secret in
   trace (label ^ " secret") secret ;
   trace (label ^ " nonce") nonce ;
@@ -94,17 +96,23 @@ let ctx t label log =
   { State.sequence = 0L ; cipher_st = Crypto.Ciphers.get_aead ~secret ~nonce pp }
 
 let hs_ctx t log =
-  ctx t "s hs traffic" log,
-  ctx t "c hs traffic" log
+  let server_handshake_traffic_secret = derive_secret t "s hs traffic" log
+  and client_handshake_traffic_secret = derive_secret t "c hs traffic" log
+  in
+  (server_handshake_traffic_secret,
+   ctx t "server handshake traffic" server_handshake_traffic_secret,
+   client_handshake_traffic_secret,
+   ctx t "client handshake traffic" client_handshake_traffic_secret)
 
 let app_ctx t log =
-  ctx t "s ap traffic" log,
-  ctx t "c ap traffic" log
+  let server_application_traffic_secret = derive_secret t "s ap traffic" log
+  and client_application_traffic_secret = derive_secret t "c ap traffic" log
+  in
+  (server_application_traffic_secret,
+   ctx t "server application traffic" server_application_traffic_secret,
+   client_application_traffic_secret,
+   ctx t "client application traffic" client_application_traffic_secret)
 
-(*
-let finished cs master_secret server data =
-  let hash = Ciphersuite.hash13 cs in
-  let label = if server then "server finished" else "client finished" in
-  let key = expand_label hash master_secret label (Cstruct.create 0) (Hash.digest_size hash) in
-  Hash.mac hash ~key (Hash.digest hash data)
-*)
+let finished t secret data =
+  let key = derive_secret_no_hash t.hash secret "finished" in
+  Hash.mac t.hash ~key (Hash.digest t.hash data)
