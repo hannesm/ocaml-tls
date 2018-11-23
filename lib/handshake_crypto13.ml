@@ -113,6 +113,6 @@ let app_ctx t log =
    client_application_traffic_secret,
    ctx t "client application traffic" client_application_traffic_secret)
 
-let finished t secret data =
-  let key = derive_secret_no_hash t.hash secret "finished" in
-  Hash.mac t.hash ~key (Hash.digest t.hash data)
+let finished hash secret data =
+  let key = derive_secret_no_hash hash secret "finished" in
+  Hash.mac hash ~key (Hash.digest hash data)

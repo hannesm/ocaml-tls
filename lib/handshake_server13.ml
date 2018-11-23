@@ -245,7 +245,7 @@ let answer_client_hello state ch raw log =
     Tracing.cs ~tag:"master-secret" ms ;
     (* let resumption_secret = resumption_secret cipher master_secret log in *)
 
-    let f_data = finished hs_secret server_hs_secret log in
+    let f_data = finished hs_secret.hash server_hs_secret log in
     let fin = Finished f_data in
     let fin_raw = Writer.assemble_handshake fin in
 
@@ -258,7 +258,7 @@ let answer_client_hello state ch raw log =
 
     let session = { session with own_private_key = Some pr ; own_certificate =  crt ; master_secret = ms (* ; resumption_secret *) } in
     (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
-    let st = AwaitClientFinished13 (session, Some client_app_ctx, log) in
+    let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
     ({ state with machina = Server13 st },
      [ `Record (Packet.HANDSHAKE, sh_raw) ;
        `Change_enc (Some server_ctx) ;
@@ -298,16 +298,14 @@ let answer_client_hello state ch raw log =
   | _, _, _, _, None ->
     fail (`Error (`NoConfiguredCiphersuite ciphers)) *)
 
-let answer_client_finished state fin (sd : session_data13) dec_ctx raw log =
-  invalid_arg "YI"
-(*  let data = finished sd.ciphersuite sd.master_secret false log in
+let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx raw log =
+  let hash = Ciphersuite.hash13 sd.ciphersuite in
+  let data = finished hash client_fini log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
   let ret, sd =
     (* only change dec if we're in handshake, also send out session ticket only just after handshake (and only if no PSK) *)
-    let dec = match dec_ctx with
-      | None -> []
-      | Some cc -> [`Change_dec (Some cc)]
+    let dec = [`Change_dec (Some dec_ctx)]
     and st, sd =
       match sd.kex with
       | `PSK -> ([], sd)
@@ -325,7 +323,7 @@ let answer_client_finished state fin (sd : session_data13) dec_ctx raw log =
   ({ state with
      machina = Server13 Established13 ;
      session = `TLS13 sd :: state.session },
-    ret) *)
+    ret)
 
 let answer_client_hello_retry state oldch ch hrr raw log =
   (* ch = oldch + keyshare for hrr.selected_group (6.3.1.3) *)
@@ -346,7 +344,7 @@ let handle_handshake cs hs buf =
          answer_client_hello_retry hs oldch ch hrr buf log
       | AwaitClientCertificate13, Certificate _ -> assert false (* process C, move to CV *)
       | AwaitClientCertificateVerify13, CertificateVerify _ -> assert false (* validate CV *)
-      | AwaitClientFinished13 (sd, cc, log), Finished x ->
-         answer_client_finished hs x sd cc buf log
+      | AwaitClientFinished13 (sd, cf, cc, log), Finished x ->
+         answer_client_finished hs x sd cf cc buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )
   | Error re -> fail (`Fatal (`ReaderError re))

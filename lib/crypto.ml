@@ -85,6 +85,14 @@ let aead_nonce nonce seq =
   in
   Cs.xor nonce s
 
+let adata_1_3 len =
+  let buf = Cstruct.create 5 in
+  Cstruct.set_uint8 buf 0 (Packet.content_type_to_int Packet.APPLICATION_DATA) ;
+  Cstruct.set_uint8 buf 1 3;
+  Cstruct.set_uint8 buf 2 3;
+  Cstruct.BE.set_uint16 buf 3 len ;
+  buf
+
 let pseudo_header seq ty (v_major, v_minor) length =
   let open Cstruct in
   let prefix = create 5 in

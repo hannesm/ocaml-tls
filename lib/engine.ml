@@ -126,12 +126,7 @@ let encrypt (version : tls_version) (st : crypto_state) ty buf =
               buf <+> t
             in
             let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
-            let adata = (* header *)
-              let len = Cstruct.len buf + Crypto.tag_len c.cipher in
-              let buf = Writer.assemble_hdr TLS_1_2 (Packet.APPLICATION_DATA, Cstruct.empty) in
-              Cstruct.BE.set_uint16 buf 3 len ;
-              buf
-            in
+            let adata = Crypto.adata_1_3 (Cstruct.len buf + Crypto.tag_len c.cipher) in
             let buf = Crypto.encrypt_aead ~cipher:c.cipher ~adata ~key:c.cipher_secret ~nonce buf in
             (Some { ctx with sequence = Int64.succ ctx.sequence }, Packet.APPLICATION_DATA, buf)
          | _ -> assert false)
@@ -254,30 +249,33 @@ let decrypt (version : tls_version) (st : crypto_state) ty buf =
   match st, version with
   | None, _ -> return (st, buf, ty)
   | Some ctx, TLS_1_3 ->
-    guard (ty = Packet.APPLICATION_DATA) (`Fatal `InvalidMessage) >>= fun () ->
-    (match ctx.cipher_st with
-     | AEAD c ->
-       (* XXX: FAILURE VALUES! *)
-       guard (ty = Packet.APPLICATION_DATA) (`Fatal `MACUnderflow) >>= fun () ->
-       let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
-       let unpad x =
-         let rec eat idx =
-           match Cstruct.get_uint8 x idx with
-           | 0 when pred idx > 0 -> eat (pred idx)
-           | 0 -> fail (`Fatal `MACUnderflow)
-           | n ->
-             let pkt = if idx = 0 then Cstruct.create 0 else Cstruct.sub x 0 idx in
-             match Packet.int_to_content_type n with
-             | Some ct when ct <> Packet.CHANGE_CIPHER_SPEC -> return (pkt, ct)
-             | _ -> fail (`Fatal `MACUnderflow)
-         in
-         eat (pred (Cstruct.len x))
-       in
-       (match Crypto.decrypt_aead ~cipher:c.cipher ~key:c.cipher_secret ~nonce buf with
-        | None -> fail (`Fatal `MACMismatch)
-        | Some x ->
-          unpad x >|= fun (data, ty) ->
-          (Some { ctx with sequence = Int64.succ ctx.sequence }, data, ty))
+    (match ty with
+     | Packet.CHANGE_CIPHER_SPEC -> return (st, buf, ty)
+     | Packet.APPLICATION_DATA ->
+       (match ctx.cipher_st with
+        | AEAD c ->
+          (* XXX: FAILURE VALUES! *)
+          let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
+          let unpad x =
+            let rec eat idx =
+              match Cstruct.get_uint8 x idx with
+              | 0 when pred idx > 0 -> eat (pred idx)
+              | 0 -> fail (`Fatal `MACUnderflow)
+              | n ->
+                let pkt = if idx = 0 then Cstruct.create 0 else Cstruct.sub x 0 idx in
+                match Packet.int_to_content_type n with
+                | Some ct when ct <> Packet.CHANGE_CIPHER_SPEC -> return (pkt, ct)
+                | _ -> fail (`Fatal `MACUnderflow)
+            in
+            eat (pred (Cstruct.len x))
+          in
+          let adata = Crypto.adata_1_3 (Cstruct.len buf) in
+          (match Crypto.decrypt_aead ~adata ~cipher:c.cipher ~key:c.cipher_secret ~nonce buf with
+           | None -> fail (`Fatal `MACMismatch)
+           | Some x ->
+             unpad x >|= fun (data, ty) ->
+             (Some { ctx with sequence = Int64.succ ctx.sequence }, data, ty))
+        | _ -> fail (`Fatal `InvalidMessage))
      | _ -> fail (`Fatal `InvalidMessage))
   | Some ctx, _ ->
     dec ctx >>= fun (st', msg) ->
@@ -366,7 +364,8 @@ let rec separate_handshakes buf =
 let handle_change_cipher_spec = function
   | Client cs -> Handshake_client.handle_change_cipher_spec cs
   | Server ss -> Handshake_server.handle_change_cipher_spec ss
-  | Client13 _ | Server13 _ -> (fun _ _ -> fail (`Fatal `InvalidMessage))
+  | Client13 _ | Server13 _ -> (fun s _ -> return (s, []))
+(* TLS 1.3 ignores CCS, may send it for compatibility with middle-boxes *)
 
 and handle_handshake = function
   | Client cs -> Handshake_client.handle_handshake cs
@@ -423,7 +422,7 @@ let handle_raw_record state (hdr, buf as record : raw_record) =
   ( match hs.machina, version with
     | Client (AwaitServerHello _), _       -> return ()
     | Server (AwaitClientHello)  , _       -> return ()
-    | _                          , TLS_1_3 -> guard (hdr.version = Supported TLS_1_0) (`Fatal (`BadRecordVersion hdr.version))
+    | _                          , TLS_1_3 -> guard (hdr.version = Supported TLS_1_2) (`Fatal (`BadRecordVersion hdr.version))
     | _                          , v       -> guard (version_eq hdr.version v) (`Fatal (`BadRecordVersion hdr.version)) )
   >>= fun () ->
   decrypt version state.decryptor hdr.content_type buf
