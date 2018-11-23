@@ -211,7 +211,7 @@ let answer_client_hello state ch raw log =
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
 
     let log = log <+> raw <+> sh_raw in
-    let server_ctx, client_ctx = hs_ctx hs_secret log in
+    let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
 
     (* ONLY if client sent a `Hostname *)
     let ee = EncryptedExtensions [ `Hostname ] in
@@ -245,14 +245,14 @@ let answer_client_hello state ch raw log =
     Tracing.cs ~tag:"master-secret" ms ;
     (* let resumption_secret = resumption_secret cipher master_secret log in *)
 
-(*    let f_data = finished cipher master_secret true log in
+    let f_data = finished hs_secret server_hs_secret log in
     let fin = Finished f_data in
     let fin_raw = Writer.assemble_handshake fin in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake fin ;
 
-      let log = log <+> fin_raw in *)
-    let server_app_ctx, client_app_ctx = app_ctx master_secret log in
+    let log = log <+> fin_raw in
+    let _, server_app_ctx, _, client_app_ctx = app_ctx master_secret log in
 
     guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
 
@@ -266,7 +266,7 @@ let answer_client_hello state ch raw log =
        `Record (Packet.HANDSHAKE, ee_raw) ;
        `Record (Packet.HANDSHAKE, cert_raw) ;
        `Record (Packet.HANDSHAKE, cv_raw) ;
-       (*       `Record (Packet.HANDSHAKE, fin_raw) ; *)
+       `Record (Packet.HANDSHAKE, fin_raw) ;
        `Change_enc (Some server_app_ctx) ] )
 
   | None, None, None

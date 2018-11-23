@@ -185,3 +185,5 @@ calls out to:
 * <2018-11-22 Thu>
 ** yay, got certificateverify to work, next step finished (and then we're all set :D)
 ** glad to see no more PKCS1_5 in certificateverify! :)
+* <2018-11-23 Fri>
+** re-enable support for finished, and fix the implementation (it requires s_hs_traffic / c_hs_traffic keys, which means they need to be exposed by crypto API)

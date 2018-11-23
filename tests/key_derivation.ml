@@ -153,34 +153,6 @@ let derive_write_handshake_keys () =
   Alcotest.check cs __LOC__ write_handshake_iv
     (Handshake_crypto13.expand_label `SHA256 s_hs_traffic_secret "iv" Cstruct.empty 12)
 
-let master = Cstruct.of_hex {|
-43 de 77 e0 c7 77 13 85  9a 94 4d b9 db 25 90 b5
-31 90 a6 5b 3e e2 e4 f1  2d d7 a0 bb 7c e2 54 b4
-|}
-
-let derive_master () =
-  let hash = Nocrypto.Hash.digest `SHA256 Cstruct.empty in
-  Alcotest.check cs __LOC__ master
-    (Handshake_crypto13.expand_label `SHA256 hs_secret "derived" hash 32)
-
-let master_secret = Cstruct.of_hex {|
-18 df 06 84 3d 13 a0 8b  f2 a4 49 84 4c 5f 8a 47
-80 01 bc 4d 4c 62 79 84  d5 a4 1d a8 d0 40 29 19
-|}
-
-let extract_master () =
-  Alcotest.check cs __LOC__ master_secret
-    (Hkdf.extract ~hash:`SHA256 ~salt:master (Cstruct.create 32)) ;
-  match !my_secret with
-  | None -> Alcotest.fail "expected my secret"
-  | Some t ->
-    let t' = Handshake_crypto13.derive t (Cstruct.create 32) in
-    match t'.secret with
-    | None -> Alcotest.fail "expected a secret"
-    | Some s ->
-      my_secret := Some t' ;
-      Alcotest.check cs __LOC__ master_secret s
-
 let finished_expanded = Cstruct.of_hex {|
 00 8d 3b 66 f8 16 ea 55  9f 96 b5 37 e8 85 c3 1f
 c0 68 bf 49 2c 65 2f 01  f2 88 a1 d8 cd c1 9f c8
@@ -241,17 +213,53 @@ d3 be 15 2a 3d a5 04 3e  06 3d da 65 cd f5 ae a2
 |}
 
 let derive_finished () =
+  let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ] in
   Alcotest.check cs __LOC__ finished_expanded
     (Handshake_crypto13.expand_label `SHA256 s_hs_traffic_secret "finished" Cstruct.empty 32) ;
-  let hash = Nocrypto.Hash.digest `SHA256 (Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ]) in
+  let hash = Nocrypto.Hash.digest `SHA256 log in
   Alcotest.check cs __LOC__ finished_key
-    (Nocrypto.Hash.mac `SHA256 ~key:finished_expanded hash)
+    (Nocrypto.Hash.mac `SHA256 ~key:finished_expanded hash) ;
+  match !my_secret with
+  | None -> Alcotest.fail "expected some secret"
+  | Some t ->
+    let s_hs_traffic = Handshake_crypto13.derive_secret t "s hs traffic" (Cstruct.append ch sh) in
+    Alcotest.check cs __LOC__ s_hs_traffic_secret s_hs_traffic ;
+    Alcotest.check cs __LOC__ finished_key
+      (Handshake_crypto13.finished t s_hs_traffic log)
 
 let finished = Cstruct.of_hex {|
 14 00 00 20 9b 9b 14 1d  90 63 37 fb d2 cb dc e7
 1d f4 de da 4a b4 2c 30  95 72 cb 7f ff ee 54 54
 b7 8f 07 18
 |}
+
+let master = Cstruct.of_hex {|
+43 de 77 e0 c7 77 13 85  9a 94 4d b9 db 25 90 b5
+31 90 a6 5b 3e e2 e4 f1  2d d7 a0 bb 7c e2 54 b4
+|}
+
+let derive_master () =
+  let hash = Nocrypto.Hash.digest `SHA256 Cstruct.empty in
+  Alcotest.check cs __LOC__ master
+    (Handshake_crypto13.expand_label `SHA256 hs_secret "derived" hash 32)
+
+let master_secret = Cstruct.of_hex {|
+18 df 06 84 3d 13 a0 8b  f2 a4 49 84 4c 5f 8a 47
+80 01 bc 4d 4c 62 79 84  d5 a4 1d a8 d0 40 29 19
+|}
+
+let extract_master () =
+  Alcotest.check cs __LOC__ master_secret
+    (Hkdf.extract ~hash:`SHA256 ~salt:master (Cstruct.create 32)) ;
+  match !my_secret with
+  | None -> Alcotest.fail "expected my secret"
+  | Some t ->
+    let t' = Handshake_crypto13.derive t (Cstruct.create 32) in
+    match t'.secret with
+    | None -> Alcotest.fail "expected a secret"
+    | Some s ->
+      my_secret := Some t' ;
+      Alcotest.check cs __LOC__ master_secret s
 
 let c_ap_traffic = Cstruct.of_hex {|
 9e 40 64 6c e7 9a 7f 9d  c0 5a f8 88 9b ce 65 52
@@ -540,10 +548,10 @@ let tests = [
   "handshake extract", `Quick, extract_handshake ;
   "derive c hs", `Quick, derive_c_hs_traffic ;
   "derive s hs", `Quick, derive_s_hs_traffic ;
+  "derive finished", `Quick, derive_finished ;
   "derive master", `Quick, derive_master ;
   "extract master", `Quick, extract_master ;
   "derive hanshake keys", `Quick, derive_write_handshake_keys ;
-  "derive finished", `Quick, derive_finished ;
   "derive traffic keys", `Quick, derive_traffic_keys ;
   "application write keys", `Quick, appdata_write ;
   "application read keys", `Quick, appdata_read ;
