@@ -240,7 +240,7 @@ let answer_client_hello state ch raw log =
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
 
     let log = log <+> cv_raw in
-    let master_secret = Handshake_crypto13.derive hs_secret Cstruct.empty in
+    let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
     let ms = match master_secret.secret with None -> assert false | Some x -> x in
     Tracing.cs ~tag:"master-secret" ms ;
     (* let resumption_secret = resumption_secret cipher master_secret log in *)
@@ -303,10 +303,10 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
   let data = finished hash client_fini log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
-  let ret, sd =
+  let ret =
     (* only change dec if we're in handshake, also send out session ticket only just after handshake (and only if no PSK) *)
-    let dec = [`Change_dec (Some dec_ctx)]
-    and st, sd =
+    [`Change_dec (Some dec_ctx)]
+(*    and st, sd =
       match sd.kex with
       | `PSK -> ([], sd)
       | `DHE_PSK | `DHE ->
@@ -317,8 +317,7 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
         in
         let st_raw = Writer.assemble_handshake st in
         ([ `Record (Packet.HANDSHAKE, st_raw) ], { sd with psk_id })
-    in
-    (dec @ st, sd)
+      in *)
   in
   ({ state with
      machina = Server13 Established13 ;
