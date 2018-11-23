@@ -160,7 +160,7 @@ type server13_handshake_state =
   | AwaitClientHello13 of client_hello * hello_retry_request * Cstruct.t
   | AwaitClientCertificate13 (* optional *)
   | AwaitClientCertificateVerify13 (* optional *)
-  | AwaitClientFinished13 of session_data13 * crypto_context option * Cstruct.t
+  | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
   | Established13
   [@@deriving sexp]
 

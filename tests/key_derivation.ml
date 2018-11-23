@@ -225,7 +225,7 @@ let derive_finished () =
     let s_hs_traffic = Handshake_crypto13.derive_secret t "s hs traffic" (Cstruct.append ch sh) in
     Alcotest.check cs __LOC__ s_hs_traffic_secret s_hs_traffic ;
     Alcotest.check cs __LOC__ finished_key
-      (Handshake_crypto13.finished t s_hs_traffic log)
+      (Handshake_crypto13.finished t.hash s_hs_traffic log)
 
 let finished = Cstruct.of_hex {|
 14 00 00 20 9b 9b 14 1d  90 63 37 fb d2 cb dc e7
