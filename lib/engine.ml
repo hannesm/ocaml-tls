@@ -689,7 +689,7 @@ let epoch state =
     `Epoch {
       epoch with
       ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
-      extended_ms            = true ;
+      extended_ms            = true ; (* RFC 8446, Appendix D, last paragraph *)
       resumption_secret      = session.resumption_secret ;
       exporter_secret       = session.exporter_secret ;
       psk_id                 = session.psk_id ;
