@@ -6,7 +6,7 @@ open Handshake_common
 
 open Handshake_crypto13
 
-let answer_client_hello state ch raw log =
+let answer_client_hello state ch raw =
   (match client_hello_valid ch with
    | `Error e -> fail (`Fatal (`InvalidClientHello e))
    | `Ok -> return () ) >>= fun () ->
@@ -64,7 +64,7 @@ let answer_client_hello state ch raw log =
       | x::_ -> x
       | [] -> None
   and keyshare group =
-    snd (List.find (fun (g, _) -> g = group) keyshares)
+    try Some (snd (List.find (fun (g, _) -> g = group) keyshares)) with Not_found -> None
   in
 
   Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version TLS_1_3 ;
@@ -80,10 +80,10 @@ let answer_client_hello state ch raw log =
       - what is PSK + KS + SG found, but PSK does not match --> (EC)DHE *)
   match
     resumed_session,
-    first_match (List.map fst keyshares) state.config.Config.groups,
+    first_match groups state.config.Config.groups,
     first_match ciphers state.config.Config.ciphers13
   with
-  | Some epoch, Some group, _ -> invalid_arg "NYI"
+  | Some epoch, Some group, _ -> invalid_arg "NYI resumed"
 (*    (* DHE_PSK *)
     (* trace_cipher dhe_psk_cipher ; *)
     let keyshare = keyshare group in
@@ -134,7 +134,7 @@ let answer_client_hello state ch raw log =
        `Record (Packet.HANDSHAKE, fin_raw) ;
        `Change_enc (Some server_app_ctx) ] ) *)
 
-  | Some epoch, None, _ -> invalid_arg "NYI"
+  | Some epoch, None, _ -> invalid_arg "NYI epoch no group"
 (*    (* PSK *)
     trace_cipher psk_cipher ;
     let sh, session = base_server_hello ~epoch `PSK psk_cipher [`PreSharedKey epoch.psk_id] in
@@ -182,9 +182,30 @@ let answer_client_hello state ch raw log =
 
   | None, Some group, Some cipher ->
     (* DHE - full handshake *)
+
+    let log = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
+      | None -> Cstruct.empty
+      | Some c ->
+        (* log is: 254 00 00 length c :: HRR *)
+        let cs = Cstruct.create 4 in
+        Cstruct.set_uint8 cs 0 (Packet.handshake_type_to_int Packet.MESSAGE_HASH) ;
+        Cstruct.set_uint8 cs 3 (Cstruct.len c) ;
+        let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; selected_group = group ; extensions = [ `Cookie c ]} in
+        let hs_buf = Writer.assemble_handshake (HelloRetryRequest hrr) in
+        Cstruct.concat [ cs ; c ; hs_buf ]
+    in
+
     (* trace_cipher cipher ; *)
-    let keyshare = keyshare group in
-    (* XXX: for-each ciphers there should be a suitable group (skipping for now since we only have DHE) *)
+    begin
+      match keyshare group with
+      | None ->
+        let cookie = Nocrypto.Hash.digest (Ciphersuite.hash13 cipher) raw in
+        let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; selected_group = group ; extensions = [ `Cookie cookie ] } in
+        let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
+        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
+        return (state, [ `Record (Packet.HANDSHAKE, hrr_raw) ])
+      | Some keyshare ->
+        (* XXX: for-each ciphers there should be a suitable group (skipping for now since we only have DHE) *)
     (* XXX: check sig_algs for signatures in certificate chain *)
 
     let early_secret = Handshake_crypto13.(derive (empty cipher) (Cstruct.create 32)) in
@@ -265,10 +286,10 @@ let answer_client_hello state ch raw log =
        `Record (Packet.HANDSHAKE, cv_raw) ;
        `Record (Packet.HANDSHAKE, fin_raw) ;
        `Change_enc (Some server_app_ctx) ] )
-
+    end
   | None, None, None
   | None, Some _, None
-  | None, None, Some _ -> invalid_arg "NYI"
+  | None, None, Some _ -> invalid_arg "NYI other"
 
 (*  | _, None, _, _, Some cipher when Cs.null log ->
     ( match first_match groups state.config.Config.groups with
@@ -321,23 +342,12 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
      session = `TLS13 sd :: state.session },
     ret)
 
-let answer_client_hello_retry state oldch ch hrr raw log =
-  (* ch = oldch + keyshare for hrr.selected_group (6.3.1.3) *)
-  guard (oldch.client_version = ch.client_version) (`Fatal `InvalidMessage) >>= fun () ->
-  guard (oldch.ciphersuites = ch.ciphersuites) (`Fatal `InvalidMessage) >>= fun () ->
-  (* XXX: properly check that extensions are the same, plus a keyshare for the selected_group *)
-  (* clients must send keyshare extension in any case (6.3.2.3), but may be empty *)
-  guard (List.length oldch.extensions = List.length ch.extensions) (`Fatal `InvalidMessage) >>= fun () ->
-  answer_client_hello state ch raw log (* XXX: TLS draft: restart hash? https://github.com/tlswg/tls13-spec/issues/104 *)
-
 let handle_handshake cs hs buf =
   let open Reader in
   match parse_handshake buf with
   | Ok handshake ->
      Tracing.sexpf ~tag:"handshake-in" ~f:sexp_of_tls_handshake handshake;
      (match cs, handshake with
-      | AwaitClientHello13 (oldch, hrr, log), ClientHello ch ->
-         answer_client_hello_retry hs oldch ch hrr buf log
       | AwaitClientCertificate13, Certificate _ -> assert false (* process C, move to CV *)
       | AwaitClientCertificateVerify13, CertificateVerify _ -> assert false (* validate CV *)
       | AwaitClientFinished13 (sd, cf, cc, log), Finished x ->

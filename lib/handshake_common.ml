@@ -110,6 +110,7 @@ let to_client_ext_type = function
   | `Draft _               -> `Draft
   | `SupportedVersions _   -> `SupportedVersion
   | `PostHandshakeAuthentication -> `PostHandshakeAuthentication
+  | `Cookie _              -> `Cookie
 
 let to_server_ext_type = function
   | `Hostname              -> `Hostname
@@ -140,7 +141,7 @@ let extension_types t exts = List.(
 let server_exts_subset_of_client sexts cexts =
   let (sexts', cexts') =
     (extension_types to_server_ext_type sexts, extension_types to_client_ext_type cexts) in
-  List_set.subset sexts' cexts'
+  List_set.subset sexts' (`Cookie :: cexts')
 
 module Group = struct
   type t = Packet.named_group
