@@ -324,6 +324,10 @@ let parse_early_data buf =
        { configuration_id ; ciphersuite ; extensions ; context }
   | None, _ -> raise_unknown "ciphersuite in early_data"
 
+let parse_cookie buf =
+  let len = BE.get_uint16 buf 0 in
+  (sub buf 2 len, shift buf (2 + len))
+
 let parse_ext raw =
   let etype = BE.get_uint16 raw 0
   and length = BE.get_uint16 raw 2
@@ -380,7 +384,7 @@ let parse_client_extension raw =
     | Some SUPPORTED_VERSIONS ->
       let versions, rt = parse_supported_versions buf in
       if len rt <> 0 then
-        raise_trailing_bytes "supportde versions"
+        raise_trailing_bytes "supported versions"
       else
         `SupportedVersions versions
     | Some POST_HANDSHAKE_AUTH ->
@@ -388,6 +392,12 @@ let parse_client_extension raw =
         `PostHandshakeAuthentication
       else
         raise_unknown "non-empty post handshake authentication"
+    | Some COOKIE ->
+      let c, rt = parse_cookie buf in
+      if len rt <> 0 then
+        raise_trailing_bytes "cookie"
+      else
+        `Cookie c
     | Some x -> parse_extension buf x
     | None -> `UnknownExtension (etype, buf)
   in
@@ -432,10 +442,6 @@ let parse_server_extension raw =
     | None -> `UnknownExtension (etype, buf)
   in
   (Some data, shift raw (4 + length))
-
-let parse_cookie buf =
-  let len = BE.get_uint16 buf 0 in
-  (sub buf 2 len, shift buf (2 + len))
 
 let parse_retry_extension raw =
   let etype, length, buf = parse_ext raw in

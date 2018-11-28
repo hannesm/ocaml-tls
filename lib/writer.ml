@@ -210,6 +210,11 @@ let assemble_extension = function
     (b, DRAFT_SUPPORT)
   | _ -> invalid_arg "unknown extension"
 
+let assemble_cookie c =
+  let l = create 2 in
+  BE.set_uint16 l 0 (len c) ;
+  l <+> c
+
 let assemble_ext (pay, typ) =
   let buf = Cstruct.create 4 in
   BE.set_uint16 buf 0 (extension_type_to_int typ);
@@ -239,6 +244,8 @@ let assemble_client_extension e =
       (assemble_supported_versions vs, SUPPORTED_VERSIONS)
     | `PostHandshakeAuthentication ->
       (Utils.Cs.empty, POST_HANDSHAKE_AUTH)
+    | `Cookie c ->
+      (assemble_cookie c, COOKIE)
     | x -> assemble_extension x
 
 let assemble_server_extension e =
@@ -253,11 +260,6 @@ let assemble_server_extension e =
     | `EarlyDataIndication -> (create 0, EARLY_DATA)
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
-
-let assemble_cookie c =
-  let l = create 2 in
-  BE.set_uint16 l 0 (len c) ;
-  l <+> c
 
 let assemble_retry_extension e =
   assemble_ext @@ match e with
@@ -390,9 +392,10 @@ let assemble_client_key_exchange kex =
   buf
 
 let assemble_hello_retry_request hrr =
+  let exts = `SelectedGroup hrr.selected_group :: hrr.extensions in
   let version, exts = match hrr.retry_version with
-    | TLS_1_3 -> TLS_1_2, `SelectedVersion TLS_1_3 :: hrr.extensions
-    | x -> x, hrr.extensions
+    | TLS_1_3 -> TLS_1_2, `SelectedVersion TLS_1_3 :: exts
+    | x -> x, exts
   in
   let v = assemble_protocol_version version in
   let sid = create 1 in

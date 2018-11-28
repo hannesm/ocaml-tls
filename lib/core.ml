@@ -161,6 +161,7 @@ type client_extension = [
   | `Draft of int
   | `SupportedVersions of tls_any_version list
   | `PostHandshakeAuthentication
+  | `Cookie of Cstruct_sexp.t
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
 

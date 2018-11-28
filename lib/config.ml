@@ -131,7 +131,7 @@ let dh_group = Dh.Group.ffdhe2048 (* ff-dhe draft 2048-bit group *)
 
 let supported_groups =
   let open Dh.Group in
-  [ ffdhe8192 ; ffdhe6144 ; ffdhe4096 ; ffdhe3072 ; ffdhe2048 ]
+  [ ffdhe2048 ; ffdhe3072 ; ffdhe4096 ; ffdhe6144 ; ffdhe8192 ]
 
 let default_config = {
   ciphers = Ciphers.default ;
