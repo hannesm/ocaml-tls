@@ -189,9 +189,9 @@ let answer_client_hello state ch raw log =
 
     let early_secret = Handshake_crypto13.(derive (empty cipher) (Cstruct.create 32)) in
 
-(* if acceptable, do server hello *)
-    let secret, public = Nocrypto.Dh.gen_key group in
-    (match Nocrypto.Dh.shared group secret keyshare with
+    (* if acceptable, do server hello *)
+    let secret, public = Handshake_crypto13.dh_gen_key group in
+    (match Handshake_crypto13.dh_shared group secret keyshare with
      | None -> fail (`Fatal `InvalidDH)
      | Some shared -> return shared) >>= fun es ->
     let hs_secret = Handshake_crypto13.derive early_secret es in

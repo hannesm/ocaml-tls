@@ -2,6 +2,22 @@ open Nocrypto
 
 let (<+>) = Utils.Cs.(<+>)
 
+let left_pad_dh group msg =
+  let bytes = Nocrypto.Uncommon.cdiv (Nocrypto.Dh.modulus_size group) 8 in
+  let padding = Cstruct.create (bytes - Cstruct.len msg) in
+  padding <+> msg
+
+let dh_shared group secret share =
+  (* RFC 8556, Section 7.4.1 - we need zero-padding on the left *)
+  match Nocrypto.Dh.shared group secret share with
+  | None -> None
+  | Some shared -> Some (left_pad_dh group shared)
+
+let dh_gen_key group =
+  (* RFC 8556, Section 4.2.8.1 - we need zero-padding on the left *)
+  let sec, shared = Nocrypto.Dh.gen_key group in
+  sec, left_pad_dh group shared
+
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
 
 let expand_label hash prk label hashvalue length =
