@@ -293,6 +293,7 @@ type epoch_data = {
   extended_ms            : bool ;
   alpn_protocol          : string option ;
   resumption_secret      : Cstruct.t ;
+  exporter_secret        : Cstruct.t ;
   psk_id                 : PreSharedKeyID.t ;
 } [@@deriving sexp]
 

@@ -73,26 +73,28 @@ type dh_sent = Dh.group * Dh.secret [@@deriving sexp]
 (* a collection of client and server verify bytes for renegotiation *)
 type reneg_params = Cstruct_sexp.t * Cstruct_sexp.t [@@deriving sexp]
 
-type session_data = {
+type common_session_data = {
   server_random          : Cstruct_sexp.t ; (* 32 bytes random from the server hello *)
   client_random          : Cstruct_sexp.t ; (* 32 bytes random from the client hello *)
-  client_version         : tls_any_version ; (* version in client hello (needed in RSA client key exchange) *)
-  ciphersuite            : Ciphersuite.ciphersuite ;
   peer_certificate_chain : Cert.t list ;
   peer_certificate       : Cert.t option ;
   trust_anchor           : Cert.t option ;
   received_certificates  : Cert.t list ;
   own_certificate        : Cert.t list ;
   own_private_key        : Nocrypto.Rsa.priv option ;
-  master_secret          : master_secret ;
-  renegotiation          : reneg_params ; (* renegotiation data *)
   own_name               : string option ;
   client_auth            : bool ;
+  master_secret          : master_secret ;
+  alpn_protocol          : string option ; (* selected alpn protocol after handshake *)
+} [@@deriving sexp]
+
+type session_data = {
+  common_session_data    : common_session_data ;
+  client_version         : tls_any_version ; (* version in client hello (needed in RSA client key exchange) *)
+  ciphersuite            : Ciphersuite.ciphersuite ;
+  renegotiation          : reneg_params ; (* renegotiation data *)
   session_id             : Cstruct_sexp.t ;
   extended_ms            : bool ;
-  alpn_protocol          : string option ; (* selected alpn protocol after handshake *)
-  resumption_secret      : Cstruct.t ;
-  psk_id                 : Cstruct.t ;
 } [@@deriving sexp]
 
 (* state machine of the server *)
@@ -129,30 +131,20 @@ type client_handshake_state =
   [@@deriving sexp]
 
 type session_data13 = {
-  server_random          : Cstruct.t ; (* 32 bytes random from the server hello *)
-  client_random          : Cstruct.t ; (* 32 bytes random from the client hello *)
-  ciphersuite            : Ciphersuite.ciphersuite13 ;
-  kex                    : [ `DHE | `DHE_PSK | `PSK ] ;
-  peer_certificate_chain : X509.t list ;
-  peer_certificate       : X509.t option ;
-  trust_anchor           : X509.t option ;
-  received_certificates  : X509.t list ;
-  own_certificate        : X509.t list ;
-  own_private_key        : Nocrypto.Rsa.priv option ;
-  master_secret          : master_secret ;
-  own_name               : string option ;
-  client_auth            : bool ;
-  alpn_protocol          : string option ; (* selected alpn protocol after handshake *)
+  common_session_data13  : common_session_data ;
+  ciphersuite13          : Ciphersuite.ciphersuite13 ;
+  kex13                  : Ciphersuite.key_exchange_algorithm13 ;
   resumption_secret      : Cstruct.t ;
+  exporter_secret        : Cstruct.t ;
   psk_id                 : Cstruct.t ;
 } [@@deriving sexp]
 
 type client13_handshake_state =
   | AwaitServerHello13 of client_hello * (Dh.group * Dh.secret) list * Cstruct.t
-  | AwaitServerEncryptedExtensions13 of session_data * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerCertificateVerify13 of session_data * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerFinishedMaybeAuth13 of session_data * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerFinished13 of session_data * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
+  | AwaitServerEncryptedExtensions13 of session_data13 * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
+  | AwaitServerCertificateVerify13 of session_data13 * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
+  | AwaitServerFinishedMaybeAuth13 of session_data13 * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
+  | AwaitServerFinished13 of session_data13 * server_extension list * Cstruct.t * Cstruct.t * Cstruct.t
   | Established13
   [@@deriving sexp]
 

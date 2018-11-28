@@ -43,11 +43,9 @@ let get_alpn_protocols (ch : client_hello) =
 let get_alpn_protocol (sh : server_hello) =
   map_find ~f:(function `ALPN protocol -> Some protocol | _ -> None) sh.extensions
 
-let empty_session = {
+let empty_common_session_data = {
   server_random          = Cstruct.create 0 ;
   client_random          = Cstruct.create 0 ;
-  client_version         = Supported TLS_1_2 ;
-  ciphersuite            = `TLS_DHE_RSA_WITH_AES_256_CBC_SHA ;
   peer_certificate_chain = [] ;
   peer_certificate       = None ;
   trust_anchor           = None ;
@@ -55,33 +53,49 @@ let empty_session = {
   own_certificate        = [] ;
   own_private_key        = None ;
   own_name               = None ;
-  master_secret          = Cstruct.create 0 ;
-  renegotiation          = Cstruct.(create 0, create 0) ;
   client_auth            = false ;
-  session_id             = Cstruct.create 0 ;
-  extended_ms            = false ;
+  master_secret          = Cstruct.empty ;
   alpn_protocol          = None ;
-  resumption_secret      = Cstruct.create 0 ;
-  psk_id                 = Cstruct.create 0 ;
 }
 
-let session_of_epoch (epoch : epoch_data) : session_data = {
-  empty_session with
-  ciphersuite = epoch.ciphersuite ;
-  peer_certificate = epoch.peer_certificate ;
-  trust_anchor = epoch.trust_anchor ;
-  own_certificate = epoch.own_certificate ;
-  own_private_key = epoch.own_private_key ;
-  received_certificates = epoch.received_certificates ;
-  peer_certificate_chain = epoch.peer_certificate_chain ;
-  master_secret = epoch.master_secret ;
-  own_name = epoch.own_name ;
-  session_id = epoch.session_id ;
-  extended_ms = epoch.extended_ms ;
-  alpn_protocol = epoch.alpn_protocol ;
-  resumption_secret = epoch.resumption_secret ;
-  psk_id = epoch.psk_id ;
+let empty_session = {
+  common_session_data = empty_common_session_data ;
+  client_version      = Supported TLS_1_2 ;
+  ciphersuite         = `TLS_DHE_RSA_WITH_AES_256_CBC_SHA ;
+  renegotiation       = Cstruct.(empty, empty) ;
+  session_id          = Cstruct.empty ;
+  extended_ms         = false ;
 }
+
+let empty_session13 = {
+  common_session_data13 = empty_common_session_data ;
+  ciphersuite13         = `TLS_AES_128_GCM_SHA256 ;
+  kex13                 = `DHE_RSA ;
+  resumption_secret     = Cstruct.empty ;
+  exporter_secret      = Cstruct.empty ;
+  psk_id                = Cstruct.empty ;
+}
+
+let session_of_epoch (epoch : epoch_data) : session_data =
+  let empty = empty_session in
+  let common_session_data = {
+    empty_session.common_session_data with
+    peer_certificate = epoch.peer_certificate ;
+    trust_anchor = epoch.trust_anchor ;
+    own_certificate = epoch.own_certificate ;
+    own_private_key = epoch.own_private_key ;
+    received_certificates = epoch.received_certificates ;
+    peer_certificate_chain = epoch.peer_certificate_chain ;
+    master_secret = epoch.master_secret ;
+    own_name = epoch.own_name ;
+    alpn_protocol = epoch.alpn_protocol ;
+  } in
+  { empty with
+    common_session_data ;
+    ciphersuite = epoch.ciphersuite ;
+    session_id = epoch.session_id ;
+    extended_ms = epoch.extended_ms ;
+  }
 
 let supported_protocol_version (min, max) v =
   if compare_tls_version min v > 0 then

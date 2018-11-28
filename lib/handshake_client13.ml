@@ -69,7 +69,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
            `Change_dec (Some server_ctx) ])
       | _ -> fail (`Fatal `InvalidServerHello) ) *)
 
-  match keyshare with
+  (* match keyshare with
   | Some (group, keyshare) ->
     guard (List.mem group (List.map fst secrets)) (`Fatal `InvalidServerHello) >>= fun () ->
 
@@ -89,7 +89,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
      [ `Change_enc (Some client_ctx) ;
        `Change_dec (Some server_ctx) ])
 
-  | _ -> fail (`Fatal `InvalidServerHello)
+  | _ -> *) fail (`Fatal `InvalidServerHello)
 
 (* called from handshake_client.ml *)
 let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
@@ -114,7 +114,7 @@ let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
 
   return ({ state with machina = Client13 st }, [`Record (Packet.HANDSHAKE, new_ch_raw)])
 
-let answer_encrypted_extensions state (session : session_data) exts es ss ee raw log =
+let answer_encrypted_extensions state (session : session_data13) exts es ss ee raw log =
   let st =
 (*    if Ciphersuite.ciphersuite_psk session.ciphersuite then
       AwaitServerFinished13 (session, exts @ ee, es, ss, log <+> raw)
@@ -123,23 +123,24 @@ let answer_encrypted_extensions state (session : session_data) exts es ss ee raw
   in
   return ({ state with machina = Client13 st }, [])
 
-let answer_certificate state (session : session_data) exts es ss certs raw log =
+let answer_certificate state (session : session_data13) exts es ss certs raw log =
   let name = match state.config.peer_name with
     | None -> None | Some x -> Some (`Wildcard x)
   in
   validate_chain state.config.authenticator certs name >>=
   fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
+  invalid_arg "not here"
   (* XXX: do we need keytype and usage as well? *)
-  let session = { session with received_certificates ; peer_certificate_chain ; peer_certificate ; trust_anchor } in
+(*  let session = { session with received_certificates ; peer_certificate_chain ; peer_certificate ; trust_anchor } in
   let st = AwaitServerCertificateVerify13 (session, exts, es, ss, log <+> raw) in
-  return ({ state with machina = Client13 st }, [])
+    return ({ state with machina = Client13 st }, []) *)
 
-let answer_certificate_verify (state : handshake_state) (session : session_data) exts es ss cv raw log =
-  verify_digitally_signed state.protocol_version ~context_string:"TLS 1.3, server CertificateVerify" state.config.signature_algorithms cv log session.peer_certificate >>= fun () ->
+let answer_certificate_verify (state : handshake_state) (session : session_data13) exts es ss cv raw log =
+  verify_digitally_signed state.protocol_version ~context_string:"TLS 1.3, server CertificateVerify" state.config.signature_algorithms cv log session.common_session_data13.peer_certificate >>= fun () ->
   let st = AwaitServerFinished13 (session, exts, es, ss, log <+> raw) in
   return ({ state with machina = Client13 st }, [])
 
-let answer_finished state (session : session_data) exts es ss fin raw log =
+let answer_finished state (session : session_data13) exts es ss fin raw log =
   invalid_arg "not here"
 (*  let master_secret = master_secret (* session. *) ciphersuite es ss log in
   Tracing.cs ~tag:"master-secret" master_secret ;

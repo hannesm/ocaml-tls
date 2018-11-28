@@ -44,22 +44,13 @@ let answer_client_hello state ch raw log =
     in
     let session : session_data13 =
       (* let s = match epoch with None -> empty_session13 | Some e -> session_of_epoch13 e in *)
-      { server_random = sh.server_random ;
+      let empty = empty_session13 in
+      let common_session_data13 = {
+        empty.common_session_data13 with
+        server_random = sh.server_random ;
         client_random = ch.client_random ;
-        ciphersuite = cipher ;
-        kex ;
-        peer_certificate_chain = [] ;
-        peer_certificate = None ;
-        trust_anchor = None ;
-        received_certificates = [] ;
-        own_certificate = [] ;
-        own_private_key = None ;
-        master_secret = Cstruct.create 0 ;
-        own_name = None ;
-        client_auth = false ;
-        alpn_protocol = None ;
-        resumption_secret = Cstruct.create 0 ;
-        psk_id = Cstruct.create 0 }
+      } in
+      { empty with common_session_data13 ; ciphersuite13 = cipher ; kex13 = kex }
     in
     (sh, session)
   and resumed_session =
@@ -205,7 +196,7 @@ let answer_client_hello state ch raw log =
      | Some shared -> return shared) >>= fun es ->
     let hs_secret = Handshake_crypto13.derive early_secret es in
 
-    let sh, session = base_server_hello `DHE cipher [`KeyShare (group, public)] in
+    let sh, session = base_server_hello `DHE_RSA cipher [`KeyShare (group, public)] in
     let sh_raw = Writer.assemble_handshake (ServerHello sh) in
 
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
@@ -255,7 +246,14 @@ let answer_client_hello state ch raw log =
 
     guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
 
-    let session = { session with own_private_key = Some pr ; own_certificate =  crt ; master_secret = master_secret.secret (* ; resumption_secret *) } in
+    let session =
+      let common_session_data13 = {
+        session.common_session_data13 with
+        own_private_key = Some pr ;
+        own_certificate = crt ;
+        master_secret = master_secret.secret
+      } in
+      { session with common_session_data13 (* TODO ; resumption_secret ; exporter_secret *) } in
     (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
     let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
     ({ state with machina = Server13 st },
@@ -298,7 +296,7 @@ let answer_client_hello state ch raw log =
     fail (`Error (`NoConfiguredCiphersuite ciphers)) *)
 
 let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx raw log =
-  let hash = Ciphersuite.hash13 sd.ciphersuite in
+  let hash = Ciphersuite.hash13 sd.ciphersuite13 in
   let data = finished hash client_fini log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
@@ -308,7 +306,7 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
 (*    and st, sd =
       match sd.kex with
       | `PSK -> ([], sd)
-      | `DHE_PSK | `DHE ->
+      | `DHE_PSK | `DHE_RSA ->
         let st, psk_id =
           let rand = Nocrypto.Rng.generate 48 in
           let buf = Writer.assemble_session_ticket_1_3 0l rand in

@@ -70,13 +70,13 @@ let derive_master_secret version (session : session_data) premaster log =
     in
     prf "extended master secret" session_hash
   else
-    prf "master secret" (session.client_random <+> session.server_random)
+    prf "master secret" (session.common_session_data.client_random <+> session.common_session_data.server_random)
 
 let initialise_crypto_ctx version (session : session_data) =
   let open Ciphersuite in
-  let client_random = session.client_random
-  and server_random = session.server_random
-  and master = session.master_secret
+  let client_random = session.common_session_data.client_random
+  and server_random = session.common_session_data.server_random
+  and master = session.common_session_data.master_secret
   and cipher = session.ciphersuite
   in
 

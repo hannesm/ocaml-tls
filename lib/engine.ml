@@ -637,59 +637,62 @@ type epoch = [
   | `Epoch of epoch_data
 ] [@@deriving sexp]
 
+let common_data_to_epoch common is_server peer_name =
+  let own_random, peer_random =
+    if is_server then
+      common.server_random, common.client_random
+    else
+      common.client_random, common.server_random
+  in
+  let epoch : epoch_data =
+    { protocol_version       = TLS_1_0 ;
+      ciphersuite           = `TLS_DHE_RSA_WITH_AES_256_CBC_SHA ;
+      peer_random ;
+      peer_certificate       = common.peer_certificate ;
+      peer_certificate_chain = common.peer_certificate_chain ;
+      peer_name ;
+      trust_anchor           = common.trust_anchor ;
+      own_random ;
+      own_certificate        = common.own_certificate ;
+      own_private_key        = common.own_private_key ;
+      own_name               = common.own_name ;
+      received_certificates  = common.received_certificates ;
+      master_secret          = common.master_secret ;
+      alpn_protocol          = common.alpn_protocol ;
+      session_id             = Cstruct.empty ;
+      extended_ms            = false ;
+      resumption_secret      = Cstruct.empty ;
+      exporter_secret       = Cstruct.empty ;
+      psk_id                 = Cstruct.empty
+    } in
+  epoch
+
 let epoch state =
   let hs = state.handshake in
+  let server =
+    match hs.machina with
+    | Client _ -> false
+    | Server _ -> true
+  and peer_name = Config.(hs.config.peer_name)
+  in
   match hs.session with
   | []           -> `InitialEpoch
   | `TLS session :: _ ->
-     let own_random , peer_random =
-       match hs.machina with
-       | Client _ -> session.client_random , session.server_random
-       | Server _ -> session.server_random , session.client_random
-     in
+     let epoch = common_data_to_epoch session.common_session_data server peer_name in
      `Epoch {
-        protocol_version       = hs.protocol_version ;
-        ciphersuite            = session.ciphersuite ;
-        peer_random ;
-        peer_certificate       = session.peer_certificate ;
-        peer_certificate_chain = session.peer_certificate_chain ;
-        peer_name              = Config.(hs.config.peer_name) ;
-        trust_anchor           = session.trust_anchor ;
-        own_random ;
-        own_certificate        = session.own_certificate ;
-        own_private_key        = session.own_private_key ;
-        own_name               = session.own_name ;
-        received_certificates  = session.received_certificates ;
-        master_secret          = session.master_secret ;
-        session_id             = session.session_id ;
-        extended_ms            = session.extended_ms ;
-        alpn_protocol          = session.alpn_protocol ;
-        resumption_secret      = session.resumption_secret ;
-        psk_id                 = session.psk_id ;
-      }
+       epoch with
+       protocol_version       = hs.protocol_version ;
+       ciphersuite            = session.ciphersuite ;
+       session_id             = session.session_id ;
+       extended_ms            = session.extended_ms ;
+     }
   | `TLS13 session :: _ ->
-     let own_random , peer_random =
-       match hs.machina with
-       | Client13 _ -> session.client_random , session.server_random
-       | Server13 _ -> session.server_random , session.client_random
-     in
-     `Epoch {
-        protocol_version       = hs.protocol_version ;
-        ciphersuite            = (session.ciphersuite :> Ciphersuite.ciphersuite) ;
-        peer_random ;
-        peer_certificate       = session.peer_certificate ;
-        peer_certificate_chain = session.peer_certificate_chain ;
-        peer_name              = Config.(hs.config.peer_name) ;
-        trust_anchor           = session.trust_anchor ;
-        own_random ;
-        own_certificate        = session.own_certificate ;
-        own_private_key        = session.own_private_key ;
-        own_name               = session.own_name ;
-        received_certificates  = session.received_certificates ;
-        master_secret          = session.master_secret ;
-        session_id             = Cstruct.create 0 ;
-        extended_ms            = true ;
-        alpn_protocol          = session.alpn_protocol ;
-        resumption_secret      = session.resumption_secret ;
-        psk_id                 = session.psk_id ;
-      }
+    let epoch : epoch_data = common_data_to_epoch session.common_session_data13 server peer_name in
+    `Epoch {
+      epoch with
+      ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
+      extended_ms            = true ;
+      resumption_secret      = session.resumption_secret ;
+      exporter_secret       = session.exporter_secret ;
+      psk_id                 = session.psk_id ;
+    }

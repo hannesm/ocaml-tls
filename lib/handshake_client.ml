@@ -97,19 +97,25 @@ let common_server_hello_machina state (sh : server_hello) (ch : client_hello) ra
         List.mem `ExtendedMasterSecret sh.extensions
     in
     let alpn_protocol = get_alpn_protocol sh in
-    let session = { empty_session with
-                    client_random    = ch.client_random ;
-                    client_version   = ch.client_version ;
-                    server_random    = sh.server_random ;
-                    ciphersuite      = cipher ;
-                    session_id ;
-                    extended_ms ;
-                    alpn_protocol ;
-                  }
+    let session =
+      let session = empty_session in
+      let common_session_data = {
+        session.common_session_data with
+        client_random    = ch.client_random ;
+        server_random    = sh.server_random ;
+        alpn_protocol ;
+      } in
+      { session with
+        common_session_data ;
+        ciphersuite      = cipher ;
+        session_id ;
+        extended_ms ;
+        client_version   = ch.client_version ;
+      }
     in
     Ciphersuite.(match ciphersuite_kex cipher with
-        | RSA     -> AwaitCertificate_RSA (session, log @ [raw])
-        | DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
+        | `RSA     -> AwaitCertificate_RSA (session, log @ [raw])
+        | `DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
   in
   ({ state with protocol_version = sh.server_version ; machina = Client machina }, [])
 
@@ -149,19 +155,24 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
   | TLS_1_0 | TLS_1_1 | TLS_1_2 ->
     match state.config.cached_session with
     | Some epoch when epoch_matches epoch ->
-       let session = session_of_epoch epoch in
-       let session = { session with
-                       client_random = ch.client_random ;
-                       server_random = sh.server_random ;
-                       client_version = ch.client_version ;
-                       client_auth = List.length epoch.own_certificate > 0 ;
-                     }
-       in
-       let client_ctx, server_ctx =
-         Handshake_crypto.initialise_crypto_ctx sh.server_version session
-       in
-       let machina = AwaitServerChangeCipherSpecResume (session, client_ctx, server_ctx, log @ [raw]) in
-       Ok ({ state with machina = Client machina }, [])
+      let session =
+        let session = session_of_epoch epoch in
+        let common_session_data = {
+          session.common_session_data with
+          client_random = ch.client_random ;
+          server_random = sh.server_random ;
+          client_auth = match epoch.own_certificate with [] -> false | _ -> true ;
+        } in
+        { session with
+          common_session_data ;
+          client_version = ch.client_version ;
+        }
+      in
+      let client_ctx, server_ctx =
+        Handshake_crypto.initialise_crypto_ctx sh.server_version session
+      in
+      let machina = AwaitServerChangeCipherSpecResume (session, client_ctx, server_ctx, log @ [raw]) in
+      Ok ({ state with machina = Client machina }, [])
     | _ ->
        let machina =
          let cipher = sh.ciphersuite in
@@ -170,18 +181,24 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
            List.mem `ExtendedMasterSecret ch.extensions &&
              List.mem `ExtendedMasterSecret sh.extensions
          in
-         let session = { empty_session with
-                         client_random    = ch.client_random ;
-                         client_version   = ch.client_version ;
-                         server_random    = sh.server_random ;
-                         ciphersuite      = cipher ;
-                         session_id ;
-                         extended_ms ;
-                       }
+         let session =
+           let session = empty_session in
+           let common_session_data = {
+             session.common_session_data with
+             client_random    = ch.client_random ;
+             server_random    = sh.server_random ;
+           } in
+           { session with
+             common_session_data ;
+             client_version   = ch.client_version ;
+             ciphersuite      = cipher ;
+             session_id ;
+             extended_ms ;
+           }
          in
          Ciphersuite.(match ciphersuite_kex cipher with
-                      | RSA     -> AwaitCertificate_RSA (session, log @ [raw])
-                      | DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
+                      | `RSA     -> AwaitCertificate_RSA (session, log @ [raw])
+                      | `DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
        in
        Ok ({ state with machina = Client machina }, [])
 
@@ -212,7 +229,10 @@ let answer_certificate_RSA state (session : session_data) cs raw log =
   let cfg = state.config in
   validate_chain cfg.authenticator cs (host_name_opt cfg.peer_name) >>= fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
   validate_keytype_usage peer_certificate session.ciphersuite >>= fun () ->
-  let session = { session with received_certificates ; peer_certificate ; peer_certificate_chain ; trust_anchor } in
+  let session =
+    let common_session_data = { session.common_session_data with received_certificates ; peer_certificate ; peer_certificate_chain ; trust_anchor } in
+    { session with common_session_data }
+  in
   ( match session.client_version with
     | Supported v -> return v
     | x           -> fail (`Fatal (`NoVersions [ x ])) (* TODO: get rid of this... *)
@@ -233,7 +253,10 @@ let answer_certificate_DHE_RSA state (session : session_data) cs raw log =
   let cfg = state.config in
   validate_chain cfg.authenticator cs (host_name_opt cfg.peer_name) >>= fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
   validate_keytype_usage peer_certificate session.ciphersuite >|= fun () ->
-  let session = { session with received_certificates ; peer_certificate ; peer_certificate_chain ; trust_anchor } in
+  let session =
+    let common_session_data = { session.common_session_data with received_certificates ; peer_certificate ; peer_certificate_chain ; trust_anchor } in
+    { session with common_session_data }
+  in
   let machina = AwaitServerKeyExchange_DHE_RSA (session, log @ [raw]) in
   ({ state with machina = Client machina }, [])
 
@@ -245,8 +268,8 @@ let answer_server_key_exchange_DHE_RSA state (session : session_data) kex raw lo
   in
 
   dh_params kex >>= fun (dh_params, raw_dh_params, leftover) ->
-  let sigdata = session.client_random <+> session.server_random <+> raw_dh_params in
-  verify_digitally_signed state.protocol_version state.config.signature_algorithms leftover sigdata session.peer_certificate >>= fun () ->
+  let sigdata = session.common_session_data.client_random <+> session.common_session_data.server_random <+> raw_dh_params in
+  verify_digitally_signed state.protocol_version state.config.signature_algorithms leftover sigdata session.common_session_data.peer_certificate >>= fun () ->
   let group, shared = Crypto.dh_params_unpack dh_params in
   guard (Dh.modulus_size group >= Config.min_dh_size) (`Fatal `InvalidDH)
   >>= fun () ->
@@ -281,12 +304,15 @@ let answer_certificate_request state (session : session_data) cr kex pms raw log
     | true, `Single (chain, priv) -> (chain, Some priv)
     | _ -> ([], None)
   in
-  let session = {
-    session with
+  let session =
+    let common_session_data = {
+      session.common_session_data with
       own_certificate ;
       own_private_key ;
       client_auth = true
-  } in
+    } in
+    { session with common_session_data }
+  in
   let machina = AwaitServerHelloDone (session, sigalgs, kex, pms, log @ [raw]) in
   ({ state with machina = Client machina }, [])
 
@@ -294,9 +320,9 @@ let answer_server_hello_done state (session : session_data) sigalgs kex premaste
   let kex = ClientKeyExchange kex in
   let ckex = Writer.assemble_handshake kex in
 
-  ( match session.client_auth, session.own_private_key with
+  ( match session.common_session_data.client_auth, session.common_session_data.own_private_key with
     | true, Some p ->
-       let cs = List.map X509.Certificate.encode_der session.own_certificate in
+       let cs = List.map X509.Certificate.encode_der session.common_session_data.own_certificate in
        let cert = Certificate (Writer.assemble_certificates cs) in
        let ccert = Writer.assemble_handshake cert in
        let to_sign = log @ [ raw ; ccert ; ckex ] in
@@ -322,7 +348,10 @@ let answer_server_hello_done state (session : session_data) sigalgs kex premaste
   let master_secret =
     Handshake_crypto.derive_master_secret state.protocol_version session premaster raws
   in
-  let session = { session with master_secret } in
+  let session =
+    let common_session_data = { session.common_session_data with master_secret } in
+    { session with common_session_data }
+  in
   let client_ctx, server_ctx =
     Handshake_crypto.initialise_crypto_ctx state.protocol_version session
   in
@@ -332,7 +361,10 @@ let answer_server_hello_done state (session : session_data) sigalgs kex premaste
   let raw_fin = Writer.assemble_handshake fin in
   let ps = to_fin @ [raw_fin] in
 
-  let session = { session with master_secret = master_secret } in
+  let session =
+    let common_session_data = { session.common_session_data with master_secret } in
+    { session with common_session_data }
+  in
   let machina = AwaitServerChangeCipherSpec (session, server_ctx, checksum, ps)
   and ccst, ccs = change_cipher_spec in
 
@@ -349,7 +381,7 @@ let answer_server_hello_done state (session : session_data) sigalgs kex premaste
 
 let answer_server_finished state (session : session_data) client_verify fin log =
   let computed =
-    Handshake_crypto.finished state.protocol_version session.ciphersuite session.master_secret "server finished" log
+    Handshake_crypto.finished state.protocol_version session.ciphersuite session.common_session_data.master_secret "server finished" log
   in
   guard (Cs.equal computed fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
@@ -359,7 +391,7 @@ let answer_server_finished state (session : session_data) client_verify fin log 
 
 let answer_server_finished_resume state (session : session_data) fin raw log =
   let client, server =
-    let checksum = Handshake_crypto.finished state.protocol_version session.ciphersuite session.master_secret in
+    let checksum = Handshake_crypto.finished state.protocol_version session.ciphersuite session.common_session_data.master_secret in
     (checksum "client finished" (log @ [raw]), checksum "server finished" log)
   in
   guard (Cs.equal server fin) (`Fatal `BadFinished) >>= fun () ->
