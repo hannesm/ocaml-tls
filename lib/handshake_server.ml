@@ -21,7 +21,7 @@ let hello_request state =
 
 let answer_client_finished state (session : session_data) client_fin raw log =
   let client, server =
-    let checksum = Handshake_crypto.finished state.protocol_version session.ciphersuite session.master_secret in
+    let checksum = Handshake_crypto.finished state.protocol_version session.ciphersuite session.common_session_data.master_secret in
     (checksum "client finished" log, checksum "server finished" (log @ [raw]))
   in
   guard (Cs.equal client client_fin) (`Fatal `BadFinished) >>= fun () ->
@@ -38,7 +38,7 @@ let answer_client_finished state (session : session_data) client_fin raw log =
 
 let answer_client_finished_resume state (session : session_data) server_verify client_fin _raw log =
   let client_verify =
-    Handshake_crypto.finished state.protocol_version session.ciphersuite session.master_secret "client finished" log
+    Handshake_crypto.finished state.protocol_version session.ciphersuite session.common_session_data.master_secret "client finished" log
   in
   guard (Cs.equal client_verify client_fin) (`Fatal `BadFinished) >>= fun () ->
   (* we really do not want to have any leftover handshake fragments *)
@@ -53,12 +53,15 @@ let establish_master_secret state (session : session_data) premastersecret raw l
   let master_secret = Handshake_crypto.derive_master_secret
       state.protocol_version session premastersecret log
   in
-  let session = { session with master_secret = master_secret } in
+  let session =
+    let common_session_data = { session.common_session_data with master_secret } in
+    { session with common_session_data }
+  in
   let client_ctx, server_ctx =
     Handshake_crypto.initialise_crypto_ctx state.protocol_version session
   in
   let machina =
-    match session.peer_certificate with
+    match session.common_session_data.peer_certificate with
     | None -> AwaitClientChangeCipherSpec (session, server_ctx, client_ctx, log)
     | Some _ -> AwaitClientCertificateVerify (session, server_ctx, client_ctx, log)
   in
@@ -66,13 +69,20 @@ let establish_master_secret state (session : session_data) premastersecret raw l
   ({ state with machina = Server machina }, [])
 
 let private_key (session : session_data) =
-  match session.own_private_key with
+  match session.common_session_data.own_private_key with
     | Some priv -> return priv
     | None      -> fail (`Fatal `InvalidSession) (* TODO: assert false / ensure via typing in config *)
 
 let validate_certs certs authenticator (session : session_data) =
   validate_chain authenticator certs None >|= fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
-  { session with received_certificates ; peer_certificate ; peer_certificate_chain ; trust_anchor }
+  let common_session_data = {
+    session.common_session_data with
+    received_certificates ;
+    peer_certificate ;
+    peer_certificate_chain ;
+    trust_anchor
+  } in
+  { session with common_session_data }
 
 let answer_client_certificate_RSA state (session : session_data) certs raw log =
   validate_certs certs state.config.authenticator session >|= fun session ->
@@ -86,7 +96,7 @@ let answer_client_certificate_DHE_RSA state (session : session_data) dh_sent cer
 
 let answer_client_certificate_verify state (session : session_data) sctx cctx verify raw log =
   let sigdata = Cs.appends log in
-  verify_digitally_signed state.protocol_version state.config.signature_algorithms verify sigdata session.peer_certificate >|= fun () ->
+  verify_digitally_signed state.protocol_version state.config.signature_algorithms verify sigdata session.common_session_data.peer_certificate >|= fun () ->
   let machina = AwaitClientChangeCipherSpec (session, sctx, cctx, log @ [raw]) in
   ({ state with machina = Server machina }, [])
 
@@ -167,7 +177,7 @@ let agreed_cipher cert requested =
 
 let server_hello config client_version (session : session_data) version reneg =
   (* RFC 4366: server shall reply with an empty hostname extension *)
-  let host = option [] (fun _ -> [`Hostname]) session.own_name
+  let host = option [] (fun _ -> [`Hostname]) session.common_session_data.own_name
   and server_random =
     let prefix =
       match
@@ -195,7 +205,7 @@ let server_hello config client_version (session : session_data) version reneg =
     | 0 -> Rng.generate 32
     | _ -> session.session_id
   and alpn =
-    match session.alpn_protocol with
+    match session.common_session_data.alpn_protocol with
     | None -> []
     | Some protocol -> [`ALPN protocol]
   in
@@ -209,8 +219,9 @@ let server_hello config client_version (session : session_data) version reneg =
   trace_cipher session.ciphersuite ;
   Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version version ;
   Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake sh ;
+  let common_session_data = { session.common_session_data with server_random } in
   (Writer.assemble_handshake sh,
-   { session with server_random ; session_id })
+   { session with common_session_data ; session_id })
 
 let answer_client_hello_common state reneg ch raw =
   let process_client_hello ch config =
@@ -247,18 +258,27 @@ let answer_client_hello_common state reneg ch raw =
              "no_application_protocol" alert. *)
           fail (`Fatal `NoApplicationProtocol) ) >|= fun alpn_protocol ->
 
-    { empty_session with
-      client_random    = ch.client_random ;
-      client_version   = ch.client_version ;
-      ciphersuite      = cipher ;
-      own_certificate  = chain ;
-      own_private_key  = priv ;
-      own_name         = host ;
-      extended_ms      = extended_ms ;
-      alpn_protocol    = alpn_protocol }
+    let session =
+      let session = empty_session in
+      let common_session_data = {
+        session.common_session_data with
+        client_random    = ch.client_random ;
+        own_certificate  = chain ;
+        own_private_key  = priv ;
+        own_name         = host ;
+        alpn_protocol    = alpn_protocol
+      } in
+      { session with
+        common_session_data ;
+        client_version   = ch.client_version ;
+        ciphersuite      = cipher ;
+        extended_ms      = extended_ms ;
+      }
+    in
+    session
 
   and server_cert (session : session_data) =
-    match session.own_certificate with
+    match session.common_session_data.own_certificate with
     | []    -> []
     | certs ->
        let cs = List.map X509.Encoding.cs_of_cert certs in
@@ -285,7 +305,8 @@ let answer_client_hello_common state reneg ch raw =
             CertificateRequest data
        in
        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake certreq ;
-       ([ assemble_handshake certreq ], { session with client_auth = true })
+       let common_session_data = { session.common_session_data with client_auth = true } in
+       ([ assemble_handshake certreq ], { session with common_session_data })
 
   and kex_dhe_rsa config (session : session_data) version sig_algs =
     let group         = Config.dh_group in
@@ -295,7 +316,7 @@ let answer_client_hello_common state reneg ch raw =
       let dh_param = Crypto.dh_params_pack group msg in
       Writer.assemble_dh_parameters dh_param in
 
-    let data = session.client_random <+> session.server_random <+> written in
+    let data = session.common_session_data.client_random <+> session.common_session_data.server_random <+> written in
 
     private_key session >>= fun priv ->
     signature version data sig_algs config.signature_algorithms priv >|= fun sgn ->
@@ -312,23 +333,23 @@ let answer_client_hello_common state reneg ch raw =
   in
 
   ( match Ciphersuite.ciphersuite_kex session.ciphersuite with
-    | Ciphersuite.DHE_RSA ->
+    | `DHE_RSA ->
         kex_dhe_rsa state.config session state.protocol_version (sig_algs ch) >>= fun (kex, dh) ->
         let outs = sh :: certificates @ [ kex ] @ cert_req @ [ hello_done ] in
         let log = raw :: outs in
         let machina =
-          if session.client_auth then
+          if session.common_session_data.client_auth then
             AwaitClientCertificate_DHE_RSA (session, dh, log)
           else
             AwaitClientKeyExchange_DHE_RSA (session, dh, log)
         in
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake ServerHelloDone ;
         return (outs, machina)
-    | Ciphersuite.RSA ->
+    | `RSA ->
         let outs = sh :: certificates @ cert_req @ [ hello_done ] in
         let log = raw :: outs in
         let machina =
-          if session.client_auth then
+          if session.common_session_data.client_auth then
             AwaitClientCertificate_RSA (session, log)
           else
             AwaitClientKeyExchange_RSA (session, log)
@@ -385,12 +406,16 @@ let answer_client_hello state (ch : client_hello) raw =
 
     match option None state.config.session_cache ch.sessionid with
     | Some epoch when epoch_matches epoch state.protocol_version ch.ciphersuites ch.extensions ->
-      let session = session_of_epoch epoch in
-      Some { session with
-             client_random = ch.client_random ;
-             client_version = ch.client_version ;
-             client_auth = (epoch.peer_certificate <> None) ;
-           }
+      let session =
+        let session = session_of_epoch epoch in
+        let common_session_data = {
+          session.common_session_data with
+          client_random = ch.client_random ;
+          client_auth = (epoch.peer_certificate <> None) ;
+        } in
+        { session with common_session_data ; client_version = ch.client_version }
+      in
+      Some session
     | _ -> None
 
   and answer_resumption session state =
@@ -405,7 +430,7 @@ let answer_client_hello state (ch : client_hello) raw =
     let log = [ raw ; sh ] in
     let server =
       Handshake_crypto.finished
-        version session.ciphersuite session.master_secret "server finished" log
+        version session.ciphersuite session.common_session_data.master_secret "server finished" log
     in
     let fin = Finished server in
     let fin_raw = Writer.assemble_handshake fin in

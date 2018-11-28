@@ -51,20 +51,20 @@ module Ciphers = struct
        State.(AEAD { cipher = GCM cipher ; cipher_secret ; nonce })
 
   let get_cipher ~secret ~hmac_secret ~iv_mode ~nonce = function
-    | Stream (RC4_128, hmac) ->
+    | `Stream (RC4_128, hmac) ->
         let open Cipher_stream in
         let cipher = (module ARC4 : Cipher_stream.S with type key = ARC4.key) in
         let cipher_secret = ARC4.of_secret secret in
         State.(Stream { cipher ; cipher_secret ; hmac ; hmac_secret })
 
-    | Block (cipher, hmac) ->
+    | `Block (cipher, hmac) ->
        ( match get_block cipher with
          | K_CBC (cipher, sec) ->
             let cipher_secret = sec secret in
             State.(CBC { cipher ; cipher_secret ; iv_mode ; hmac ; hmac_secret })
        )
 
-    | AEAD cipher -> get_aead ~secret ~nonce cipher
+    | `AEAD cipher -> get_aead ~secret ~nonce cipher
 end
 
 let digest_eq fn ~target cs =

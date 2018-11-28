@@ -1,29 +1,25 @@
 (** Ciphersuite definitions and some helper functions. *)
 
 (** sum type of all possible key exchange methods *)
-type key_exchange_algorithm =
-  | RSA
-  | DHE_RSA
-  | PSK
-  | DHE_PSK
-  [@@deriving sexp]
+type key_exchange_algorithm13 = [ `DHE_RSA | `DHE_PSK | `PSK ] [@@deriving sexp]
+type key_exchange_algorithm = [ key_exchange_algorithm13 | `RSA ] [@@deriving sexp]
 
 (** [needs_certificate kex] is a predicate which is true if the [kex] requires a server certificate *)
 let needs_certificate = function
-  | RSA | DHE_RSA -> true
-  | PSK | DHE_PSK -> false
+  | `RSA | `DHE_RSA -> true
+  | `PSK | `DHE_PSK -> false
 
-(** [needs_server_kex kex] is a predicate which is true if the [kex] requires a server key exchange messag *)
+(** [needs_server_kex kex] is a predicate which is true if the [kex] requires a server key exchange message *)
 let needs_server_kex = function
-  | DHE_RSA | DHE_PSK -> true
-  | RSA | PSK         -> false
+  | `DHE_RSA | `DHE_PSK -> true
+  | `RSA | `PSK         -> false
 
 (** [required_keytype_and_usage kex] is [(keytype, usage)] which a certificate must have if it is used in the given [kex] method *)
 let required_keytype_and_usage = function
-  | RSA     -> (`RSA, `Key_encipherment)
-  | DHE_RSA -> (`RSA, `Digital_signature) (* signing with the signature scheme and hash algorithm that will be employed in the server key exchange message. *)
-  | PSK
-  | DHE_PSK -> assert false
+  | `RSA     -> (`RSA, `Key_encipherment)
+  | `DHE_RSA -> (`RSA, `Digital_signature) (* signing with the signature scheme and hash algorithm that will be employed in the server key exchange message. *)
+  | `PSK
+  | `DHE_PSK -> assert false
 
 type stream_cipher =
   | RC4_128
@@ -49,22 +45,24 @@ let kn = function
   | AES_128_CCM -> (16, 12)
   | AES_256_CCM -> (32, 12)
 
-type payload_protection =
-  | Stream of stream_cipher * Nocrypto.Hash.hash
-  | Block of block_cipher * Nocrypto.Hash.hash
-  | AEAD of aead_cipher
-  [@@deriving sexp]
+type payload_protection13 = [ `AEAD of aead_cipher ] [@@deriving sexp]
+
+type payload_protection = [
+  payload_protection13
+  | `Stream of stream_cipher * Nocrypto.Hash.hash
+  | `Block of block_cipher * Nocrypto.Hash.hash
+  ] [@@deriving sexp]
 
 (** [key_length iv payload_protection] is [(key size, IV size, mac size)] where key IV, and mac sizes are the required bytes for the given [payload_protection] *)
 let key_length iv pp =
   let mac_size = Nocrypto.Hash.digest_size in
   match pp with
-  | Stream (RC4_128, mac)           -> (16, 0 , mac_size mac)
-  | AEAD AES_128_CCM                -> (16, 4 , 0)
-  | AEAD AES_256_CCM                -> (32, 4 , 0)
-  | AEAD AES_128_GCM                -> (16, 4 , 0)
-  | AEAD AES_256_GCM                -> (32, 4 , 0)
-  | Block (bc, mac) ->
+  | `Stream (RC4_128, mac)           -> (16, 0 , mac_size mac)
+  | `AEAD AES_128_CCM                -> (16, 4 , 0)
+  | `AEAD AES_256_CCM                -> (32, 4 , 0)
+  | `AEAD AES_128_GCM                -> (16, 4 , 0)
+  | `AEAD AES_256_GCM                -> (32, 4 , 0)
+  | `Block (bc, mac) ->
      let keylen, ivlen = match bc with
        | TRIPLE_DES_EDE_CBC -> (24, 8)
        | AES_128_CBC        -> (16, 16)
@@ -207,35 +205,35 @@ let ciphersuite_to_string x= Packet.any_ciphersuite_to_string (ciphersuite_to_an
 
 (** [get_kex_privprot ciphersuite] is [(kex, privacy_protection)] where it dissects the [ciphersuite] into a pair containing the key exchange method [kex], and its [privacy_protection] *)
 let get_kex_privprot = function
-  | `TLS_RSA_WITH_RC4_128_MD5            -> (RSA    , Stream (RC4_128, `MD5))
-  | `TLS_RSA_WITH_RC4_128_SHA            -> (RSA    , Stream (RC4_128, `SHA1))
-  | `TLS_RSA_WITH_3DES_EDE_CBC_SHA       -> (RSA    , Block (TRIPLE_DES_EDE_CBC, `SHA1))
-  | `TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA   -> (DHE_RSA, Block (TRIPLE_DES_EDE_CBC, `SHA1))
-  | `TLS_RSA_WITH_AES_128_CBC_SHA        -> (RSA    , Block (AES_128_CBC, `SHA1))
-  | `TLS_DHE_RSA_WITH_AES_128_CBC_SHA    -> (DHE_RSA, Block (AES_128_CBC, `SHA1))
-  | `TLS_RSA_WITH_AES_256_CBC_SHA        -> (RSA    , Block (AES_256_CBC, `SHA1))
-  | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA    -> (DHE_RSA, Block (AES_256_CBC, `SHA1))
-  | `TLS_RSA_WITH_AES_128_CBC_SHA256     -> (RSA    , Block (AES_128_CBC, `SHA256))
-  | `TLS_RSA_WITH_AES_256_CBC_SHA256     -> (RSA    , Block (AES_256_CBC, `SHA256))
-  | `TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> (DHE_RSA, Block (AES_128_CBC, `SHA256))
-  | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> (DHE_RSA, Block (AES_256_CBC, `SHA256))
-  | `TLS_RSA_WITH_AES_128_CCM            -> (RSA    , AEAD AES_128_CCM)
-  | `TLS_RSA_WITH_AES_256_CCM            -> (RSA    , AEAD AES_256_CCM)
-  | `TLS_DHE_RSA_WITH_AES_128_CCM        -> (DHE_RSA, AEAD AES_128_CCM)
-  | `TLS_DHE_RSA_WITH_AES_256_CCM        -> (DHE_RSA, AEAD AES_256_CCM)
-  | `TLS_RSA_WITH_AES_128_GCM_SHA256     -> (RSA    , AEAD AES_128_GCM)
-  | `TLS_RSA_WITH_AES_256_GCM_SHA384     -> (RSA    , AEAD AES_256_GCM)
-  | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> (DHE_RSA, AEAD AES_128_GCM)
-  | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> (DHE_RSA, AEAD AES_256_GCM)
+  | `TLS_RSA_WITH_RC4_128_MD5            -> (`RSA    , `Stream (RC4_128, `MD5))
+  | `TLS_RSA_WITH_RC4_128_SHA            -> (`RSA    , `Stream (RC4_128, `SHA1))
+  | `TLS_RSA_WITH_3DES_EDE_CBC_SHA       -> (`RSA    , `Block (TRIPLE_DES_EDE_CBC, `SHA1))
+  | `TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA   -> (`DHE_RSA, `Block (TRIPLE_DES_EDE_CBC, `SHA1))
+  | `TLS_RSA_WITH_AES_128_CBC_SHA        -> (`RSA    , `Block (AES_128_CBC, `SHA1))
+  | `TLS_DHE_RSA_WITH_AES_128_CBC_SHA    -> (`DHE_RSA, `Block (AES_128_CBC, `SHA1))
+  | `TLS_RSA_WITH_AES_256_CBC_SHA        -> (`RSA    , `Block (AES_256_CBC, `SHA1))
+  | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA    -> (`DHE_RSA, `Block (AES_256_CBC, `SHA1))
+  | `TLS_RSA_WITH_AES_128_CBC_SHA256     -> (`RSA    , `Block (AES_128_CBC, `SHA256))
+  | `TLS_RSA_WITH_AES_256_CBC_SHA256     -> (`RSA    , `Block (AES_256_CBC, `SHA256))
+  | `TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> (`DHE_RSA, `Block (AES_128_CBC, `SHA256))
+  | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> (`DHE_RSA, `Block (AES_256_CBC, `SHA256))
+  | `TLS_RSA_WITH_AES_128_CCM            -> (`RSA    , `AEAD AES_128_CCM)
+  | `TLS_RSA_WITH_AES_256_CCM            -> (`RSA    , `AEAD AES_256_CCM)
+  | `TLS_DHE_RSA_WITH_AES_128_CCM        -> (`DHE_RSA, `AEAD AES_128_CCM)
+  | `TLS_DHE_RSA_WITH_AES_256_CCM        -> (`DHE_RSA, `AEAD AES_256_CCM)
+  | `TLS_RSA_WITH_AES_128_GCM_SHA256     -> (`RSA    , `AEAD AES_128_GCM)
+  | `TLS_RSA_WITH_AES_256_GCM_SHA384     -> (`RSA    , `AEAD AES_256_GCM)
+  | `TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 -> (`DHE_RSA, `AEAD AES_128_GCM)
+  | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> (`DHE_RSA, `AEAD AES_256_GCM)
 
-  | `TLS_PSK_WITH_AES_128_GCM_SHA256     -> (PSK    , AEAD AES_128_GCM)
-  | `TLS_PSK_WITH_AES_256_GCM_SHA384     -> (PSK    , AEAD AES_256_GCM)
-  | `TLS_PSK_WITH_AES_128_CCM            -> (PSK    , AEAD AES_128_CCM)
-  | `TLS_PSK_WITH_AES_256_CCM            -> (PSK    , AEAD AES_256_CCM)
-  | `TLS_DHE_PSK_WITH_AES_128_GCM_SHA256 -> (DHE_PSK, AEAD AES_128_GCM)
-  | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> (DHE_PSK, AEAD AES_256_GCM)
-  | `TLS_DHE_PSK_WITH_AES_128_CCM        -> (DHE_PSK, AEAD AES_128_CCM)
-  | `TLS_DHE_PSK_WITH_AES_256_CCM        -> (DHE_PSK, AEAD AES_256_CCM)
+  | `TLS_PSK_WITH_AES_128_GCM_SHA256     -> (`PSK    , `AEAD AES_128_GCM)
+  | `TLS_PSK_WITH_AES_256_GCM_SHA384     -> (`PSK    , `AEAD AES_256_GCM)
+  | `TLS_PSK_WITH_AES_128_CCM            -> (`PSK    , `AEAD AES_128_CCM)
+  | `TLS_PSK_WITH_AES_256_CCM            -> (`PSK    , `AEAD AES_256_CCM)
+  | `TLS_DHE_PSK_WITH_AES_128_GCM_SHA256 -> (`DHE_PSK, `AEAD AES_128_GCM)
+  | `TLS_DHE_PSK_WITH_AES_256_GCM_SHA384 -> (`DHE_PSK, `AEAD AES_256_GCM)
+  | `TLS_DHE_PSK_WITH_AES_128_CCM        -> (`DHE_PSK, `AEAD AES_128_CCM)
+  | `TLS_DHE_PSK_WITH_AES_256_CCM        -> (`DHE_PSK, `AEAD AES_256_CCM)
   | _ -> invalid_arg "should not happen"
 
 (** [ciphersuite_kex ciphersuite] is [kex], first projection of [get_kex_privprot] *)
@@ -246,13 +244,13 @@ let ciphersuite_privprot c = snd (get_kex_privprot c)
 
 let ciphersuite_fs cs =
   match ciphersuite_kex cs with
-  | DHE_RSA | DHE_PSK -> true
-  | RSA | PSK         -> false
+  | `DHE_RSA | `DHE_PSK -> true
+  | `RSA | `PSK         -> false
 
 let ciphersuite_psk cs =
   match ciphersuite_kex cs with
-  | DHE_RSA | RSA -> false
-  | DHE_PSK | PSK -> true
+  | `DHE_RSA | `RSA -> false
+  | `DHE_PSK | `PSK -> true
 
 let ciphersuite_tls12_only = function
   | `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
