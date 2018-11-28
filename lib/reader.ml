@@ -324,13 +324,14 @@ let parse_early_data buf =
        { configuration_id ; ciphersuite ; extensions ; context }
   | None, _ -> raise_unknown "ciphersuite in early_data"
 
+let parse_ext raw =
+  let etype = BE.get_uint16 raw 0
+  and length = BE.get_uint16 raw 2
+  in
+  (etype, length, sub raw 4 length)
+
 let parse_client_extension raw =
-  let etype = BE.get_uint16 raw 0 in
-  let length = BE.get_uint16 raw 2 in
-  Printf.printf "etype %04X len %d\n%!" etype length ;
-  let buf = sub raw 4 length in
-  Printf.printf "buf %d\n%!" (Cstruct.len buf) ;
-  Cstruct.hexdump buf ;
+  let etype, length, buf = parse_ext raw in
   let data =
     match int_to_extension_type etype with
     | Some SERVER_NAME ->
@@ -393,9 +394,7 @@ let parse_client_extension raw =
   (Some data, shift raw (4 + length))
 
 let parse_server_extension raw =
-  let etype = BE.get_uint16 raw 0 in
-  let length = BE.get_uint16 raw 2 in
-  let buf = sub raw 4 length in
+  let etype, length, buf = parse_ext raw in
   let data =
     match int_to_extension_type etype with
     | Some SERVER_NAME ->
@@ -434,6 +433,37 @@ let parse_server_extension raw =
   in
   (Some data, shift raw (4 + length))
 
+let parse_cookie buf =
+  let len = BE.get_uint16 buf 0 in
+  (sub buf 2 len, shift buf (2 + len))
+
+let parse_retry_extension raw =
+  let etype, length, buf = parse_ext raw in
+  let data =
+    match int_to_extension_type etype with
+    | Some KEY_SHARE ->
+      begin
+        let group, rt = parse_group buf in
+        if len rt <> 0 then
+          raise_trailing_bytes "key share"
+        else
+          match group with
+          | None -> raise_unknown "unknown group in key share"
+          | Some g -> `SelectedGroup g
+      end
+    | Some SUPPORTED_VERSIONS ->
+      let version = parse_version_exn buf in
+      `SelectedVersion version
+    | Some COOKIE ->
+      let c, rt = parse_cookie buf in
+       if len rt <> 0 then
+         raise_trailing_bytes "cookie"
+       else
+         `Cookie c
+    | _ -> `UnknownExtension (etype, buf)
+  in
+  (Some data, shift raw (4 + length))
+
 let parse_extensions parse_ext buf =
   let length = BE.get_uint16 buf 0 in
   if len buf <> length + 2 then
@@ -448,11 +478,9 @@ let parse_client_hello buf =
   let sessionid = if slen = 0 then None else Some (sub buf 35 slen) in
   let ciphersuites, rt = parse_any_ciphersuites (shift buf (35 + slen)) in
   let _, rt' = parse_compression_methods rt in
-  Printf.printf "here\n%!" ;
   let extensions =
     if len rt' == 0 then [] else parse_extensions parse_client_extension rt'
   in
-  Printf.printf "after extensions\n%!" ;
   ClientHello { client_version ; client_random ; sessionid ; ciphersuites ; extensions }
 
 let parse_server_hello buf =
@@ -469,11 +497,37 @@ let parse_server_hello buf =
     | Some _   , _    -> raise_unknown "unsupported compression method"
     | None     , _    -> raise_unknown "compression method"
   in
-  let extensions =
-    if len rt' == 0 then [] else parse_extensions parse_server_extension rt'
-  in
-  (* TODO: look through extensions for SelectedVersion and report this as server_version *)
-  ServerHello { server_version ; server_random ; sessionid ; ciphersuite ; extensions }
+  (* depending on the content of the server_random we have to diverge in behaviour *)
+  if Cstruct.equal server_random helloretryrequest then begin
+    (* hello retry request, TODO: verify cmp=empty,sessionid=empty *)
+    match Ciphersuite.(any_ciphersuite_to_ciphersuite13 (ciphersuite_to_any_ciphersuite ciphersuite)) with
+    | None -> raise_unknown "unsupported ciphersuite in hello retry request"
+    | Some ciphersuite ->
+      let extensions =
+        if len rt' == 0 then [] else parse_extensions parse_retry_extension rt'
+      in
+      let retry_version =
+        match Utils.map_find ~f:(function `SelectedVersion v -> Some v | _ -> None) extensions with
+        | None -> server_version
+        | Some v -> v
+      in
+      let selected_group =
+        match Utils.map_find ~f:(function `SelectedGroup g -> Some g | _ -> None) extensions with
+        | None -> raise_unknown "unknown selected group"
+        | Some g -> g
+      in
+      HelloRetryRequest { retry_version ; ciphersuite ; selected_group ; extensions }
+  end else begin
+    let extensions =
+      if len rt' == 0 then [] else parse_extensions parse_server_extension rt'
+    in
+    let server_version =
+      match Utils.map_find ~f:(function `SelectedVersion v -> Some v | _ -> None) extensions with
+      | None -> server_version
+      | Some v -> v
+    in
+    ServerHello { server_version ; server_random ; sessionid ; ciphersuite ; extensions }
+  end
 
 let parse_certificates_exn buf =
   let parsef buf =
@@ -605,16 +659,6 @@ let parse_client_key_exchange buf =
     raise_trailing_bytes "client key exchange"
   else
     ClientKeyExchange (sub buf 2 length)
-
-let parse_hello_retry_request buf =
-  let version = parse_version_exn buf in
-  let ciphersuite, rt = parse_ciphersuite (shift buf 2) in
-  let group, rt = parse_group rt in
-  let extensions = parse_extensions parse_server_extension rt in
-  match ciphersuite, group with
-  | Some ciphersuite, Some selected_group -> { version ; ciphersuite ; selected_group ; extensions }
-  | None, _ -> raise_unknown "ciphersuite"
-  | _, None -> raise_unknown "selected group"
 
 let parse_handshake_frame buf =
   if len buf < 4 then

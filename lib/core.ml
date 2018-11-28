@@ -175,7 +175,14 @@ type server_extension = [
   | `EarlyDataIndication
   | `PreSharedKey of psk_identity
   | `Draft of int
-  | `SelectedVersion of tls_version
+  | `SelectedVersion of tls_version (* only used internally in writer!! *)
+  | `UnknownExtension of (int * Cstruct_sexp.t)
+] [@@deriving sexp]
+
+type hello_retry_extension = [
+  | `SelectedGroup of group (* only used internally in writer!! *)
+  | `Cookie of Cstruct_sexp.t
+  | `SelectedVersion of tls_version (* only used internally in writer!! *)
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
 
@@ -232,17 +239,17 @@ type ec_parameters =
   | NamedGroupParameters of (group * Cstruct_sexp.t)
   [@@deriving sexp]
 
-type hello_retry_request = {
-  version : tls_version ;
-  ciphersuite : ciphersuite ;
+type hello_retry = {
+  retry_version : tls_version ;
+  ciphersuite : ciphersuite13 ;
   selected_group : group ;
-  extensions : server_extension list
+  extensions : hello_retry_extension list
 } [@@deriving sexp]
 
 type tls_handshake =
   | HelloRequest
-  | HelloRetryRequest of hello_retry_request
-  | EncryptedExtensions of server_extension list
+  | HelloRetryRequest of hello_retry
+  | EncryptedExtensions of server_extension list (* TODO ee_extension list *)
   | ServerHelloDone
   | ClientHello of client_hello
   | ServerHello of server_hello
@@ -257,13 +264,6 @@ type tls_handshake =
   [@@deriving sexp]
 
 type tls_alert = alert_level * alert_type [@@deriving sexp]
-
-type tls_body =
-  | TLS_ChangeCipherSpec
-  | TLS_ApplicationData
-  | TLS_Alert of tls_alert
-  | TLS_Handshake of tls_handshake
-  [@@deriving sexp]
 
 (** the master secret of a TLS connection *)
 type master_secret = Cstruct_sexp.t [@@deriving sexp]

@@ -93,7 +93,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
 
 (* called from handshake_client.ml *)
 let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
-  guard (TLS_1_3 = hrr.version) (`Fatal `InvalidMessage) >>= fun () ->
+  guard (TLS_1_3 = hrr.retry_version) (`Fatal `InvalidMessage) >>= fun () ->
   let sg = Ciphersuite.group_to_any_group hrr.selected_group in
   (match map_find ~f:(function `SupportedGroups gs -> Some gs | _ -> None) ch.extensions with
     | None -> fail (`Fatal `InvalidMessage)
