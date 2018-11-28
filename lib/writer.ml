@@ -210,8 +210,14 @@ let assemble_extension = function
     (b, DRAFT_SUPPORT)
   | _ -> invalid_arg "unknown extension"
 
+let assemble_ext (pay, typ) =
+  let buf = Cstruct.create 4 in
+  BE.set_uint16 buf 0 (extension_type_to_int typ);
+  BE.set_uint16 buf 2 (len pay);
+  buf <+> pay
+
 let assemble_client_extension e =
-  let pay, typ = match e with
+  assemble_ext @@ match e with
     | `SupportedGroups groups ->
       (assemble_supported_groups groups, SUPPORTED_GROUPS)
     | `Hostname name -> (assemble_hostnames [name], SERVER_NAME)
@@ -234,14 +240,9 @@ let assemble_client_extension e =
     | `PostHandshakeAuthentication ->
       (Utils.Cs.empty, POST_HANDSHAKE_AUTH)
     | x -> assemble_extension x
-  in
-  let buf = create 4 in
-  BE.set_uint16 buf 0 (extension_type_to_int typ);
-  BE.set_uint16 buf 2 (len pay);
-  buf <+> pay
 
 let assemble_server_extension e =
-  let pay, typ = match e with
+  assemble_ext @@ match e with
     | `Hostname -> (create 0, SERVER_NAME)
     | `ALPN protocol ->
       (assemble_alpn_protocols [protocol], APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
@@ -252,11 +253,18 @@ let assemble_server_extension e =
     | `EarlyDataIndication -> (create 0, EARLY_DATA)
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
-  in
-  let buf = create 4 in
-  BE.set_uint16 buf 0 (extension_type_to_int typ);
-  BE.set_uint16 buf 2 (Cstruct.len pay);
-  buf <+> pay
+
+let assemble_cookie c =
+  let l = create 2 in
+  BE.set_uint16 l 0 (len c) ;
+  l <+> c
+
+let assemble_retry_extension e =
+  assemble_ext @@ match e with
+    | `SelectedGroup g -> (assemble_group g, KEY_SHARE)
+    | `Cookie c -> (assemble_cookie c, COOKIE)
+    | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
+    | `UnknownExtension _ -> invalid_arg "unknown retry extension"
 
 let assemble_extensions assemble_e es =
   assemble_list ~none_if_empty:true Two assemble_e es
@@ -382,17 +390,24 @@ let assemble_client_key_exchange kex =
   buf
 
 let assemble_hello_retry_request hrr =
-  let v = assemble_protocol_version hrr.version in
-  let cs = assemble_ciphersuite hrr.ciphersuite in
-  let ng = assemble_group hrr.selected_group in
-  let exts = assemble_extensions assemble_server_extension hrr.extensions in
-  v <+> cs <+> ng <+> exts
+  let version, exts = match hrr.retry_version with
+    | TLS_1_3 -> TLS_1_2, `SelectedVersion TLS_1_3 :: hrr.extensions
+    | x -> x, hrr.extensions
+  in
+  let v = assemble_protocol_version version in
+  let sid = create 1 in
+  let cs = assemble_ciphersuite (hrr.ciphersuite :> Ciphersuite.ciphersuite) in
+  (* useless compression method *)
+  let cm = create 1 in
+  let extensions = assemble_extensions assemble_retry_extension exts in
+  v <+> helloretryrequest <+> sid <+> cs <+> cm <+> extensions
 
 let assemble_handshake hs =
   let (payload, payload_type) =
     match hs with
     | ClientHello ch -> (assemble_client_hello ch, CLIENT_HELLO)
     | ServerHello sh -> (assemble_server_hello sh, SERVER_HELLO)
+    | HelloRetryRequest hr -> (assemble_hello_retry_request hr, SERVER_HELLO)
     | Certificate cs -> (cs, CERTIFICATE)
     | CertificateRequest cr -> (cr, CERTIFICATE_REQUEST)
     | CertificateVerify c -> (c, CERTIFICATE_VERIFY)

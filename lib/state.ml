@@ -149,7 +149,7 @@ type client13_handshake_state =
   [@@deriving sexp]
 
 type server13_handshake_state =
-  | AwaitClientHello13 of client_hello * hello_retry_request * Cstruct.t
+  | AwaitClientHello13 of client_hello * hello_retry * Cstruct.t (* get rid of this, use a cookie in the hello retry request *)
   | AwaitClientCertificate13 (* optional *)
   | AwaitClientCertificateVerify13 (* optional *)
   | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t

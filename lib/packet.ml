@@ -168,32 +168,6 @@ type extension_type =
   [@@uint16_t] [@@sexp]
 ]
 
-(* TLS 1.3, RFC 8446, section 4.2 *)
-let extension_allowed hs = function
-  | SERVER_NAME -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | MAX_FRAGMENT_LENGTH -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | STATUS_REQUEST -> hs = CLIENT_HELLO || hs = CERTIFICATE_REQUEST || hs = CERTIFICATE
-  | SUPPORTED_GROUPS -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | SIGNATURE_ALGORITHMS -> hs = CLIENT_HELLO || hs = CERTIFICATE_REQUEST
-  | USE_SRTP -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | HEARTBEAT -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | APPLICATION_LAYER_PROTOCOL_NEGOTIATION -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | SIGNED_CERTIFICATE_TIMESTAMP -> hs = CLIENT_HELLO || hs = CERTIFICATE_REQUEST || hs = CERTIFICATE
-  | CLIENT_CERTIFICATE_TYPE -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | SERVER_CERTIFICATE_TYPE -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS
-  | PADDING -> hs = CLIENT_HELLO
-  | KEY_SHARE -> hs = CLIENT_HELLO || hs = SERVER_HELLO (* || hs = HELLO_RETRY_REQUEST *)
-  | PRE_SHARED_KEY -> hs = CLIENT_HELLO || hs = SERVER_HELLO
-  | PSK_KEY_EXCHANGE_MODES -> hs = CLIENT_HELLO
-  | EARLY_DATA -> hs = CLIENT_HELLO || hs = ENCRYPTED_EXTENSIONS || hs = SESSION_TICKET
-  | COOKIE -> hs = CLIENT_HELLO (* || hs = HELLO_RETRY_REQUEST *)
-  | SUPPORTED_VERSIONS -> hs = CLIENT_HELLO || hs = SERVER_HELLO (* || hs = HELLO_RETRY_REQUEST *)
-  | CERTIFICATE_AUTHORITIES -> hs = CLIENT_HELLO || hs = CERTIFICATE_REQUEST
-  | OID_FILTERS -> hs = CERTIFICATE_REQUEST
-  | POST_HANDSHAKE_AUTH -> hs = CLIENT_HELLO
-  | SIGNATURE_ALGORITHMS_CERT -> hs = CLIENT_HELLO || hs = CERTIFICATE_REQUEST
-  | _ -> false
-
 (* TLS maximum fragment length *)
 [%%cenum
 type max_fragment_length =
@@ -646,3 +620,7 @@ type any_ciphersuite =
   | TLS_ECDHE_PSK_WITH_AES_256_CCM_SHA384        [@id 0xD005] (*I-D.mattsson-tls-ecdhe-psk-aead*)
   [@@uint16_t] [@@sexp]
 ]
+
+let helloretryrequest = Nocrypto.Hash.digest `SHA256 (Cstruct.of_string "HelloRetryRequest")
+let downgrade13 = Cstruct.of_hex "44 4F 57 4E 47 52 44 01"
+let downgrade12 = Cstruct.of_hex "44 4F 57 4E 47 52 44 00"
