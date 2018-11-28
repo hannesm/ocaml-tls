@@ -28,7 +28,7 @@ let pp_hash_k_n ciphersuite =
   (pp, hash, k, n)
 
 type t = {
-  secret : Cstruct.t option ;
+  secret : Cstruct.t ;
   cipher : Ciphersuite.ciphersuite13 ;
   hash : Nocrypto.Hash.hash ;
 }
@@ -58,27 +58,25 @@ let derive_secret_no_hash hash prk ?(ctx = Cstruct.empty) label =
   key
 
 let derive_secret t label log =
-  match t.secret with
-  | None -> assert false
-  | Some prk ->
-    let ctx = Nocrypto.Hash.digest t.hash log in
-    derive_secret_no_hash t.hash prk ~ctx label
+  let ctx = Nocrypto.Hash.digest t.hash log in
+  derive_secret_no_hash t.hash t.secret ~ctx label
 
 let empty cipher = {
-  secret = None ;
+  secret = Cstruct.empty ;
   cipher ;
   hash = Ciphersuite.hash13 cipher
 }
 
-let derive t secret =
+let derive t secret_ikm =
   let salt =
-    match t.secret with
-    | None -> Cstruct.empty
-    | Some _ -> derive_secret t "derived" Cstruct.empty
+    if Cstruct.equal t.secret Cstruct.empty then
+      Cstruct.empty
+    else
+      derive_secret t "derived" Cstruct.empty
   in
-  let secret = Hkdf.extract ~hash:t.hash ~salt secret in
+  let secret = Hkdf.extract ~hash:t.hash ~salt secret_ikm in
   trace "derive (extracted secret)" secret ;
-  { t with secret = Some secret }
+  { t with secret }
 
 let traffic_key cipher prk =
   let _, hash, key_len, iv_len = pp_hash_k_n cipher in

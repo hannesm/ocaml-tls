@@ -241,8 +241,7 @@ let answer_client_hello state ch raw log =
 
     let log = log <+> cv_raw in
     let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
-    let ms = match master_secret.secret with None -> assert false | Some x -> x in
-    Tracing.cs ~tag:"master-secret" ms ;
+    Tracing.cs ~tag:"master-secret" master_secret.secret ;
     (* let resumption_secret = resumption_secret cipher master_secret log in *)
 
     let f_data = finished hs_secret.hash server_hs_secret log in
@@ -256,7 +255,7 @@ let answer_client_hello state ch raw log =
 
     guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
 
-    let session = { session with own_private_key = Some pr ; own_certificate =  crt ; master_secret = ms (* ; resumption_secret *) } in
+    let session = { session with own_private_key = Some pr ; own_certificate =  crt ; master_secret = master_secret.secret (* ; resumption_secret *) } in
     (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
     let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
     ({ state with machina = Server13 st },

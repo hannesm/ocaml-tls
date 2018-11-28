@@ -21,11 +21,8 @@ let extract_secret_early () =
   in
   Alcotest.check cs __LOC__ secret0 (Hkdf.extract ~hash:`SHA256 ~salt ikm) ;
   let t = Handshake_crypto13.(derive (empty cipher) ikm) in
-  match t.Handshake_crypto13.secret with
-  | None -> Alcotest.fail "expected a secret!"
-  | Some secret ->
-    my_secret := Some t ;
-    Alcotest.check cs __LOC__ secret0 secret
+  my_secret := Some t ;
+  Alcotest.check cs __LOC__ secret0 t.secret
 
 let expand0 = Cstruct.of_hex {|
 6f 26 15 a1 08 c7 02 c5  67 8f 54 fc 9d ba b6 97
@@ -56,11 +53,8 @@ let extract_handshake () =
   | None -> Alcotest.fail "expected some secret"
   | Some t ->
     let t' = Handshake_crypto13.derive t ikm in
-    match t'.secret with
-    | None -> Alcotest.fail "expected some secret in the state"
-    | Some sec ->
-      my_secret := Some t' ;
-      Alcotest.check cs __LOC__ hs_secret sec
+    my_secret := Some t' ;
+    Alcotest.check cs __LOC__ hs_secret t'.secret
 
 let ch = Cstruct.of_hex {|
 01 00 00 c0 03 03 cb 34  ec b1 e7 81 63 ba 1c 38
@@ -255,11 +249,8 @@ let extract_master () =
   | None -> Alcotest.fail "expected my secret"
   | Some t ->
     let t' = Handshake_crypto13.derive t (Cstruct.create 32) in
-    match t'.secret with
-    | None -> Alcotest.fail "expected a secret"
-    | Some s ->
-      my_secret := Some t' ;
-      Alcotest.check cs __LOC__ master_secret s
+    my_secret := Some t' ;
+    Alcotest.check cs __LOC__ master_secret t'.secret
 
 let c_ap_traffic = Cstruct.of_hex {|
 9e 40 64 6c e7 9a 7f 9d  c0 5a f8 88 9b ce 65 52
