@@ -189,7 +189,7 @@ calls out to:
 ** re-enable support for finished, and fix the implementation (it requires s_hs_traffic / c_hs_traffic keys, which means they need to be exposed by crypto API)
 * <2018-11-28 Wed>
 - TODO padding strategy? (for each piece of payload)
-- DH now has leading zeros!
+- DH now has leading zeros! (oh, look at me, NSS https://bugzilla.mozilla.org/show_bug.cgi?id=1478698)
 - TODO consistency of nocrypto: RSA.decrypt pads on the left, while Dh.gen_key does not (see https://github.com/mirleft/ocaml-nocrypto/issues/145) --> should be unified (provide an optional labeled argument?)
 - HRR server-side support! can now run:
 /opt/bin/gnutls-cli --insecure -d 999 localhost:4433
