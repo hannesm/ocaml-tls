@@ -109,6 +109,8 @@ module Ciphers = struct
     (* `TLS_AES_128_CCM_8_SHA256 *)
   ]
 
+  let supported13 = default13
+
 end
 
 let default_signature_algorithms =

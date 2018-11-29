@@ -165,18 +165,30 @@ type client_extension = [
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
 
+type server13_extension = [
+  | `KeyShare of (group * Cstruct_sexp.t)
+  | `PreSharedKey of psk_identity
+  | `SelectedVersion of tls_version (* only used internally in writer!! *)
+] [@@deriving sexp]
+
 type server_extension = [
+  server13_extension
   | `Hostname
   | `MaxFragmentLength of max_fragment_length
   | `ECPointFormats of ec_point_format list
   | `SecureRenegotiation of Cstruct_sexp.t
   | `ExtendedMasterSecret
   | `ALPN of string
-  | `KeyShare of (group * Cstruct_sexp.t)
   | `EarlyDataIndication
-  | `PreSharedKey of psk_identity
   | `Draft of int
-  | `SelectedVersion of tls_version (* only used internally in writer!! *)
+  | `UnknownExtension of (int * Cstruct_sexp.t)
+] [@@deriving sexp]
+
+type encrypted_extension = [
+  | `Hostname
+  | `MaxFragmentLength of max_fragment_length
+  | `SupportedGroups of named_group list
+  | `ALPN of string
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
 
@@ -243,6 +255,7 @@ type ec_parameters =
 type hello_retry = {
   retry_version : tls_version ;
   ciphersuite : ciphersuite13 ;
+  sessionid : SessionID.t option ;
   selected_group : group ;
   extensions : hello_retry_extension list
 } [@@deriving sexp]
@@ -250,7 +263,7 @@ type hello_retry = {
 type tls_handshake =
   | HelloRequest
   | HelloRetryRequest of hello_retry
-  | EncryptedExtensions of server_extension list (* TODO ee_extension list *)
+  | EncryptedExtensions of encrypted_extension list
   | ServerHelloDone
   | ClientHello of client_hello
   | ServerHello of server_hello

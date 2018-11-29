@@ -155,6 +155,8 @@ module Ciphers : sig
   (** [psk_of ciphers] selects all ciphersuites which use a pre-shared key. *)
 
   val default13 : ciphersuite13 list
+
+  val supported13 : ciphersuite13 list
 end
 
 (** {1 Internal use only} *)

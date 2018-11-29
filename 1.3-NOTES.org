@@ -193,3 +193,17 @@ calls out to:
 - TODO consistency of nocrypto: RSA.decrypt pads on the left, while Dh.gen_key does not (see https://github.com/mirleft/ocaml-nocrypto/issues/145) --> should be unified (provide an optional labeled argument?)
 - HRR server-side support! can now run:
 /opt/bin/gnutls-cli --insecure -d 999 localhost:4433
+* <2018-11-29 Thu>
+- there's struggle with CCS. tls 1.3 allows this to be sent at arbitrary points (really?) during the handshake, to-be-ignored.
+- now FF sends CH, gets HRR, sends CCS; CH. our server (doing stateless HRR) is still in state (Server AwaitClientHello) - Engine.handle_change_cipher_spec uses that for dispatching (and ignores the hs.protocol_version)
+--> this is intricate, unclear whether there is an attack surface. are clients after HRR allowed to use an older version? can HRR contain <1.3?
+- for now, handle_ccs uses hs.protocol_version <- is this safe? can it be downgraded/invalid at some point? need to check that (it's set by new_state to the maximum configured protocol version)
+--> this means a client/server can sent arbitrary amount of CCS if OCaml-TLS is configured with 1.3
+- when should we (should we?) emit CCS?
+- fiddling more with FF: - EE may be empty (esp. sending `hostname without client sent hostname is not a good idea)
+- sessionid is reused in HRR and SH (copied from CH in both cases)
+- TODO group vs named_group :/
+- installed tlsfuzzer (python) from tomato42/tlsfuzz
+- fixed some bugs ;) (valid_client_hello etc.)
+- found some bugs (TODO: readup downgrade prevention)
+- avoid empty EncryptedExtensions

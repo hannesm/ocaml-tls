@@ -21,7 +21,7 @@ let serve_ssl port callback =
     s in
 
   yap ~tag ("-> start @ " ^ string_of_int port) >>= fun () ->
-  Tls_lwt.accept_ext config server_s >>= fun (channels, addr) ->
+  Tls_lwt.accept_ext  config server_s >>= fun (channels, addr) ->
   yap ~tag "-> connect" >>= fun () ->
   callback channels addr >>= fun () ->
   yap ~tag "<- handler done"
@@ -29,8 +29,9 @@ let serve_ssl port callback =
 
 let test_server port =
   serve_ssl port @@ fun (ic, oc) addr ->
+    yap ~tag:"handler" "accepted" >>= fun () ->
     Lwt_io.read_line ic >>= fun line ->
-    yap "handler" ("+ " ^ line) >>= fun () ->
+    yap ~tag:"handler" ("+ " ^ line) >>= fun () ->
     Lwt_io.write_line oc line
 
 let () =
