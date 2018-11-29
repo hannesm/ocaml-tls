@@ -132,7 +132,7 @@ let answer_client_hello state ch raw =
 
         (* ONLY if client sent a `Hostname *)
         let sg = `SupportedGroups (List.map Ciphersuite.group_to_any_group state.config.Config.groups) in
-        let ee = EncryptedExtensions [ sg ] (* `Hostname ] *) in
+        let ee = EncryptedExtensions [ ] (* sg ] (* `Hostname ] *) *) in
         (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
         let ee_raw = Writer.assemble_handshake ee in
 
