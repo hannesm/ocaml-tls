@@ -443,6 +443,26 @@ let parse_server_extension raw =
   in
   (Some data, shift raw (4 + length))
 
+let parse_encrypted_extension raw =
+  let etype, length, buf = parse_ext raw in
+  let data =
+    match int_to_extension_type etype with
+    | Some SERVER_NAME ->
+       (match parse_hostnames buf with
+        | [] -> `Hostname
+        | _      -> raise_unknown "bad server name indication (multiple names)")
+    | Some SUPPORTED_GROUPS ->
+       let gs = parse_supported_groups buf in
+       `SupportedGroups gs
+    | Some APPLICATION_LAYER_PROTOCOL_NEGOTIATION ->
+      (match parse_alpn_protocols buf with
+       | [protocol] -> `ALPN protocol
+       | _ -> raise_unknown "bad ALPN (none or multiple names)")
+    | Some x -> raise_unknown ("bad encrypted extension " ^ (extension_type_to_string x))
+    | None -> `UnknownExtension (etype, buf)
+  in
+  (Some data, shift raw (4 + length))
+
 let parse_retry_extension raw =
   let etype, length, buf = parse_ext raw in
   let data =
@@ -505,7 +525,7 @@ let parse_server_hello buf =
   in
   (* depending on the content of the server_random we have to diverge in behaviour *)
   if Cstruct.equal server_random helloretryrequest then begin
-    (* hello retry request, TODO: verify cmp=empty,sessionid=empty *)
+    (* hello retry request, TODO: verify cmp=empty *)
     match Ciphersuite.(any_ciphersuite_to_ciphersuite13 (ciphersuite_to_any_ciphersuite ciphersuite)) with
     | None -> raise_unknown "unsupported ciphersuite in hello retry request"
     | Some ciphersuite ->
@@ -522,7 +542,7 @@ let parse_server_hello buf =
         | None -> raise_unknown "unknown selected group"
         | Some g -> g
       in
-      HelloRetryRequest { retry_version ; ciphersuite ; selected_group ; extensions }
+      HelloRetryRequest { retry_version ; sessionid ; ciphersuite ; selected_group ; extensions }
   end else begin
     let extensions =
       if len rt' == 0 then [] else parse_extensions parse_server_extension rt'
@@ -702,7 +722,7 @@ let parse_handshake = catch @@ fun buf ->
     | Some CLIENT_KEY_EXCHANGE -> parse_client_key_exchange payload
     | Some FINISHED -> Finished payload
     | Some ENCRYPTED_EXTENSIONS ->
-      let ee = parse_extensions parse_server_extension payload in
+      let ee = parse_extensions parse_encrypted_extension payload in
       EncryptedExtensions ee
     | Some KEY_UPDATE ->
       if len payload = 0 then KeyUpdate else raise_trailing_bytes "key update"

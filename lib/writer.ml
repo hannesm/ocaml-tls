@@ -261,6 +261,15 @@ let assemble_server_extension e =
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
 
+let assemble_encrypted_extension e =
+  assemble_ext @@ match e with
+    | `Hostname -> (create 0, SERVER_NAME)
+    | `ALPN protocol ->
+      (assemble_alpn_protocols [protocol], APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
+    | `SupportedGroups groups ->
+      (assemble_supported_groups groups, SUPPORTED_GROUPS)
+    | _ -> invalid_arg "unknown extension"
+
 let assemble_retry_extension e =
   assemble_ext @@ match e with
     | `SelectedGroup g -> (assemble_group g, KEY_SHARE)
@@ -285,18 +294,19 @@ let assemble_certificates_1_3 context certs =
   set_uint8 l 0 (len context) ;
   l <+> context <+> assemble_certs_exts (List.map (fun c -> c, []) certs)
 
+let assemble_sid sid =
+  let buf = create 1 in
+  match sid with
+  | None   -> set_uint8 buf 0 0; buf
+  | Some s -> set_uint8 buf 0 (len s); buf <+> s
+
 let assemble_client_hello (cl : client_hello) : Cstruct.t =
   let version = match cl.client_version with
     | Supported TLS_1_3 -> Supported TLS_1_2 (* keep 0x03 0x03 on wire *)
     | x -> x
   in
   let v = assemble_any_protocol_version version in
-  let sid =
-    let buf = create 1 in
-    match cl.sessionid with
-    | None   -> set_uint8 buf 0 0; buf
-    | Some s -> set_uint8 buf 0 (len s); buf <+> s
-  in
+  let sid = assemble_sid cl.sessionid in
   let css = assemble_any_ciphersuites cl.ciphersuites in
   (* compression methods, completely useless *)
   let cms = assemble_compression_methods [NULL] in
@@ -345,12 +355,7 @@ let assemble_server_hello (sh : server_hello) : Cstruct.t =
     | x -> x, sh.extensions
   in
   let v = assemble_protocol_version version in
-  let sid =
-    let buf = create 1 in
-    match sh.sessionid with
-    | None   -> set_uint8 buf 0 0; buf
-    | Some s -> set_uint8 buf 0 (len s); buf <+> s
-  in
+  let sid = assemble_sid sh.sessionid in
   let cs = assemble_ciphersuite sh.ciphersuite in
   (* useless compression method *)
   let cm = assemble_compression_method NULL in
@@ -398,7 +403,7 @@ let assemble_hello_retry_request hrr =
     | x -> x, exts
   in
   let v = assemble_protocol_version version in
-  let sid = create 1 in
+  let sid = assemble_sid hrr.sessionid in
   let cs = assemble_ciphersuite (hrr.ciphersuite :> Ciphersuite.ciphersuite) in
   (* useless compression method *)
   let cm = create 1 in
@@ -421,7 +426,7 @@ let assemble_handshake hs =
     | Finished fs -> (fs, FINISHED)
     | SessionTicket st -> (st, SESSION_TICKET)
     | EncryptedExtensions ee ->
-       let cs = assemble_extensions assemble_server_extension ee in
+       let cs = assemble_extensions assemble_encrypted_extension ee in
        (cs, ENCRYPTED_EXTENSIONS)
     | KeyUpdate -> (create 0, KEY_UPDATE)
   in

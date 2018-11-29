@@ -217,16 +217,24 @@ let client_hello_valid (ch : client_hello) =
         sig_alg
   in
 
+  let share_ciphers =
+    match
+      first_match (filter_map ~f:any_ciphersuite_to_ciphersuite ch.ciphersuites) Config.Ciphers.supported,
+      first_match (filter_map ~f:any_ciphersuite_to_ciphersuite13 ch.ciphersuites) Config.Ciphers.supported13
+    with
+    | None, None -> false
+    | _ -> true
+  in
   match
     not (empty ch.ciphersuites),
     List_set.is_proper_set ch.ciphersuites,
-    first_match (filter_map ~f:any_ciphersuite_to_ciphersuite ch.ciphersuites) Config.Ciphers.supported,
+    share_ciphers,
     List_set.is_proper_set (extension_types to_client_ext_type ch.extensions)
   with
-  | true, _, Some _, true -> version_good ch.client_version
+  | true, _, true, true -> version_good ch.client_version
   | false, _ , _, _ -> `Error `EmptyCiphersuites
   (*  | _, false, _, _ -> `Error (`NotSetCiphersuites ch.ciphersuites) *)
-  | _, _, None, _ -> `Error (`NoSupportedCiphersuite ch.ciphersuites)
+  | _, _, false, _ -> `Error (`NoSupportedCiphersuite ch.ciphersuites)
   | _, _, _, false -> `Error (`NotSetExtension ch.extensions)
 
 

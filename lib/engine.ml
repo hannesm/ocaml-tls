@@ -360,10 +360,11 @@ let rec separate_handshakes buf =
     (hs :: rt, frag)
 
 let handle_change_cipher_spec = function
-  | Client cs -> Handshake_client.handle_change_cipher_spec cs
-  | Server ss -> Handshake_server.handle_change_cipher_spec ss
-  | Client13 _ | Server13 _ -> (fun s _ -> return (s, []))
-(* TLS 1.3 ignores CCS, may send it for compatibility with middle-boxes *)
+  | TLS_1_3 -> (fun _ s _ -> return (s, [])) (* TLS 1.3 ignores CCS, may send it for compatibility with middle-boxes *)
+  | _ -> function
+    | Client cs -> Handshake_client.handle_change_cipher_spec cs
+    | Server ss -> Handshake_server.handle_change_cipher_spec ss
+    | Client13 _ | Server13 _ -> assert false
 
 and handle_handshake = function
   | Client cs -> Handshake_client.handle_handshake cs
@@ -394,7 +395,7 @@ let handle_packet hs buf = function
       fail (`Fatal `CannotHandleApplicationDataYet)
 
   | Packet.CHANGE_CIPHER_SPEC ->
-     handle_change_cipher_spec hs.machina hs buf
+     handle_change_cipher_spec hs.protocol_version hs.machina hs buf
      >|= fun (hs, items) -> (hs, items, None, `No_err)
 
   | Packet.HANDSHAKE ->
@@ -525,6 +526,7 @@ let can_handle_appdata s = hs_can_handle_appdata s.handshake
 
 let handshake_in_progress s = match s.handshake.machina with
   | Client Established | Server Established -> false
+  | Client13 Established13 | Server13 Established13 -> false
   | _ -> true
 
 (* another entry for user data *)

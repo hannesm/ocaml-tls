@@ -115,13 +115,14 @@ let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
   return ({ state with machina = Client13 st }, [`Record (Packet.HANDSHAKE, new_ch_raw)])
 
 let answer_encrypted_extensions state (session : session_data13) exts es ss ee raw log =
-  let st =
+(*  let st =
 (*    if Ciphersuite.ciphersuite_psk session.ciphersuite then
       AwaitServerFinished13 (session, exts @ ee, es, ss, log <+> raw)
       else*)
       AwaitServerFinishedMaybeAuth13 (session, exts @ ee, es, ss, log <+> raw)
   in
-  return ({ state with machina = Client13 st }, [])
+    return ({ state with machina = Client13 st }, []) *)
+  invalid_arg "bla"
 
 let answer_certificate state (session : session_data13) exts es ss certs raw log =
   let name = match state.config.peer_name with

@@ -38,7 +38,7 @@ let answer_client_hello state ch raw =
     let sh =
       { server_version = TLS_1_3 ;
         server_random = Nocrypto.Rng.generate 32 ;
-        sessionid = None ;
+        sessionid = ch.sessionid ;
         ciphersuite ;
         extensions }
     in
@@ -89,23 +89,23 @@ let answer_client_hello state ch raw =
     | Some _ -> invalid_arg "PSK"
     | None ->
       (* DHE - full handshake *)
-      let log = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
-        | None -> Cstruct.empty
+      let log, is_hrr = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
+        | None -> Cstruct.empty, false
         | Some c ->
           (* log is: 254 00 00 length c :: HRR *)
           let cs = Cstruct.create 4 in
           Cstruct.set_uint8 cs 0 (Packet.handshake_type_to_int Packet.MESSAGE_HASH) ;
           Cstruct.set_uint8 cs 3 (Cstruct.len c) ;
-          let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; selected_group = group ; extensions = [ `Cookie c ]} in
+          let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie c ]} in
           let hs_buf = Writer.assemble_handshake (HelloRetryRequest hrr) in
-          Cstruct.concat [ cs ; c ; hs_buf ]
+          Cstruct.concat [ cs ; c ; hs_buf ], true
       in
 
       (* trace_cipher cipher ; *)
       match keyshare group with
       | None ->
         let cookie = Nocrypto.Hash.digest (Ciphersuite.hash13 cipher) raw in
-        let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; selected_group = group ; extensions = [ `Cookie cookie ] } in
+        let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie cookie ] } in
         let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
         return (state, [ `Record (Packet.HANDSHAKE, hrr_raw) ])
@@ -131,7 +131,8 @@ let answer_client_hello state ch raw =
         let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
 
         (* ONLY if client sent a `Hostname *)
-        let ee = EncryptedExtensions [ `Hostname ] in
+        let sg = `SupportedGroups (List.map Ciphersuite.group_to_any_group state.config.Config.groups) in
+        let ee = EncryptedExtensions [ sg ] (* `Hostname ] *) in
         (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
         let ee_raw = Writer.assemble_handshake ee in
 
@@ -181,9 +182,11 @@ let answer_client_hello state ch raw =
           } in
           { session with common_session_data13 (* TODO ; resumption_secret ; exporter_secret *) } in
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
+        let hrr = if is_hrr then [ `Record change_cipher_spec ] else [] in
         let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
         ({ state with machina = Server13 st },
-         [ `Record (Packet.HANDSHAKE, sh_raw) ;
+         hrr @ [ `Record (Packet.HANDSHAKE, sh_raw) ;
+                 `Record change_cipher_spec ;
            `Change_enc (Some server_ctx) ;
            `Change_dec (Some client_ctx) ;
            `Record (Packet.HANDSHAKE, ee_raw) ;
