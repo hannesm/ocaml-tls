@@ -277,8 +277,8 @@ let assemble_retry_extension e =
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | `UnknownExtension _ -> invalid_arg "unknown retry extension"
 
-let assemble_extensions assemble_e es =
-  assemble_list ~none_if_empty:true Two assemble_e es
+let assemble_extensions ?none_if_empty assemble_e es =
+  assemble_list ?none_if_empty Two assemble_e es
 
 let assemble_cert_ext (certificate, extensions) =
   let cert = assemble_certificate certificate
@@ -325,7 +325,7 @@ let assemble_client_hello (cl : client_hello) : Cstruct.t =
    handshake protocol) and test whether the resulting length falls into
    that range.  If it does, a padding extension can be added in order to
    push the length to (at least) 512 bytes. *)
-  let extensions = assemble_extensions assemble_client_extension cl.extensions in
+  let extensions = assemble_extensions ~none_if_empty:true assemble_client_extension cl.extensions in
   let extrapadding =
     let buflen = len bbuf + len extensions + 4 in
     if buflen >= 256 && buflen <= 511 then
@@ -359,7 +359,7 @@ let assemble_server_hello (sh : server_hello) : Cstruct.t =
   let cs = assemble_ciphersuite sh.ciphersuite in
   (* useless compression method *)
   let cm = assemble_compression_method NULL in
-  let extensions = assemble_extensions assemble_server_extension exts in
+  let extensions = assemble_extensions ~none_if_empty:true assemble_server_extension exts in
   v <+> sh.server_random <+> sid <+> cs <+> cm <+> extensions
 
 let assemble_dh_parameters p =
@@ -407,7 +407,7 @@ let assemble_hello_retry_request hrr =
   let cs = assemble_ciphersuite (hrr.ciphersuite :> Ciphersuite.ciphersuite) in
   (* useless compression method *)
   let cm = create 1 in
-  let extensions = assemble_extensions assemble_retry_extension exts in
+  let extensions = assemble_extensions ~none_if_empty:true assemble_retry_extension exts in
   v <+> helloretryrequest <+> sid <+> cs <+> cm <+> extensions
 
 let assemble_handshake hs =
