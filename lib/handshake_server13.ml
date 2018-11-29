@@ -89,8 +89,8 @@ let answer_client_hello state ch raw =
     | Some _ -> invalid_arg "PSK"
     | None ->
       (* DHE - full handshake *)
-      let log, is_hrr = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
-        | None -> Cstruct.empty, false
+      let log = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
+        | None -> Cstruct.empty
         | Some c ->
           (* log is: 254 00 00 length c :: HRR *)
           let cs = Cstruct.create 4 in
@@ -98,7 +98,7 @@ let answer_client_hello state ch raw =
           Cstruct.set_uint8 cs 3 (Cstruct.len c) ;
           let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie c ]} in
           let hs_buf = Writer.assemble_handshake (HelloRetryRequest hrr) in
-          Cstruct.concat [ cs ; c ; hs_buf ], true
+          Cstruct.concat [ cs ; c ; hs_buf ]
       in
 
       (* trace_cipher cipher ; *)
@@ -182,11 +182,9 @@ let answer_client_hello state ch raw =
           } in
           { session with common_session_data13 (* TODO ; resumption_secret ; exporter_secret *) } in
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
-        let hrr = if is_hrr then [ `Record change_cipher_spec ] else [] in
         let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
         ({ state with machina = Server13 st },
-         hrr @ [ `Record (Packet.HANDSHAKE, sh_raw) ;
-                 `Record change_cipher_spec ;
+         [ `Record (Packet.HANDSHAKE, sh_raw) ;
            `Change_enc (Some server_ctx) ;
            `Change_dec (Some client_ctx) ;
            `Record (Packet.HANDSHAKE, ee_raw) ;
