@@ -187,19 +187,18 @@ let answer_client_hello state ch raw =
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
         let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
         ({ state with machina = Server13 st },
-         [ `Record (Packet.HANDSHAKE, sh_raw) ;
-            `Change_enc (Some server_ctx) ;
-            `Change_dec (Some client_ctx) ] @
+         `Record (Packet.HANDSHAKE, sh_raw) ::
          (match ch.sessionid with
           | None -> []
           | Some _ -> [`Record change_cipher_spec]) @
-          [
-            `Record (Packet.HANDSHAKE, ee_raw) ;
-            `Record (Packet.HANDSHAKE, cert_raw) ;
-            `Record (Packet.HANDSHAKE, cv_raw) ;
-            `Record (Packet.HANDSHAKE, fin_raw) ;
-            `Change_enc (Some server_app_ctx) ;
-          ])
+         [ `Change_enc (Some server_ctx) ;
+           `Change_dec (Some client_ctx) ;
+           `Record (Packet.HANDSHAKE, ee_raw) ;
+           `Record (Packet.HANDSHAKE, cert_raw) ;
+           `Record (Packet.HANDSHAKE, cv_raw) ;
+           `Record (Packet.HANDSHAKE, fin_raw) ;
+           `Change_enc (Some server_app_ctx) ;
+         ])
 
 let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx raw log =
   let hash = Ciphersuite.hash13 sd.ciphersuite13 in
