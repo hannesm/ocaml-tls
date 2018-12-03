@@ -172,7 +172,7 @@ let answer_finished state (session : session_data13) exts es ss fin raw log =
      `Record (Packet.HANDSHAKE, mfin) ;
      `Change_enc (Some client_app_ctx) ]) *)
 
-let answer_session_ticket state _lifetime psk_id =
+let answer_session_ticket state _se =
   (* XXX: do sth with lifetime *)
   (match state.session with
    (*   | s::xs when not (Ciphersuite.ciphersuite_psk s.ciphersuite) -> return ({ s with psk_id } :: xs) *)
@@ -201,10 +201,7 @@ let handle_handshake cs hs buf =
          answer_finished hs sd exts es ss fin buf log
       | AwaitServerFinishedMaybeAuth13 (sd, exts, es, ss, log), Finished fin ->
          answer_finished hs sd exts es ss fin buf log
-      | Established13, SessionTicket se ->
-        (match parse_session_ticket_1_3 se with
-         | Ok (lifetime, psk_id) -> answer_session_ticket hs lifetime psk_id
-         | Error re -> fail (`Fatal (`ReaderError re)))
+      | Established13, SessionTicket se -> answer_session_ticket hs se
       | Established13, CertificateRequest _ -> assert false (* maybe send out C, CV, F *)
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)))
   | Error re -> fail (`Fatal (`ReaderError re))

@@ -130,6 +130,12 @@ type client_handshake_state =
   | Established (* handshake successfully completed *)
   [@@deriving sexp]
 
+type kdf = {
+  secret : Cstruct.t ;
+  cipher : Ciphersuite.ciphersuite13 ;
+  hash : Nocrypto.Hash.hash ;
+} [@@deriving sexp]
+
 type session_data13 = {
   common_session_data13  : common_session_data ;
   ciphersuite13          : Ciphersuite.ciphersuite13 ;
@@ -137,6 +143,7 @@ type session_data13 = {
   resumption_secret      : Cstruct.t ;
   exporter_secret        : Cstruct.t ;
   psk_id                 : Cstruct.t ;
+  master_secret          : kdf ;
 } [@@deriving sexp]
 
 type client13_handshake_state =

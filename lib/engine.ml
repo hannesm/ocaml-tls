@@ -254,18 +254,16 @@ let decrypt (version : tls_version) (st : crypto_state) ty buf =
      | Packet.APPLICATION_DATA ->
        (match ctx.cipher_st with
         | AEAD c ->
-          (* XXX: FAILURE VALUES! *)
           let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
           let unpad x =
-            let rec eat idx =
-              match Cstruct.get_uint8 x idx with
-              | 0 when pred idx > 0 -> eat (pred idx)
+            (* TODO error values (atm both MACUnderflow) *)
+            let rec eat = function
               | 0 -> fail (`Fatal `MACUnderflow)
-              | n ->
-                let pkt = if idx = 0 then Cstruct.create 0 else Cstruct.sub x 0 idx in
-                match Packet.int_to_content_type n with
-                | Some ct when ct <> Packet.CHANGE_CIPHER_SPEC -> return (pkt, ct)
-                | _ -> fail (`Fatal `MACUnderflow)
+              | idx -> match Cstruct.get_uint8 x idx with
+                | 0 -> eat (pred idx)
+                | n -> match Packet.int_to_content_type n with
+                  | Some ct -> return (Cstruct.sub x 0 idx, ct)
+                  | None -> fail (`Fatal `MACUnderflow)
             in
             eat (pred (Cstruct.len x))
           in

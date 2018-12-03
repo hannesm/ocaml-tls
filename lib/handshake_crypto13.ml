@@ -43,12 +43,6 @@ let pp_hash_k_n ciphersuite =
   let k, n = kn pp in
   (pp, hash, k, n)
 
-type t = {
-  secret : Cstruct.t ;
-  cipher : Ciphersuite.ciphersuite13 ;
-  hash : Nocrypto.Hash.hash ;
-}
-
 let hkdflabel label context length =
   let len =
     let b = Cstruct.create 2 in
@@ -74,25 +68,25 @@ let derive_secret_no_hash hash prk ?(ctx = Cstruct.empty) label =
   key
 
 let derive_secret t label log =
-  let ctx = Nocrypto.Hash.digest t.hash log in
-  derive_secret_no_hash t.hash t.secret ~ctx label
+  let ctx = Nocrypto.Hash.digest t.State.hash log in
+  derive_secret_no_hash t.State.hash t.State.secret ~ctx label
 
 let empty cipher = {
-  secret = Cstruct.empty ;
+  State.secret = Cstruct.empty ;
   cipher ;
   hash = Ciphersuite.hash13 cipher
 }
 
 let derive t secret_ikm =
   let salt =
-    if Cstruct.equal t.secret Cstruct.empty then
+    if Cstruct.equal t.State.secret Cstruct.empty then
       Cstruct.empty
     else
       derive_secret t "derived" Cstruct.empty
   in
-  let secret = Hkdf.extract ~hash:t.hash ~salt secret_ikm in
+  let secret = Hkdf.extract ~hash:t.State.hash ~salt secret_ikm in
   trace "derive (extracted secret)" secret ;
-  { t with secret }
+  { t with State.secret }
 
 let traffic_key cipher prk =
   let _, hash, key_len, iv_len = pp_hash_k_n cipher in
@@ -103,10 +97,10 @@ let traffic_key cipher prk =
   (key, iv)
 
 let ctx t label secret =
-  let secret, nonce = traffic_key t.cipher secret in
+  let secret, nonce = traffic_key t.State.cipher secret in
   trace (label ^ " secret") secret ;
   trace (label ^ " nonce") nonce ;
-  let pp = Ciphersuite.privprot13 t.cipher in
+  let pp = Ciphersuite.privprot13 t.State.cipher in
   { State.sequence = 0L ; cipher_st = Crypto.Ciphers.get_aead ~secret ~nonce pp }
 
 let hs_ctx t log =
@@ -126,6 +120,9 @@ let app_ctx t log =
    ctx t "server application traffic" server_application_traffic_secret,
    client_application_traffic_secret,
    ctx t "client application traffic" client_application_traffic_secret)
+
+let exporter t log = derive_secret t "exp master" log
+let resumption t log = derive_secret t "res master" log
 
 let finished hash secret data =
   let key = derive_secret_no_hash hash secret "finished" in
