@@ -20,8 +20,6 @@ module Make (F : Mirage_flow_lwt.S) : sig
   type buffer = Cstruct.t
   type +'a io = 'a Lwt.t
 
-  type tracer = Sexplib.Sexp.t -> unit
-
   (** we provide the FLOW interface *)
   include Mirage_flow_lwt.S
     with type 'a io  := 'a io
@@ -39,16 +37,14 @@ module Make (F : Mirage_flow_lwt.S) : sig
     ?acceptable_cas:X509.distinguished_name list -> ?cert:Tls.Config.own_cert ->
     ?drop:bool -> flow -> (unit, write_error) result Lwt.t
 
-  (** [client_of_flow ~trace client ~host flow] upgrades the existing connection
+  (** [client_of_flow client ~host flow] upgrades the existing connection
       to TLS using the [client] configuration, using [host] as peer name. *)
-  val client_of_flow :
-    ?trace:tracer -> Tls.Config.client -> ?host:string -> FLOW.flow ->
+  val client_of_flow : Tls.Config.client -> ?host:string -> FLOW.flow ->
     (flow, write_error) result Lwt.t
 
-  (** [server_of_flow ?tracer server flow] upgrades the flow to a TLS
+  (** [server_of_flow server flow] upgrades the flow to a TLS
       connection using the [server] configuration. *)
-  val server_of_flow :
-    ?trace:tracer -> Tls.Config.server -> FLOW.flow ->
+  val server_of_flow : Tls.Config.server -> FLOW.flow ->
     (flow, write_error) result Lwt.t
 
   (** [epoch flow] extracts information of the established session. *)

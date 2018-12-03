@@ -33,6 +33,8 @@ depends: [
   "x509" {>= "0.6.1"}
   "hkdf"
   "logs"
+  "fmt"
+  "cmdliner"
   "cstruct-unix" {with-test & >= "3.0.0"}
   "ounit" {with-test}
   "alcotest" {with-test}
