@@ -40,7 +40,7 @@ let serve_ssl port callback =
   yap ~tag ("-> start @ " ^ ps ^ " (use `openssl s_client -connect host:" ^ ps ^ " -servername foo` (or -servername bar))") >>= fun () ->
   let rec loop () =
     let config = Tls.Config.server ~certificates:(`Multiple [barcert ; foocert]) () in
-    Tls_lwt.Unix.accept ~trace:eprint_sexp config server_s >>= fun (t, addr) ->
+    Tls_lwt.Unix.accept config server_s >>= fun (t, addr) ->
     yap ~tag "-> connect" >>= fun () ->
     ( handle (Tls_lwt.Unix.epoch t) (Tls_lwt.of_t t) addr ; loop () )
   in

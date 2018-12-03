@@ -15,11 +15,6 @@ let lines ic =
       | None -> Lwt_io.close ic >>= fun () -> return_none
       | line -> return line
 
-let eprint_sexp sexp =
-  output_string stdout Sexplib.Sexp.(to_string_hum sexp) ;
-  output_string stdout "\n\n" ;
-  flush stdout
-
 let print_alert where alert =
     Printf.eprintf "(TLS ALERT (%s): %s)\n%!"
       where (Tls.Packet.alert_type_to_string alert)
@@ -27,3 +22,15 @@ let print_alert where alert =
 let print_fail where fail =
   Printf.eprintf "(TLS FAIL (%s): %s)\n%!"
     where (Tls.Engine.string_of_failure fail)
+
+let setup_log style_renderer level =
+  Fmt_tty.setup_std_outputs ?style_renderer ();
+  Logs.set_level level;
+  Logs.set_reporter (Logs_fmt.reporter ~dst:Format.std_formatter ())
+
+open Cmdliner
+
+let setup_log =
+  Term.(const setup_log
+        $ Fmt_cli.style_renderer ()
+        $ Logs_cli.level ())

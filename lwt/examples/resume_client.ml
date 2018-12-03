@@ -11,7 +11,7 @@ let http_client ?ca ?fp host port =
       | Some "NONE", _ -> `No_authentication_I'M_STUPID
       | Some f, _      -> `Ca_file f ) >>= fun authenticator ->
   let config = Tls.Config.client ~authenticator () in
-  Tls_lwt.Unix.connect ~trace:eprint_sexp config (host, port) >>= fun t ->
+  Tls_lwt.Unix.connect config (host, port) >>= fun t ->
   Tls_lwt.Unix.write t (Cstruct.of_string "foo\n") >>= fun () ->
   let cs = Cstruct.create 4 in
   Tls_lwt.Unix.read t cs >>= fun _len ->
@@ -23,7 +23,7 @@ let http_client ?ca ?fp host port =
   Tls_lwt.Unix.close t >>= fun () ->
   Printf.printf "closed session\n" ;
   let config = Tls.Config.client ~authenticator ~cached_session () in
-  Tls_lwt.connect_ext ~trace:eprint_sexp config (host, port) >>= fun (ic, oc) ->
+  Tls_lwt.connect_ext config (host, port) >>= fun (ic, oc) ->
   let req = String.concat "\r\n" [
     "GET / HTTP/1.1" ; "Host: " ^ host ; "Connection: close" ; "" ; ""
   ] in

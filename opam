@@ -34,6 +34,7 @@ depends: [
   "domain-name" {>= "0.3.0"}
   "fmt"
   "hkdf"
+  "logs"
   "cstruct-unix" {with-test & >= "3.0.0"}
   "ounit" {with-test}
   "alcotest" {with-test}

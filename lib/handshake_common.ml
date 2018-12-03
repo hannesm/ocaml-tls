@@ -4,6 +4,9 @@ open State
 
 open Nocrypto
 
+let src = Logs.Src.create "handshake" ~doc:"TLS handshake"
+module Log = (val Logs.src_log src : Logs.LOG)
+
 let trace_cipher cipher =
   let kex, papr = Ciphersuite.get_kex_privprot cipher in
   let sexp = lazy (Sexplib.Sexp.(List Ciphersuite.(

@@ -57,6 +57,7 @@ let answer_client_hello state ch raw =
     match map_find ~f:(function `PreSharedKeys ids -> Some ids | _ -> None) ch.extensions with
     | None -> None
     | Some ids ->
+      Log.info (fun m -> m "received %d ids" (List.length ids));
       (* ((id, max_age), binder) list *)
       (* need to verify binder, do the max_age computations + checking,
          figure out whether the id is in our psk cache, and use the resumption secret as input
@@ -72,6 +73,7 @@ let answer_client_hello state ch raw =
   in
 
   Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version TLS_1_3 ;
+  Log.info (fun m -> m "TLS 1.3");
 
   (* KEX to use:
     - if client has keyshare (+supportedgroup) ext, we can use (EC)DHE (if we have the same)
@@ -89,6 +91,7 @@ let answer_client_hello state ch raw =
   | None, _ -> fail (`Fatal `NoSupportedGroup)
   | _, None -> fail (`Error (`NoConfiguredCiphersuite ciphers))
   | Some group, Some cipher ->
+    Log.info (fun m -> m "cipher %a" Sexplib.Sexp.pp_hum (Ciphersuite.sexp_of_ciphersuite13 cipher)) ;
     match resumed_session with
     | Some _ -> invalid_arg "PSK"
     | None ->
