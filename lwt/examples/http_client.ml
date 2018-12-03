@@ -11,7 +11,6 @@ let http_client ?ca ?fp host port =
       | Some "NONE", _ -> `No_authentication_I'M_STUPID
       | Some f, _      -> `Ca_file f ) >>= fun authenticator ->
   Tls_lwt.connect_ext
-    ~trace:eprint_sexp
     (Tls.Config.client ~authenticator ())
     (host, port) >>= fun (ic, oc) ->
   let req = String.concat "\r\n" [

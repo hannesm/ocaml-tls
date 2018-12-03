@@ -39,7 +39,7 @@ let serve_ssl port callback =
     X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
     let config = Tls.Config.server ~reneg:true ~certificates:(`Single cert) ~authenticator () in
     (Lwt.catch
-       (fun () -> Tls_lwt.accept_ext ~trace:eprint_sexp config s >|= fun r -> `R r)
+       (fun () -> Tls_lwt.accept_ext config s >|= fun r -> `R r)
        (function
          | Unix.Unix_error (e, f, p) -> return (`L (string_of_unix_err e f p))
          | Tls_lwt.Tls_alert a -> return (`L (Tls.Packet.alert_type_to_string a))
@@ -65,8 +65,18 @@ let echo_server port =
     in
     loop () *)
 
-let () =
-  let port =
-    try int_of_string Sys.argv.(1) with _ -> 4433
-  in
-  Lwt_main.run (echo_server port)
+let jump _ port =
+  Lwt_main.run (echo_server port);
+  `Ok ()
+
+open Cmdliner
+
+let port =
+  let doc = "Port to connect to" in
+  Arg.(value & opt int 4433 & info [ "port" ] ~doc)
+
+let cmd =
+  Term.(ret (const jump $ setup_log $ port)),
+  Term.info "server" ~version:"%%VERSION_NUM%%"
+
+let () = match Term.eval cmd with `Ok () -> exit 0 | _ -> exit 1

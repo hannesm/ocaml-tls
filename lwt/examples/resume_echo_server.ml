@@ -77,7 +77,7 @@ let serve_ssl port callback =
               | ADDR_INET (ip, p) -> string_of_inet_addr ip ^ ":" ^ string_of_int p)
           in
           yap ~tag:"client-connect" txt >>= fun () ->
-          Tls_lwt.Unix.server_of_fd ~trace:eprint_sexp config s >|= fun t -> `R t)
+          Tls_lwt.Unix.server_of_fd config s >|= fun t -> `R t)
        (function
          | Unix.Unix_error (e, f, p) -> return (`L (string_of_unix_err e f p))
          | Tls_lwt.Tls_alert a -> return (`L (Tls.Packet.alert_type_to_string a))

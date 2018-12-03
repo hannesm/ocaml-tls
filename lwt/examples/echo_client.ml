@@ -39,7 +39,6 @@ let echo_client ?ca host port =
     ~cert:server_cert
     ~priv_key:server_key >>= fun certificate ->
   Tls_lwt.connect_ext
-    ~trace:eprint_sexp
     Tls.Config.(client ~authenticator ~cached_session ~certificates:(`Single certificate) ~ciphers:Ciphers.supported ())
     (host, port) >>= fun (ic, oc) ->
   Lwt.join [

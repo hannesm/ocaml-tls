@@ -724,8 +724,6 @@ let parse_handshake = catch @@ fun buf ->
     raise_trailing_bytes "handshake"
   else
     let payload = sub buf 4 length in
-    Printf.printf "payload is %d" length ;
-    Cstruct.hexdump payload ;
     match handshake_type with
     | Some HELLO_REQUEST ->
       if len payload = 0 then HelloRequest else raise_trailing_bytes "hello request"

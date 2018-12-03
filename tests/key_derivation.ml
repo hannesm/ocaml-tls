@@ -519,7 +519,7 @@ let self_signature () =
              [ `RSA_PSS_RSAENC_SHA256 ] data
              log cert
     with
-    | Ok () -> Printf.printf "verification successful\n%!"
+    | Ok () -> ()
     | Error e -> Alcotest.fail ("self-verification failed " ^ (Engine.string_of_failure e))
 
 let wire_signature () =
@@ -530,7 +530,7 @@ let wire_signature () =
           [ `RSA_PSS_RSAENC_SHA256 ] (Cstruct.shift cert_verify 4)
           log cert
   with
-  | Ok () -> Printf.printf "verification successful\n%!"
+  | Ok () -> ()
   | Error e -> Alcotest.fail ("trace-verification failed " ^ (Engine.string_of_failure e))
 
 let tests = [
