@@ -55,13 +55,14 @@ let empty_session = {
   extended_ms         = false ;
 }
 
-let empty_session13 = {
+let empty_session13 cipher = {
   common_session_data13 = empty_common_session_data ;
-  ciphersuite13         = `TLS_AES_128_GCM_SHA256 ;
+  ciphersuite13         = cipher ;
   kex13                 = `DHE_RSA ;
   resumption_secret     = Cstruct.empty ;
-  exporter_secret      = Cstruct.empty ;
+  exporter_secret       = Cstruct.empty ;
   psk_id                = Cstruct.empty ;
+  master_secret         = Handshake_crypto13.empty cipher
 }
 
 let session_of_epoch (epoch : epoch_data) : session_data =
@@ -106,7 +107,7 @@ let to_client_ext_type = function
   | `ALPN _                -> `ALPN
   | `KeyShare _            -> `KeyShare
   | `EarlyDataIndication _ -> `EarlyDataIndication
-  | `PreSharedKey _        -> `PreSharedKey
+  | `PreSharedKeys _       -> `PreSharedKey
   | `Draft _               -> `Draft
   | `SupportedVersions _   -> `SupportedVersion
   | `PostHandshakeAuthentication -> `PostHandshakeAuthentication

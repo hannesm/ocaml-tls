@@ -44,7 +44,7 @@ let answer_client_hello state ch raw =
     in
     let session : session_data13 =
       (* let s = match epoch with None -> empty_session13 | Some e -> session_of_epoch13 e in *)
-      let empty = empty_session13 in
+      let empty = empty_session13 cipher in
       let common_session_data13 = {
         empty.common_session_data13 with
         server_random = sh.server_random ;
@@ -54,15 +54,19 @@ let answer_client_hello state ch raw =
     in
     (sh, session)
   and resumed_session =
-    match map_find ~f:(function `PreSharedKey ids -> Some ids | _ -> None) ch.extensions with
+    match map_find ~f:(function `PreSharedKeys ids -> Some ids | _ -> None) ch.extensions with
     | None -> None
     | Some ids ->
-      match
+      (* ((id, max_age), binder) list *)
+      (* need to verify binder, do the max_age computations + checking,
+         figure out whether the id is in our psk cache, and use the resumption secret as input
+         and return the idx *)
+(*      match
         List.filter (function None -> false | Some _ -> true)
           (List.map state.config.Config.psk_cache ids)
       with
       | x::_ -> x
-      | [] -> None
+        | [] -> *) None
   and keyshare group =
     try Some (snd (List.find (fun (g, _) -> g = group) keyshares)) with Not_found -> None
   in
@@ -160,7 +164,6 @@ let answer_client_hello state ch raw =
         let log = log <+> cv_raw in
         let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
         Tracing.cs ~tag:"master-secret" master_secret.secret ;
-        (* let resumption_secret = resumption_secret cipher master_secret log in *)
 
         let f_data = finished hs_secret.hash server_hs_secret log in
         let fin = Finished f_data in
@@ -180,44 +183,46 @@ let answer_client_hello state ch raw =
             own_certificate = crt ;
             master_secret = master_secret.secret
           } in
-          { session with common_session_data13 (* TODO ; resumption_secret ; exporter_secret *) } in
+          { session with common_session_data13 (* TODO ; exporter_secret *) } in
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
         let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
         ({ state with machina = Server13 st },
          [ `Record (Packet.HANDSHAKE, sh_raw) ;
-           `Change_enc (Some server_ctx) ;
-           `Change_dec (Some client_ctx) ;
-           `Record (Packet.HANDSHAKE, ee_raw) ;
-           `Record (Packet.HANDSHAKE, cert_raw) ;
-           `Record (Packet.HANDSHAKE, cv_raw) ;
-           `Record (Packet.HANDSHAKE, fin_raw) ;
-           `Change_enc (Some server_app_ctx) ] )
+            `Change_enc (Some server_ctx) ;
+            `Change_dec (Some client_ctx) ] @
+         (match ch.sessionid with
+          | None -> []
+          | Some _ -> [`Record change_cipher_spec]) @
+          [
+            `Record (Packet.HANDSHAKE, ee_raw) ;
+            `Record (Packet.HANDSHAKE, cert_raw) ;
+            `Record (Packet.HANDSHAKE, cv_raw) ;
+            `Record (Packet.HANDSHAKE, fin_raw) ;
+            `Change_enc (Some server_app_ctx) ;
+          ])
 
 let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx raw log =
   let hash = Ciphersuite.hash13 sd.ciphersuite13 in
   let data = finished hash client_fini log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
-  let ret =
-    (* only change dec if we're in handshake, also send out session ticket only just after handshake (and only if no PSK) *)
-    [`Change_dec (Some dec_ctx)]
-(*    and st, sd =
-      match sd.kex with
-      | `PSK -> ([], sd)
-      | `DHE_PSK | `DHE_RSA ->
-        let st, psk_id =
-          let rand = Nocrypto.Rng.generate 48 in
-          let buf = Writer.assemble_session_ticket_1_3 0l rand in
-          (SessionTicket buf, rand)
-        in
-        let st_raw = Writer.assemble_handshake st in
-        ([ `Record (Packet.HANDSHAKE, st_raw) ], { sd with psk_id })
-      in *)
+  let sd, out =
+    let resumption_secret = Handshake_crypto13.resumption sd.master_secret (log <+> raw) in
+    let age_add =
+      let cs = Nocrypto.Rng.generate 4 in
+      Cstruct.BE.get_uint32 cs 0
+    in
+    let psk_id = Nocrypto.Rng.generate 32 in
+    let st = { lifetime = 300l ; age_add ; nonce = 0 ; ticket = psk_id } in
+    Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
+    let st_raw = Writer.assemble_handshake (SessionTicket st) in
+    { sd with psk_id ; resumption_secret },
+    [ `Record (Packet.HANDSHAKE, st_raw) ]
   in
   ({ state with
      machina = Server13 Established13 ;
      session = `TLS13 sd :: state.session },
-    ret)
+     `Change_dec (Some dec_ctx) :: out)
 
 let handle_handshake cs hs buf =
   let open Reader in

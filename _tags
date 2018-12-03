@@ -23,3 +23,4 @@ true : package(cstruct nocrypto result x509 sexplib hkdf)
 <mirage/*> : package(mirage-flow-lwt mirage-kv-lwt mirage-clock lwt ptime)
 
 <random>: -traverse
+<mirage/example*>: -traverse

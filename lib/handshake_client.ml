@@ -33,11 +33,11 @@ let default_client_hello config =
       let exts =
          [`SignatureAlgorithms sig_alg ; `SupportedGroups groups ; `KeyShare keyshares ; `Draft draft ]
       in
-      let psk = match config.cached_session with
+(*  TODO    let psk = match config.cached_session with
         | Some { psk_id ; _ } when Cstruct.len psk_id > 0 -> [`PreSharedKey [ psk_id ]]
         | _ -> []
-      in
-      (exts @ psk, List.length psk > 0, secrets)
+        in *)
+      (exts (* @ psk *), false (* List.length psk > 0 *), secrets)
   in
   let alpn = match config.alpn_protocols with
     | [] -> []

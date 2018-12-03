@@ -304,10 +304,28 @@ let parse_keyshare_entry buf =
   | None -> None, left
   | Some g -> Some (g, share), left
 
-let parse_presharedkey buf =
-  let len = BE.get_uint16 buf 0 in
-  let psk, rest = split (shift buf 2) len in
-  (Some psk, rest)
+let parse_id buf =
+  let id_len = BE.get_uint16 buf 0 in
+  if id_len = 0 then (* id must be non-empty! *)
+    raise_wrong_length "PSK id is empty"
+  else
+    let age = BE.get_uint32 buf (id_len + 2) in
+    (Some (sub buf 2 id_len, age), shift buf (id_len + 6))
+
+let parse_binder buf =
+  let l = get_uint8 buf 0 in
+  Some (sub buf 1 l), shift buf (l + 1)
+
+let parse_client_presharedkeys buf =
+  let id_len = BE.get_uint16 buf 0 in
+  let identities = parse_list parse_id (sub buf 2 id_len) [] in
+  let binders_len = BE.get_uint16 buf (id_len + 2) in
+  let binders = parse_list parse_binder (sub buf (4 + id_len) binders_len) [] in
+  let id_binder = List.combine identities binders in
+  if len buf <> 4 + binders_len + id_len then
+    raise_trailing_bytes "psk"
+  else
+    id_binder
 
 let parse_early_data buf =
   let cfgidlen = BE.get_uint16 buf 0 in
@@ -372,12 +390,8 @@ let parse_client_extension raw =
          let shares = parse_list parse_keyshare_entry (sub buf 2 ll) [] in
          `KeyShare shares
     | Some PRE_SHARED_KEY ->
-       let ll = BE.get_uint16 buf 0 in
-       if ll + 2 <> len buf then
-         raise_unknown "bad pre_shared_key length"
-       else
-         let ids = parse_list parse_presharedkey (sub buf 2 ll) [] in
-         `PreSharedKey ids
+      let ids = parse_client_presharedkeys buf in
+      `PreSharedKeys ids
     | Some EARLY_DATA ->
        let ed = parse_early_data buf in
        `EarlyDataIndication ed
@@ -420,10 +434,10 @@ let parse_server_extension raw =
           | Some g -> `KeyShare (g, ks)
           | None -> raise_unknown "keyshare entry")
     | Some PRE_SHARED_KEY ->
-       (match parse_presharedkey buf with
-        | _, xs when len xs <> 0 -> raise_trailing_bytes "server pre_shared_key"
-        | Some psk, _ -> `PreSharedKey psk
-        | _ -> raise_unknown "server presharedkey")
+      if len buf <> 2 then
+        raise_trailing_bytes "server pre_shared_key"
+      else
+        `PreSharedKey (BE.get_uint16 buf 0)
     | Some EARLY_DATA ->
        if len buf <> 0 then
          raise_trailing_bytes "server early_data"
@@ -669,15 +683,19 @@ let parse_digitally_signed_1_2 = catch @@ fun buf ->
     (sig_alg, signature)
   | None -> raise_unknown "hash or signature algorithm"
 
-let parse_session_ticket_1_3_exn buf =
-  let lifetime = BE.get_uint32 buf 0 in
-  let pskidlen = BE.get_uint16 buf 4 in
-  if len buf <> pskidlen + 6 then
+let parse_session_ticket buf =
+  let lifetime = BE.get_uint32 buf 0
+  and age_add = BE.get_uint32 buf 4
+  and nonce = get_uint8 buf 8
+  and ticket_len = BE.get_uint16 buf 9
+  in
+  let ticket = sub buf 11 ticket_len in
+  let ext_len = BE.get_uint16 buf (11 + ticket_len) in
+  (* TODO parse extensions! *)
+  if len buf <> 13 + ticket_len + ext_len then
     raise_trailing_bytes "1.3 session ticket"
   else
-    (lifetime, sub buf 6 pskidlen)
-
-let parse_session_ticket_1_3 = catch parse_session_ticket_1_3_exn
+    { lifetime ; age_add ; nonce ; ticket }
 
 let parse_client_key_exchange buf =
   let length = BE.get_uint16 buf 0 in
@@ -726,5 +744,7 @@ let parse_handshake = catch @@ fun buf ->
       EncryptedExtensions ee
     | Some KEY_UPDATE ->
       if len payload = 0 then KeyUpdate else raise_trailing_bytes "key update"
-    | Some SESSION_TICKET -> SessionTicket payload
+    | Some SESSION_TICKET ->
+      let ticket = parse_session_ticket payload in
+      SessionTicket ticket
     | None  -> raise_unknown @@ "handshake type" ^ string_of_int typ

@@ -207,3 +207,34 @@ calls out to:
 - fixed some bugs ;) (valid_client_hello etc.)
 - found some bugs (TODO: readup downgrade prevention)
 - avoid empty EncryptedExtensions
+* <2018-11-30 Fri>
+from a zoomed out POV:
+- validity of packets (e.g. CH, when CCS may be received (only during handshake IIRC, not after Finished))
+- client handshake
+- client authentication
+- PSK
+- 0RTT (and (client) API changes? - not sending cookies during 0RTT)
+- have a checklist of RFC sections and OCaml-TLS status
+now, there are a bunch of new parameters/extensions to consider
+- extensions in certificate
+- cert_sig_algs
+these extensions are quite cumbersome atm (map_find etc.)
+* <2018-12-03 Mon>
+re-reading section 2.2 (PSK), 4.6.1
+- server decides on PSK vs DHE_PSK --> server configuration "require ephemeral"?
+- server can send multiple newsessionticket, one after initial HS, others after client authentication
+- ticket must be resumed with a cipher using the same hash!
+- client side: ticket must match sni of initial hs, should match sni of resumption
+from 4.6.1:
+Note: Although the resumption master secret depends on the client's
+second flight, a server which does not request client authentication
+MAY compute the remainder of the transcript independently and then
+send a NewSessionTicket immediately upon sending its Finished rather
+than waiting for the client Finished.  This might be appropriate in
+cases where the client is expected to open multiple TLS connections
+in parallel and would benefit from the reduced overhead of a
+resumption handshake, for example.
+--> that's possible since S only awaits client finished, which is completely
+    deterministic!
+DONE according to appendix, if the session ID is echoed back the server _must_ send CCS
+TODO we can precompute the sessionticket and send it after finished in the same flight

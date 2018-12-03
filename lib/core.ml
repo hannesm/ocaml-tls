@@ -98,7 +98,7 @@ type early_data = {
   context : Cstruct.t ;
 } [@@deriving sexp]
 
-type psk_identity = Cstruct.t [@@deriving sexp]
+type psk_identity = (Cstruct.t * int32) * Cstruct.t [@@deriving sexp]
 
 type group = Nocrypto.Dh.group [@@deriving sexp] (* for now *)
 
@@ -157,7 +157,7 @@ type client_extension = [
   | `ALPN of string list
   | `KeyShare of (named_group * Cstruct.t) list
   | `EarlyDataIndication of early_data
-  | `PreSharedKey of psk_identity list
+  | `PreSharedKeys of psk_identity list
   | `Draft of int
   | `SupportedVersions of tls_any_version list
   | `PostHandshakeAuthentication
@@ -167,7 +167,7 @@ type client_extension = [
 
 type server13_extension = [
   | `KeyShare of (group * Cstruct.t)
-  | `PreSharedKey of psk_identity
+  | `PreSharedKey of int
   | `SelectedVersion of tls_version (* only used internally in writer!! *)
 ] [@@deriving sexp]
 
@@ -260,6 +260,14 @@ type hello_retry = {
   extensions : hello_retry_extension list
 } [@@deriving sexp]
 
+type session_ticket = {
+  lifetime : int32 ;
+  age_add : int32 ;
+  nonce : int ;
+  ticket : Cstruct.t ;
+  (* TODO extensions *)
+} [@@deriving sexp]
+
 type tls_handshake =
   | HelloRequest
   | HelloRetryRequest of hello_retry
@@ -273,7 +281,7 @@ type tls_handshake =
   | ClientKeyExchange of Cstruct.t
   | CertificateVerify of Cstruct.t
   | Finished of Cstruct.t
-  | SessionTicket of Cstruct.t
+  | SessionTicket of session_ticket
   | KeyUpdate
   [@@deriving sexp]
 

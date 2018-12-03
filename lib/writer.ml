@@ -162,10 +162,10 @@ let assemble_keyshare_entry (ng, ks) =
   BE.set_uint16 l 0 (len ks) ;
   g <+> l <+> ks
 
-let assemble_psk psk =
-  let c = create 2 in
+let assemble_client_psks psk = invalid_arg "NYI"
+(*  let c = create 2 in
   BE.set_uint16 c 0 (len psk) ;
-  c <+> psk
+    c <+> psk *)
 
 let assemble_ec_point_format f =
   let buf = create 1 in
@@ -236,8 +236,8 @@ let assemble_client_extension e =
       (assemble_alpn_protocols protocols, APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
     | `KeyShare ks ->
       (assemble_list Two assemble_keyshare_entry ks, KEY_SHARE)
-    | `PreSharedKey ids ->
-      (assemble_list Two assemble_psk ids, PRE_SHARED_KEY)
+    | `PreSharedKeys ids ->
+      (assemble_client_psks ids, PRE_SHARED_KEY)
     | `EarlyDataIndication edi ->
       (assemble_early_data edi, EARLY_DATA)
     | `SupportedVersions vs ->
@@ -256,7 +256,10 @@ let assemble_server_extension e =
     | `KeyShare (g, ks) ->
       let ng = Ciphersuite.group_to_any_group g in
       (assemble_keyshare_entry (ng, ks), KEY_SHARE)
-    | `PreSharedKey psk -> (assemble_psk psk, PRE_SHARED_KEY)
+    | `PreSharedKey id ->
+      let data = create 2 in
+      BE.set_uint16 data 0 id ;
+      (data, PRE_SHARED_KEY)
     | `EarlyDataIndication -> (create 0, EARLY_DATA)
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
@@ -382,12 +385,14 @@ let assemble_digitally_signed_1_2 sigalg signature =
   (assemble_hash_signature sigalg) <+>
     (assemble_digitally_signed signature)
 
-let assemble_session_ticket_1_3 lifetime id =
-  let buf = create 4 in
-  BE.set_uint32 buf 0 lifetime ;
-  let idlen = create 2 in
-  BE.set_uint16 idlen 0 (len id) ;
-  buf <+> idlen <+> id
+let assemble_session_ticket se =
+  let buf = create 11 in
+  BE.set_uint32 buf 0 se.lifetime ;
+  BE.set_uint32 buf 4 se.age_add ;
+  set_uint8 buf 8 se.nonce ;
+  BE.set_uint16 buf 9 (len se.ticket) ;
+  let ext_len = create 2 in
+  buf <+> se.ticket <+> ext_len (* todo: extensions! *)
 
 let assemble_client_key_exchange kex =
   let len = len kex in
@@ -424,7 +429,7 @@ let assemble_handshake hs =
     | ServerHelloDone -> (create 0, SERVER_HELLO_DONE)
     | HelloRequest -> (create 0, HELLO_REQUEST)
     | Finished fs -> (fs, FINISHED)
-    | SessionTicket st -> (st, SESSION_TICKET)
+    | SessionTicket st -> (assemble_session_ticket st, SESSION_TICKET)
     | EncryptedExtensions ee ->
        let cs = assemble_extensions assemble_encrypted_extension ee in
        (cs, ENCRYPTED_EXTENSIONS)
