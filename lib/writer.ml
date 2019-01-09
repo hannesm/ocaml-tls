@@ -130,21 +130,6 @@ let assemble_certificate_request_1_2 ts sigalgs cas =
     assemble_signature_algorithms sigalgs <+>
     assemble_cas cas
 
-let assemble_cert_extension (oid, values) =
-  let olen = create 1 in
-  set_uint8 olen 0 (len oid) ;
-  let vlen = create 2 in
-  BE.set_uint16 vlen 0 (len values) ;
-  olen <+> oid <+> vlen <+> values
-
-let assemble_certificate_request_1_3 con sigalgs cas exts =
-  let clen = create 1 in
-  set_uint8 clen 0 (len con) ;
-  let sa = assemble_signature_algorithms sigalgs in
-  let ca = assemble_cas cas in
-  let ext = assemble_list Two assemble_cert_extension exts in
-  clen <+> con <+> sa <+> ca <+> ext
-
 let assemble_named_group g =
   let buf = create 2 in
   BE.set_uint16 buf 0 (named_group_to_int g);
@@ -221,6 +206,21 @@ let assemble_ext (pay, typ) =
   BE.set_uint16 buf 2 (len pay);
   buf <+> pay
 
+let assemble_extensions ?none_if_empty assemble_e es =
+  assemble_list ?none_if_empty Two assemble_e es
+
+let assemble_certificate_request_extension e =
+  assemble_ext @@ match e with
+  | `SignatureAlgorithms s ->
+    (assemble_signature_algorithms s, SIGNATURE_ALGORITHMS)
+  | _ -> invalid_arg "unknown extension"
+
+let assemble_certificate_request_1_3 ?(context = Cstruct.empty) exts =
+  let clen = create 1 in
+  set_uint8 clen 0 (len context) ;
+  let exts = assemble_extensions assemble_certificate_request_extension exts in
+  clen <+> context <+> exts
+
 let assemble_client_extension e =
   assemble_ext @@ match e with
     | `SupportedGroups groups ->
@@ -279,9 +279,6 @@ let assemble_retry_extension e =
     | `Cookie c -> (assemble_cookie c, COOKIE)
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | `UnknownExtension _ -> invalid_arg "unknown retry extension"
-
-let assemble_extensions ?none_if_empty assemble_e es =
-  assemble_list ?none_if_empty Two assemble_e es
 
 let assemble_cert_ext (certificate, extensions) =
   let cert = assemble_certificate certificate

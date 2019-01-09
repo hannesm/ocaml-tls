@@ -630,25 +630,30 @@ let parse_certificate_request_1_2_exn buf =
 let parse_certificate_request_1_2 =
   catch parse_certificate_request_1_2_exn
 
-let parse_cert_extension buf =
-  let olen = get_uint8 buf 0 in
-  let oid, rt = split (shift buf 1) olen in
-  let vallen = BE.get_uint16 rt 0 in
-  let values, rt = split (shift rt 2) vallen in
-  (Some (oid, values), rt)
+let parse_certificate_request_extension raw =
+  let etype, length, buf = parse_ext raw in
+  let data = match int_to_extension_type etype with
+    | Some SIGNATURE_ALGORITHMS ->
+      let algos, rt = parse_signature_algorithms buf in
+      if len rt <> 0 then
+        raise_trailing_bytes "signature algorithms"
+      else
+        `SignatureAlgorithms algos
+    | _ -> `UnknownExtension (etype, buf)
+  in
+  (Some data, shift raw (4 + length))
 
 let parse_certificate_request_1_3_exn buf =
-  let conlen = get_uint8 buf 0 in
-  let context, rt = split (shift buf 1) conlen in
-  let sigs, rt = parse_signature_algorithms rt in
-  let cas, rt = parse_cas rt in
-  let extlen = BE.get_uint16 rt 0 in
-  let extdata, rt = split (shift rt 2) extlen in
-  let exts = parse_list parse_cert_extension extdata [] in
-  if len rt <> 0 then
-    raise_trailing_bytes "certificate request"
-  else
-    (context, sigs, cas, exts)
+  let contextlen = get_uint8 buf 0 in
+  let context, rt =
+    if contextlen = 0 then
+      None, shift buf 1
+    else
+      let ctx, rest = split (shift buf 1) contextlen in
+      Some ctx, rest
+  in
+  let exts = parse_extensions parse_certificate_request_extension rt in
+  (context, exts)
 
 let parse_certificate_request_1_3 =
   catch parse_certificate_request_1_3_exn
