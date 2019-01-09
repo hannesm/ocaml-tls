@@ -237,4 +237,8 @@ resumption handshake, for example.
 --> that's possible since S only awaits client finished, which is completely
     deterministic!
 DONE according to appendix, if the session ID is echoed back the server _must_ send CCS
+-> TODO we now always send CCS and SID, should this be configurable?
 TODO we can precompute the sessionticket and send it after finished in the same flight
+* <2019-01-09 Wed>
+- rebased on tls 0.9.3 release
+- CertificateRequest parse and assembly (part of client authentication)

@@ -19,7 +19,7 @@ val assemble_certificate_request : Packet.client_certificate_type list -> Cstruc
 
 val assemble_certificate_request_1_2 : Packet.client_certificate_type list -> Core.signature_algorithm list -> Cstruct.t list -> Cstruct.t
 
-val assemble_certificate_request_1_3 : Cstruct.t -> Core.signature_algorithm list -> Cstruct.t list -> (Cstruct.t * Cstruct.t) list -> Cstruct.t
+val assemble_certificate_request_1_3 : ?context:Cstruct.t -> Core.certificate_request_extension list -> Cstruct.t
 
 val assemble_certificates : Cstruct.t list -> Cstruct.t
 

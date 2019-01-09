@@ -268,6 +268,16 @@ type session_ticket = {
   (* TODO extensions *)
 } [@@deriving sexp]
 
+type certificate_request_extension = [
+  (*  | `StatusRequest *)
+  | `SignatureAlgorithms of signature_algorithm list
+  (* | `SignedCertificateTimestamp *)
+  (* | `CertificateAuthorities *)
+  (* | `OidFilters *)
+  (* | `SignatureAlgorithmsCert *)
+  | `UnknownExtension of (int * Cstruct.t)
+]
+
 type tls_handshake =
   | HelloRequest
   | HelloRetryRequest of hello_retry

@@ -29,7 +29,7 @@ val parse_change_cipher_spec   : Cstruct.t -> unit result
 
 val parse_certificate_request     : Cstruct.t -> (Packet.client_certificate_type list * Cstruct.t list) result
 val parse_certificate_request_1_2 : Cstruct.t -> (Packet.client_certificate_type list * Core.signature_algorithm list * Cstruct.t list) result
-val parse_certificate_request_1_3 : Cstruct.t -> (Cstruct.t * Core.signature_algorithm list * Cstruct.t list * (Cstruct.t * Cstruct.t) list) result
+val parse_certificate_request_1_3 : Cstruct.t -> (Cstruct.t option * Core.certificate_request_extension list) result
 
 val parse_certificates : Cstruct.t -> Cstruct.t list result
 val parse_certificates_1_3 : Cstruct.t -> (Cstruct.t * Cstruct.t list) result
