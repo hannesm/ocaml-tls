@@ -229,10 +229,29 @@ let answer_client_hello state ch raw =
          ])
 
 let answer_client_certificate state cert (sd : session_data13) client_fini dec_ctx raw log =
-  let st =
-    AwaitClientCertificateVerify13 (sd, client_fini, dec_ctx, log <+> raw)
-  in
-  Ok ({ state with machina = Server13 st }, [])
+  match Reader.parse_certificates_1_3 cert, state.config.Config.authenticator with
+  | Error re, _ -> fail (`Fatal (`ReaderError re))
+  | Ok (_, []), None -> assert false
+  | Ok (_ctx, []), Some auth ->
+    begin match auth [] with
+      | `Ok anchor ->
+        let trust_anchor = match anchor with
+          | None -> None
+          | Some (_chain, ta) -> Some ta
+        in
+        let common_session_data13 = { sd.common_session_data13 with trust_anchor } in
+        let sd = { sd with common_session_data13 } in
+        let st = AwaitClientFinished13 (sd, client_fini, dec_ctx, log <+> raw) in
+        Ok ({ state with machina = Server13 st }, [])
+      | `Fail e -> fail (`Error (`AuthenticationFailure e))
+    end
+  | Ok (ctx, certs), auth ->
+    (* TODO verify certificate chain1 *)
+    (* TODO what to do with ctx? send through authenticator? *)
+    let st =
+      AwaitClientCertificateVerify13 (sd, client_fini, dec_ctx, log <+> raw)
+    in
+    Ok ({ state with machina = Server13 st }, [])
 
 let answer_client_certificate_verify state cv (sd : session_data13) client_fini dec_ctx raw log =
   let st =
@@ -263,12 +282,6 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
      session = `TLS13 sd :: state.session },
      `Change_dec (Some dec_ctx) :: out)
 
-let answer_finished_in_client_cert state fin (sd : session_data13) client_fini dec_ctx raw log =
-  (* this may only happen if there wasn't a client certificate sent! *)
-  match sd.common_session_data13.received_certificates with
-  | [] ->   answer_client_finished state fin sd client_fini dec_ctx raw log
-   | _ -> fail (`Fatal `NoCertificateVerifyReceived)
-
 let handle_handshake cs hs buf =
   let open Reader in
   match parse_handshake buf with
@@ -279,8 +292,6 @@ let handle_handshake cs hs buf =
         answer_client_certificate hs cert sd cf cc buf log
       | AwaitClientCertificateVerify13 (sd, cf, cc, log), CertificateVerify cv ->
         answer_client_certificate_verify hs cv sd cf cc buf log
-      | AwaitClientCertificateVerify13 (sd, cf, cc, log), Finished fin ->
-        answer_finished_in_client_cert hs fin sd cf cc buf log
       | AwaitClientFinished13 (sd, cf, cc, log), Finished x ->
          answer_client_finished hs x sd cf cc buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )
