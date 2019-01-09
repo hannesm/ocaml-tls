@@ -272,7 +272,7 @@ type certificate_request_extension = [
   (*  | `StatusRequest *)
   | `SignatureAlgorithms of signature_algorithm list
   (* | `SignedCertificateTimestamp *)
-  (* | `CertificateAuthorities *)
+  | `CertificateAuthorities of X509.distinguished_name list
   (* | `OidFilters *)
   (* | `SignatureAlgorithmsCert *)
   | `UnknownExtension of (int * Cstruct.t)

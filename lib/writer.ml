@@ -209,10 +209,21 @@ let assemble_ext (pay, typ) =
 let assemble_extensions ?none_if_empty assemble_e es =
   assemble_list ?none_if_empty Two assemble_e es
 
+let assemble_ca ca =
+  let lenbuf = create 2 in
+  let data = X509.Encoding.cs_of_distinguished_name ca in
+  BE.set_uint16 lenbuf 0 (len data) ;
+  lenbuf <+> data
+
+let assemble_certificate_authorities cas =
+  assemble_list Two assemble_ca cas
+
 let assemble_certificate_request_extension e =
   assemble_ext @@ match e with
   | `SignatureAlgorithms s ->
     (assemble_signature_algorithms s, SIGNATURE_ALGORITHMS)
+  | `CertificateAuthorities cas ->
+    (assemble_certificate_authorities cas, CERTIFICATE_AUTHORITIES)
   | _ -> invalid_arg "unknown extension"
 
 let assemble_certificate_request_1_3 ?(context = Cstruct.empty) exts =
