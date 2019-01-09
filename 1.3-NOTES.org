@@ -242,3 +242,4 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 * <2019-01-09 Wed>
 - rebased on tls 0.9.3 release
 - CertificateRequest parse and assembly (part of client authentication)
+- CertificateAuthorities extension

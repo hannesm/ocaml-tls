@@ -41,6 +41,7 @@ let alert_of_fatal = function
   | `InvalidServerHello -> Packet.UNSUPPORTED_EXTENSION
   | `InvalidRenegotiationVersion _ -> Packet.HANDSHAKE_FAILURE
   | `NoCertificateReceived -> Packet.HANDSHAKE_FAILURE
+  | `NoCertificateVerifyReceived -> Packet.HANDSHAKE_FAILURE
   | `NotRSACertificate -> Packet.BAD_CERTIFICATE
   | `InvalidCertificateUsage -> Packet.BAD_CERTIFICATE
   | `InvalidCertificateExtendedUsage -> Packet.BAD_CERTIFICATE

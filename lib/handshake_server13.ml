@@ -137,8 +137,16 @@ let answer_client_hello state ch raw =
         let log = log <+> raw <+> sh_raw in
         let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
 
+        (* ONLY if client sent a `Hostname *)
+        let sg = `SupportedGroups (List.map Ciphersuite.group_to_any_group state.config.Config.groups) in
+        let ee = EncryptedExtensions [ ] (* sg ] (* `Hostname ] *) *) in
+        (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
+        let ee_raw = Writer.assemble_handshake ee in
+
+        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake ee ;
+
         let cert_request, session = match state.config.Config.authenticator with
-          | None -> ([], session)
+          | None -> (None, session)
           | Some _ ->
             let certreq =
               let exts =
@@ -151,16 +159,8 @@ let answer_client_hello state ch raw =
             in
             Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake certreq ;
             let common_session_data13 = { session.common_session_data13 with client_auth = true } in
-            ([ Writer.assemble_handshake certreq ], { session with common_session_data13 })
+            (Some (Writer.assemble_handshake certreq), { session with common_session_data13 })
         in
-
-        (* ONLY if client sent a `Hostname *)
-        let sg = `SupportedGroups (List.map Ciphersuite.group_to_any_group state.config.Config.groups) in
-        let ee = EncryptedExtensions [ ] (* sg ] (* `Hostname ] *) *) in
-        (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
-        let ee_raw = Writer.assemble_handshake ee in
-
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake ee ;
 
         let crt, pr = match state.config.Config.own_certificates with
           | `Single (chain, priv) -> chain, priv
@@ -172,7 +172,10 @@ let answer_client_hello state ch raw =
 
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
 
-        let log = Cstruct.concat (log :: cert_request @ [ ee_raw ; cert_raw ]) in
+        let log =
+          let req = match cert_request with None -> [] | Some xs -> [ xs ] in
+          Cstruct.concat (log :: ee_raw :: req @ [ cert_raw ])
+        in
         signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
           log (Some sigalgs) state.config.Config.signature_algorithms pr >>= fun signed ->
         let cv = CertificateVerify signed in
@@ -205,22 +208,37 @@ let answer_client_hello state ch raw =
           } in
           { session with common_session_data13 (* TODO ; exporter_secret *) } in
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
-        let st = AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log) in
+        let st, cert_req = match cert_request with
+          | None -> AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, log), []
+          | Some creq -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, log),
+                         [ `Record (Packet.HANDSHAKE, creq) ]
+        in
         ({ state with machina = Server13 st },
          `Record (Packet.HANDSHAKE, sh_raw) ::
          (match ch.sessionid with
           | None -> []
           | Some _ -> [`Record change_cipher_spec]) @
          [ `Change_enc (Some server_ctx) ;
-           `Change_dec (Some client_ctx) ] @
-         List.map (fun pkt -> `Record (Packet.HANDSHAKE, pkt)) cert_request
-         @ [
-           `Record (Packet.HANDSHAKE, ee_raw) ;
-           `Record (Packet.HANDSHAKE, cert_raw) ;
-           `Record (Packet.HANDSHAKE, cv_raw) ;
-           `Record (Packet.HANDSHAKE, fin_raw) ;
-           `Change_enc (Some server_app_ctx) ;
+           `Change_dec (Some client_ctx) ;
+           `Record (Packet.HANDSHAKE, ee_raw) ] @
+         cert_req
+         @ [ `Record (Packet.HANDSHAKE, cert_raw) ;
+             `Record (Packet.HANDSHAKE, cv_raw) ;
+             `Record (Packet.HANDSHAKE, fin_raw) ;
+             `Change_enc (Some server_app_ctx) ;
          ])
+
+let answer_client_certificate state cert (sd : session_data13) client_fini dec_ctx raw log =
+  let st =
+    AwaitClientCertificateVerify13 (sd, client_fini, dec_ctx, log <+> raw)
+  in
+  Ok ({ state with machina = Server13 st }, [])
+
+let answer_client_certificate_verify state cv (sd : session_data13) client_fini dec_ctx raw log =
+  let st =
+    AwaitClientFinished13 (sd, client_fini, dec_ctx, log <+> raw)
+  in
+  Ok ({ state with machina = Server13 st }, [])
 
 let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx raw log =
   let hash = Ciphersuite.hash13 sd.ciphersuite13 in
@@ -245,14 +263,24 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
      session = `TLS13 sd :: state.session },
      `Change_dec (Some dec_ctx) :: out)
 
+let answer_finished_in_client_cert state fin (sd : session_data13) client_fini dec_ctx raw log =
+  (* this may only happen if there wasn't a client certificate sent! *)
+  match sd.common_session_data13.received_certificates with
+  | [] ->   answer_client_finished state fin sd client_fini dec_ctx raw log
+   | _ -> fail (`Fatal `NoCertificateVerifyReceived)
+
 let handle_handshake cs hs buf =
   let open Reader in
   match parse_handshake buf with
   | Ok handshake ->
      Tracing.sexpf ~tag:"handshake-in" ~f:sexp_of_tls_handshake handshake;
      (match cs, handshake with
-      | AwaitClientCertificate13, Certificate _ -> assert false (* process C, move to CV *)
-      | AwaitClientCertificateVerify13, CertificateVerify _ -> assert false (* validate CV *)
+      | AwaitClientCertificate13 (sd, cf, cc, log), Certificate cert ->
+        answer_client_certificate hs cert sd cf cc buf log
+      | AwaitClientCertificateVerify13 (sd, cf, cc, log), CertificateVerify cv ->
+        answer_client_certificate_verify hs cv sd cf cc buf log
+      | AwaitClientCertificateVerify13 (sd, cf, cc, log), Finished fin ->
+        answer_finished_in_client_cert hs fin sd cf cc buf log
       | AwaitClientFinished13 (sd, cf, cc, log), Finished x ->
          answer_client_finished hs x sd cf cc buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )

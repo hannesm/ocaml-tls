@@ -156,8 +156,8 @@ type client13_handshake_state =
   [@@deriving sexp]
 
 type server13_handshake_state =
-  | AwaitClientCertificate13 (* optional *)
-  | AwaitClientCertificateVerify13 (* optional *)
+  | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
+  | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
   | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
   | Established13
   [@@deriving sexp]
@@ -241,6 +241,7 @@ type fatal = [
   | `NoVersions of tls_any_version list
   | `ReaderError of Reader.error
   | `NoCertificateReceived
+  | `NoCertificateVerifyReceived
   | `NotRSACertificate
   | `NotRSASignature
   | `KeyTooSmall
