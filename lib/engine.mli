@@ -85,6 +85,7 @@ type fatal = [
   | `NoVersions of Core.tls_any_version list
   | `ReaderError of Reader.error
   | `NoCertificateReceived
+  | `NoCertificateVerifyReceived
   | `NotRSACertificate
   | `NotRSASignature
   | `KeyTooSmall
