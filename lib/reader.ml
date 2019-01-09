@@ -639,6 +639,18 @@ let parse_certificate_request_extension raw =
         raise_trailing_bytes "signature algorithms"
       else
         `SignatureAlgorithms algos
+    | Some CERTIFICATE_AUTHORITIES ->
+      let cas, rt = parse_cas buf in
+      if len rt <> 0 then
+        raise_trailing_bytes "certificate authorities"
+      else
+        let cas = List.fold_left (fun cas buf ->
+            match X509.Encoding.distinguished_name_of_cs buf with
+            | Some ca -> ca :: cas
+            | None -> cas)
+            [] cas
+        in
+        `CertificateAuthorities (List.rev cas)
     | _ -> `UnknownExtension (etype, buf)
   in
   (Some data, shift raw (4 + length))

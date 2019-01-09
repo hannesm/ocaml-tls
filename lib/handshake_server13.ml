@@ -137,6 +137,23 @@ let answer_client_hello state ch raw =
         let log = log <+> raw <+> sh_raw in
         let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
 
+        let cert_request, session = match state.config.Config.authenticator with
+          | None -> ([], session)
+          | Some _ ->
+            let certreq =
+              let exts =
+                `SignatureAlgorithms state.config.Config.signature_algorithms ::
+                (match state.config.Config.acceptable_cas with
+                 | [] -> []
+                 | cas -> [ `CertificateAuthorities cas ])
+              in
+              CertificateRequest (Writer.assemble_certificate_request_1_3 exts)
+            in
+            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake certreq ;
+            let common_session_data13 = { session.common_session_data13 with client_auth = true } in
+            ([ Writer.assemble_handshake certreq ], { session with common_session_data13 })
+        in
+
         (* ONLY if client sent a `Hostname *)
         let sg = `SupportedGroups (List.map Ciphersuite.group_to_any_group state.config.Config.groups) in
         let ee = EncryptedExtensions [ ] (* sg ] (* `Hostname ] *) *) in
@@ -155,7 +172,7 @@ let answer_client_hello state ch raw =
 
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
 
-        let log = Cstruct.concat [ log ; ee_raw ; cert_raw ] in
+        let log = Cstruct.concat (log :: cert_request @ [ ee_raw ; cert_raw ]) in
         signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
           log (Some sigalgs) state.config.Config.signature_algorithms pr >>= fun signed ->
         let cv = CertificateVerify signed in
@@ -195,7 +212,9 @@ let answer_client_hello state ch raw =
           | None -> []
           | Some _ -> [`Record change_cipher_spec]) @
          [ `Change_enc (Some server_ctx) ;
-           `Change_dec (Some client_ctx) ;
+           `Change_dec (Some client_ctx) ] @
+         List.map (fun pkt -> `Record (Packet.HANDSHAKE, pkt)) cert_request
+         @ [
            `Record (Packet.HANDSHAKE, ee_raw) ;
            `Record (Packet.HANDSHAKE, cert_raw) ;
            `Record (Packet.HANDSHAKE, cv_raw) ;
