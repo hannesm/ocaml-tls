@@ -1,4 +1,5 @@
 open Nocrypto
+open Nocrypto_asymmetric
 open Core
 
 (** Configuration of the TLS stack *)
@@ -6,7 +7,7 @@ open Core
 (** {1 Config type} *)
 
 (** certificate chain and private key of the first certificate *)
-type certchain = X509.t list * Nocrypto.Rsa.priv
+type certchain = X509.t list * Rsa.priv
 
 (** polymorphic variant of own certificates *)
 type own_cert = [

@@ -186,7 +186,7 @@ type epoch_data = {
   received_certificates  : X509.t list ;
   own_random             : Cstruct.t ;
   own_certificate        : X509.t list ;
-  own_private_key        : Nocrypto.Rsa.priv option ;
+  own_private_key        : Nocrypto_asymmetric.Rsa.priv option ;
   own_name               : string option ;
   master_secret          : master_secret ;
   session_id             : SessionID.t ;

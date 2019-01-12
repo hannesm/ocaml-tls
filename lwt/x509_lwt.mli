@@ -1,7 +1,7 @@
 (** X.509 certificate handling using Lwt. *)
 
 (** private material: a certificate chain and a RSA private key *)
-type priv          = X509.t list * Nocrypto.Rsa.priv
+type priv          = X509.t list * Nocrypto_asymmetric.Rsa.priv
 
 (** authenticator *)
 type authenticator = X509.Authenticator.a

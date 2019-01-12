@@ -1,6 +1,6 @@
 open Lwt
 
-type priv = X509.t list * Nocrypto.Rsa.priv
+type priv = X509.t list * Nocrypto_asymmetric.Rsa.priv
 
 type authenticator = X509.Authenticator.a
 

@@ -6,6 +6,7 @@ open Sexplib.Conv
 
 open Core
 open Nocrypto
+open Nocrypto_asymmetric
 
 type hmac_key = Cstruct.t
 
@@ -83,7 +84,7 @@ type session_data = {
   trust_anchor           : X509.t option ;
   received_certificates  : X509.t list ;
   own_certificate        : X509.t list ;
-  own_private_key        : Nocrypto.Rsa.priv option ;
+  own_private_key        : Rsa.priv option ;
   master_secret          : master_secret ;
   renegotiation          : reneg_params ; (* renegotiation data *)
   own_name               : string option ;

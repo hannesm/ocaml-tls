@@ -68,5 +68,5 @@ module X509 (KV : Mirage_kv_lwt.RO) (C : Mirage_clock.PCLOCK) : sig
   (** [certificate store typ] unmarshals a certificate chain and
       private key material from the [store]. *)
   val certificate   : KV.t -> [< `Default | `Name of string ]
-                           -> (X509.t list * Nocrypto.Rsa.priv) Lwt.t
+                           -> (X509.t list * Nocrypto_asymmetric.Rsa.priv) Lwt.t
 end

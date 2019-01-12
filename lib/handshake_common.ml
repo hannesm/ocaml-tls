@@ -3,6 +3,7 @@ open Core
 open State
 
 open Nocrypto
+open Nocrypto_asymmetric
 
 let empty = function [] -> true | _ -> false
 
