@@ -162,6 +162,7 @@ type client_extension = [
   | `SupportedVersions of tls_any_version list
   | `PostHandshakeAuthentication
   | `Cookie of Cstruct.t
+  | `PskKeyExchangeModes of psk_key_exchange_mode list
   | `UnknownExtension of (int * Cstruct.t)
 ] [@@deriving sexp]
 

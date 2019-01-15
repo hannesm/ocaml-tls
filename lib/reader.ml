@@ -346,6 +346,14 @@ let parse_cookie buf =
   let len = BE.get_uint16 buf 0 in
   (sub buf 2 len, shift buf (2 + len))
 
+let parse_psk_key_exchange_mode buf =
+  let data = get_uint8 buf 0 in
+  (int_to_psk_key_exchange_mode data, shift buf 1)
+
+let parse_psk_key_exchange_modes buf =
+  let count = get_uint8 buf 0 in
+  parse_count_list parse_psk_key_exchange_mode (shift buf 1) [] count
+
 let parse_ext raw =
   let etype = BE.get_uint16 raw 0
   and length = BE.get_uint16 raw 2
@@ -412,6 +420,12 @@ let parse_client_extension raw =
         raise_trailing_bytes "cookie"
       else
         `Cookie c
+    | Some PSK_KEY_EXCHANGE_MODES ->
+      let modes, rt = parse_psk_key_exchange_modes buf in
+      if len rt <> 0 then
+        raise_trailing_bytes "psk key exchange modes"
+      else
+        `PskKeyExchangeModes modes
     | Some x -> parse_extension buf x
     | None -> `UnknownExtension (etype, buf)
   in
