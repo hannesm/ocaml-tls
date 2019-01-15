@@ -187,6 +187,14 @@ type early_data_type =
   [@@uint8_t] [@@sexp]
 ]
 
+
+[%%cenum
+type psk_key_exchange_mode =
+  | PSK_KE [@id 0]
+  | PSK_KE_DHE [@id 1]
+  [@@uint8_t] [@@sexp]
+]
+
 [%%cenum
 type signature_alg =
   | RSA_PKCS1_MD5    [@id 0x0101] (* deprecated, TLS 1.2 only *)

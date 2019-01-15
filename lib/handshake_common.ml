@@ -124,6 +124,7 @@ let to_client_ext_type = function
   | `SupportedVersions _   -> `SupportedVersion
   | `PostHandshakeAuthentication -> `PostHandshakeAuthentication
   | `Cookie _              -> `Cookie
+  | `PskKeyExchangeModes _ -> `PskKeyExchangeMode
 
 let to_server_ext_type = function
   | `Hostname              -> `Hostname
