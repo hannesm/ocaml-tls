@@ -56,6 +56,7 @@ let alert_of_fatal = function
   | `HashAlgorithmMismatch -> Packet.HANDSHAKE_FAILURE
   | `NotRSASignature -> Packet.HANDSHAKE_FAILURE
   | `RSASignatureVerificationFailed -> Packet.HANDSHAKE_FAILURE
+  | `UnsupportedSignatureScheme -> Packet.HANDSHAKE_FAILURE
   | `KeyTooSmall -> Packet.INSUFFICIENT_SECURITY
   | `BadCertificateChain -> Packet.BAD_CERTIFICATE
   | `InvalidClientHello `NoSignatureAlgorithmsExtension
