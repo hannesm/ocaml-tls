@@ -582,10 +582,32 @@ let parse_certificates_exn buf =
 
 let parse_certificates = catch @@ parse_certificates_exn
 
+(* TODO finish implementation of certificate extensions *)
+let parse_certificate_ext _ = None, Cstruct.empty
+
+let parse_certificate_ext_1_3_exn buf =
+  let certlen = get_uint24_len buf in
+  let cert, extbuf, rest =
+    let cert, rt = split (shift buf 3) certlen in
+    let ext_len = BE.get_uint16 rt 0 in
+    let extbuf, rt = split (shift rt 2) ext_len in
+    cert, extbuf, rt
+  in
+  let exts = parse_list parse_certificate_ext extbuf [] in
+  (Some (cert, exts), rest)
+
+let parse_certificate_ext_list_1_3_exn buf =
+  let length = get_uint24_len buf in
+  if len buf <> length + 3 then
+    raise_trailing_bytes "certificates"
+  else
+    parse_list parse_certificate_ext_1_3_exn (shift buf 3) []
+
 let parse_certificates_1_3_exn buf =
   let clen = get_uint8 buf 0 in
   let context, rt = split (shift buf 1) clen in
-  (context, parse_certificates_exn rt)
+  let certs = parse_certificate_ext_list_1_3_exn rt in
+  (context, certs)
 
 let parse_certificates_1_3 = catch @@ parse_certificates_1_3_exn
 

@@ -90,6 +90,7 @@ type fatal = [
   | `KeyTooSmall
   | `RSASignatureMismatch
   | `RSASignatureVerificationFailed
+  | `UnsupportedSignatureScheme
   | `HashAlgorithmMismatch
   | `BadCertificateChain
   | `MACMismatch

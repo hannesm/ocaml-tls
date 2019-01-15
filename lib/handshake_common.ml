@@ -294,9 +294,7 @@ let signature version ?context_string data client_sig_algs signature_algorithms 
     let sign = Rsa.PKCS1.sig_encode ~key:private_key cs in
     Writer.assemble_digitally_signed_1_2 sig_alg sign
   | TLS_1_3 ->
-     (* RSA-PSS is used *)
-     (* input is prepended by 64 * 0x20 (to avoid cross-version attacks) *)
-    (* input for signature now contains also a context string *)
+    (* RSA-PSS is used *)
     let prefix = to_sign_1_3 context_string in
     ( match client_sig_algs with
       | None              -> return `RSA_PSS_RSAENC_SHA256
@@ -373,7 +371,7 @@ let verify_digitally_signed version ?context_string sig_algs data signature_data
             in
             guard (PSS.verify ~key:pubkey ~signature data) (`Fatal `RSASignatureMismatch)
           | `PKCS1 ->
-            invalid_arg "no"
+            fail (`Fatal `UnsupportedSignatureScheme)
         end
       | Error re -> fail (`Fatal (`ReaderError re)))
 

@@ -243,3 +243,7 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 - rebased on tls 0.9.3 release
 - CertificateRequest parse and assembly (part of client authentication)
 - CertificateAuthorities extension
+* <2019-01-15 Tue>
+- client authentication (certificate parsing, certificateverify)
+- interop with gnutls with client certificates :D
+/opt/bin/gnutls-cli 127.0.0.1:4433 --insecure -d 999 --x509keyfile=mirage/ocaml-tls/certificates/server.key --x509certfile=mirage/ocaml-tls/certificates/server.pem

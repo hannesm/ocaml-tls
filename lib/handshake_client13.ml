@@ -191,10 +191,11 @@ let handle_handshake cs hs buf =
          answer_encrypted_extensions hs sd exts es ss ee buf log
       | AwaitServerFinishedMaybeAuth13 (sd, exts, es, ss, log), CertificateRequest _ -> assert false (* process CR *)
       | AwaitServerFinishedMaybeAuth13 (sd, exts, es, ss, log), Certificate cs ->
-         (match parse_certificates_1_3 cs with
+(*         (match parse_certificates_1_3 cs with
           | Ok (con, cs) -> guard (Cs.null con) (`Fatal `InvalidMessage) >>= fun () ->
                                      answer_certificate hs sd exts es ss cs buf log
-          | Error re -> fail (`Fatal (`ReaderError re)))
+           | Error re -> fail (`Fatal (`ReaderError re)))*)
+        assert false
       | AwaitServerCertificateVerify13 (sd, exts, es, ss, log), CertificateVerify cv ->
          answer_certificate_verify hs sd exts es ss cv buf log
       | AwaitServerFinished13 (sd, exts, es, ss, log), Finished fin ->

@@ -245,19 +245,27 @@ let answer_client_certificate state cert (sd : session_data13) client_fini dec_c
         Ok ({ state with machina = Server13 st }, [])
       | `Fail e -> fail (`Error (`AuthenticationFailure e))
     end
-  | Ok (ctx, certs), auth ->
-    (* TODO verify certificate chain1 *)
+  | Ok (_ctx, cert_exts), auth ->
     (* TODO what to do with ctx? send through authenticator? *)
-    let st =
-      AwaitClientCertificateVerify13 (sd, client_fini, dec_ctx, log <+> raw)
+    (* TODO what to do with extensions? *)
+    let certs = List.map fst cert_exts in
+    validate_chain auth certs None >|= fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
+    let sd' = let common_session_data13 = {
+        sd.common_session_data13 with
+        received_certificates ;
+        peer_certificate ;
+        peer_certificate_chain ;
+        trust_anchor
+      } in
+      { sd with common_session_data13 }
     in
-    Ok ({ state with machina = Server13 st }, [])
+    let st = AwaitClientCertificateVerify13 (sd', client_fini, dec_ctx, log <+> raw) in
+    ({ state with machina = Server13 st }, [])
 
 let answer_client_certificate_verify state cv (sd : session_data13) client_fini dec_ctx raw log =
-  let st =
-    AwaitClientFinished13 (sd, client_fini, dec_ctx, log <+> raw)
-  in
-  Ok ({ state with machina = Server13 st }, [])
+  verify_digitally_signed TLS_1_3 ~context_string:"TLS 1.3, client CertificateVerify" state.config.Config.signature_algorithms cv log sd.common_session_data13.peer_certificate >|= fun () ->
+  let st = AwaitClientFinished13 (sd, client_fini, dec_ctx, log <+> raw) in
+  ({ state with machina = Server13 st }, [])
 
 let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx raw log =
   let hash = Ciphersuite.hash13 sd.ciphersuite13 in
