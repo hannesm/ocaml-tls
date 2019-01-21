@@ -37,7 +37,7 @@ let serve_ssl port callback =
   yap ~tag ("-> start @ " ^ string_of_int port) >>= fun () ->
   let rec loop s =
     X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-    let config = Tls.Config.server ~reneg:true ~certificates:(`Single cert) ~authenticator () in
+    let config = Tls.Config.server ~reneg:true ~certificates:(`Single cert) ~authenticator ~version:(Tls.Core.TLS_1_3, Tls.Core.TLS_1_3) () in
     (Lwt.catch
        (fun () -> Tls_lwt.accept_ext config s >|= fun r -> `R r)
        (function
