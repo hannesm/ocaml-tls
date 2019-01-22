@@ -664,8 +664,8 @@ let common_data_to_epoch common is_server peer_name =
       session_id             = Cstruct.empty ;
       extended_ms            = false ;
       resumption_secret      = Cstruct.empty ;
-      exporter_secret       = Cstruct.empty ;
-      psk_id                 = Cstruct.empty
+      exporter_secret        = Cstruct.empty ;
+      psk                    = None
     } in
   epoch
 
@@ -673,8 +673,8 @@ let epoch state =
   let hs = state.handshake in
   let server =
     match hs.machina with
-    | Client _ -> false
-    | Server _ -> true
+    | Client _ | Client13 _ -> false
+    | Server _ | Server13 _ -> true
   and peer_name = Config.(hs.config.peer_name)
   in
   match hs.session with
@@ -695,6 +695,6 @@ let epoch state =
       ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
       extended_ms            = true ; (* RFC 8446, Appendix D, last paragraph *)
       resumption_secret      = session.resumption_secret ;
-      exporter_secret       = session.exporter_secret ;
-      psk_id                 = session.psk_id ;
+      exporter_secret        = session.exporter_secret ;
+      psk                    = session.psk ;
     }

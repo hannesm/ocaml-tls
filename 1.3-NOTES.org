@@ -252,3 +252,6 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 - gnutls 3.5.0 interop
 - getting sessionticket / psk client hello extension to work with firefox, but not with gnutls :(
  - FF only offers PSK_KE_DHE, no PSK_KE
+* <2019-01-18 Fri>
+* <2019-01-22 Tue>
+- pre-shared keys (resumption)

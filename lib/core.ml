@@ -84,6 +84,7 @@ module SessionID = struct
   let equal = Cstruct.equal
 end
 
+(* TODO needs to be updated in respect to psk13 *)
 module PreSharedKeyID = struct
   type t = Cstruct.t [@@deriving sexp]
   let compare = Cstruct.compare
@@ -307,6 +308,13 @@ module Cert = struct
   let sexp_of_t _ = Sexplib.Sexp.Atom "certificate"
 end
 
+type psk13 = {
+  identifier : Cstruct.t ;
+  obfuscation : int32 ;
+  nonce : int ; (* 0..255 *)
+  (* origin : [ `Resumption | `External ] (* using different labels for binder_key *) *)
+} [@@deriving sexp]
+
 (** information about an open session *)
 type epoch_data = {
   protocol_version       : tls_version ;
@@ -327,7 +335,7 @@ type epoch_data = {
   alpn_protocol          : string option ;
   resumption_secret      : Cstruct.t ;
   exporter_secret        : Cstruct.t ;
-  psk_id                 : PreSharedKeyID.t ;
+  psk                    : psk13 option ;
 } [@@deriving sexp]
 
 let supports_key_usage ?(not_present = false) cert usage =

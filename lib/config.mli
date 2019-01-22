@@ -18,7 +18,7 @@ type own_cert = [
 
 type session_cache = SessionID.t -> epoch_data option
 
-type psk_cache = PreSharedKeyID.t -> epoch_data option
+type psk_cache = Cstruct.t -> epoch_data option
 
 (** configuration parameters *)
 type config = private {

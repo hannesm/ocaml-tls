@@ -58,16 +58,28 @@ let answer_client_hello state ch raw =
     | None -> None
     | Some ids ->
       Log.info (fun m -> m "received %d ids" (List.length ids));
-      (* ((id, max_age), binder) list *)
-      (* need to verify binder, do the max_age computations + checking,
-         figure out whether the id is in our psk cache, and use the resumption secret as input
-         and return the idx *)
-(*      match
-        List.filter (function None -> false | Some _ -> true)
-          (List.map state.config.Config.psk_cache ids)
+      match List.filter (fun ((id, _), _) ->
+          (* TODO: verify max_age in here! *)
+          match state.config.Config.psk_cache id with
+            None -> false | Some _ -> true)
+          ids
       with
-      | x::_ -> x
-        | [] -> *) None
+      | [] ->
+        Log.info (fun m -> m "found no id in psk cache") ;
+        None
+      | ((id, max_age), binder)::_ ->
+        (* need to verify binder, do the max_age computations + checking,
+           figure out whether the id is in our psk cache, and use the resumption secret as input
+           and return the idx *)
+        let old_epoch =
+          match state.config.Config.psk_cache id with
+          | None -> assert false (* see above *)
+          | Some x -> x
+        in
+        (* (a) compute PSK
+           (b) compute binder (but that may be for HRR!? -- unclear)
+           (c) transfer properties from old_epoch *)
+        None
   and keyshare group =
     try Some (snd (List.find (fun (g, _) -> g = group) keyshares)) with Not_found -> None
   in
@@ -279,10 +291,15 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx r
       Cstruct.BE.get_uint32 cs 0
     in
     let psk_id = Nocrypto.Rng.generate 32 in
-    let st = { lifetime = 300l ; age_add ; nonce = 0 ; ticket = psk_id } in
+    let nonce =
+      let one = Nocrypto.Rng.generate 1 in
+      Cstruct.get_uint8 one 0
+    in
+    let st = { lifetime = 300l ; age_add ; nonce ; ticket = psk_id } in
     Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
     let st_raw = Writer.assemble_handshake (SessionTicket st) in
-    { sd with psk_id ; resumption_secret },
+    let psk = { identifier = psk_id ; obfuscation = age_add ; nonce } in
+    { sd with psk = Some psk ; resumption_secret },
     [ `Record (Packet.HANDSHAKE, st_raw) ]
   in
   ({ state with
