@@ -5,6 +5,13 @@ let string_of_unix_err err f p =
   Printf.sprintf "Unix_error (%s, %s, %s)"
     (Unix.error_message err) f p
 
+let add_to_cache, find_in_cache =
+  let c = ref [] in
+  (fun id session -> c := (id, session) :: !c),
+  (fun id -> match List.find_opt (fun (id', _) -> Cstruct.compare id id' = 0) !c with
+     | None -> None
+     | Some (_, ep) -> Some ep)
+
 let serve_ssl port callback =
 
   let tag = "server" in
@@ -37,15 +44,21 @@ let serve_ssl port callback =
   yap ~tag ("-> start @ " ^ string_of_int port) >>= fun () ->
   let rec loop s =
     X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-    let config = Tls.Config.server ~reneg:true ~certificates:(`Single cert) ~authenticator ~version:(Tls.Core.TLS_1_3, Tls.Core.TLS_1_3) () in
+    let config = Tls.Config.server ~psk_cache:find_in_cache ~reneg:true ~certificates:(`Single cert) ~authenticator ~version:(Tls.Core.TLS_1_3, Tls.Core.TLS_1_3) () in
     (Lwt.catch
-       (fun () -> Tls_lwt.accept_ext config s >|= fun r -> `R r)
+       (fun () -> Tls_lwt.Unix.accept config s >|= fun r -> `R r)
        (function
          | Unix.Unix_error (e, f, p) -> return (`L (string_of_unix_err e f p))
          | Tls_lwt.Tls_alert a -> return (`L (Tls.Packet.alert_type_to_string a))
          | Tls_lwt.Tls_failure f -> return (`L (Tls.Engine.string_of_failure f))
          | exn -> let str = Printexc.to_string exn in return (`L ("loop: exception " ^ str)))) >>= function
-    | `R (channels, addr) ->
+    | `R (t, addr) ->
+      (match Tls_lwt.Unix.epoch t with
+       | `Error -> ()
+       | `Ok ep -> match ep.Tls.Core.psk with
+         | None -> ()
+         | Some psk -> add_to_cache psk.Tls.Core.identifier ep) ;
+      let channels = Tls_lwt.of_t t in
       yap ~tag "-> connect" >>= fun () -> ( handle channels addr ; loop s )
     | `L (msg) ->
       yap ~tag ("server socket: " ^ msg) >>= fun () -> loop s

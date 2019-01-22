@@ -64,7 +64,7 @@ let empty_session13 cipher = {
   kex13                 = `DHE_RSA ;
   resumption_secret     = Cstruct.empty ;
   exporter_secret       = Cstruct.empty ;
-  psk_id                = Cstruct.empty ;
+  psk                   = None ;
   master_secret         = Handshake_crypto13.empty cipher
 }
 

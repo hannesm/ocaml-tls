@@ -142,8 +142,8 @@ type session_data13 = {
   kex13                  : Ciphersuite.key_exchange_algorithm13 ;
   resumption_secret      : Cstruct.t ;
   exporter_secret        : Cstruct.t ;
-  psk_id                 : Cstruct.t ;
   master_secret          : kdf ;
+  psk                    : psk13 option ; (* should be a map once we hand out multiple psk (then also contain sni/client_auth/...) -- requires notification protocol to API client about new PSK *)
 } [@@deriving sexp]
 
 type client13_handshake_state =
