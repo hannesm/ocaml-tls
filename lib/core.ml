@@ -101,6 +101,12 @@ type early_data = {
 
 type psk_identity = (Cstruct.t * int32) * Cstruct.t [@@deriving sexp]
 
+let binders_len psks =
+  let binder_len (_, binder) =
+    Cstruct.len binder + 1 (* binder len *)
+  in
+  2 (* binder len *) + List.fold_left (+) 0 (List.map binder_len psks)
+
 type group = Nocrypto.Dh.group [@@deriving sexp] (* for now *)
 
 type signature_algorithm = [

@@ -533,6 +533,69 @@ let wire_signature () =
   | Ok () -> ()
   | Error e -> Alcotest.fail ("trace-verification failed " ^ (Engine.string_of_failure e))
 
+let res_secret_0 = Cstruct.of_hex {|
+4e cd 0e b6 ec 3b 4d 87  f5 d6 02 8f 92 2c a4 c5
+85 1a 27 7f d4 13 11 c9  e6 2d 2c 94 92 e1 c4 f3
+|}
+
+let res_secret () =
+  let hash = Cstruct.create 2 in
+  Alcotest.check cs __LOC__ res_secret_0
+    (Handshake_crypto13.expand_label `SHA256 res_master "resumption" hash 32)
+
+let early_secret1 = Cstruct.of_hex {|
+9b 21 88 e9 b2 fc 6d 64  d7 1d c3 29 90 0e 20 bb
+41 91 50 00 f6 78 aa 83  9c bb 79 7c b7 d8 33 2c
+|}
+
+let early1 () =
+  let salt = Cstruct.empty
+  and ikm = res_secret_0
+  in
+  Alcotest.check cs __LOC__ early_secret1 (Hkdf.extract ~hash:`SHA256 ~salt ikm) ;
+  let t = Handshake_crypto13.(derive (empty cipher) ikm) in
+  my_secret := Some t ;
+  Alcotest.check cs __LOC__ early_secret1 t.secret
+
+let ch_res_prefix = Cstruct.of_hex {|
+01 00 01 fc 03 03 1b c3  ce b6 bb e3 9c ff 93 83
+55 b5 a5 0a db 6d b2 1b  7a 6a f6 49 d7 b4 bc 41
+9d 78 76 48 7d 95 00 00  06 13 01 13 03 13 02 01
+00 01 cd 00 00 00 0b 00  09 00 00 06 73 65 72 76
+65 72 ff 01 00 01 00 00  0a 00 14 00 12 00 1d 00
+17 00 18 00 19 01 00 01  01 01 02 01 03 01 04 00
+33 00 26 00 24 00 1d 00  20 e4 ff b6 8a c0 5f 8d
+96 c9 9d a2 66 98 34 6c  6b e1 64 82 ba dd da fe
+05 1a 66 b4 f1 8d 66 8f  0b 00 2a 00 00 00 2b 00
+03 02 03 04 00 0d 00 20  00 1e 04 03 05 03 06 03
+02 03 08 04 08 05 08 06  04 01 05 01 06 01 02 01
+04 02 05 02 06 02 02 02  00 2d 00 02 01 01 00 1c
+00 02 40 01 00 15 00 57  00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+29 00 dd 00 b8 00 b2 2c  03 5d 82 93 59 ee 5f f7
+af 4e c9 00 00 00 00 26  2a 64 94 dc 48 6d 2c 8a
+34 cb 33 fa 90 bf 1b 00  70 ad 3c 49 88 83 c9 36
+7c 09 a2 be 78 5a bc 55  cd 22 60 97 a3 a9 82 11
+72 83 f8 2a 03 a1 43 ef  d3 ff 5d d3 6d 64 e8 61
+be 7f d6 1d 28 27 db 27  9c ce 14 50 77 d4 54 a3
+66 4d 4e 6d a4 d2 9e e0  37 25 a6 a4 da fc d0 fc
+67 d2 ae a7 05 29 51 3e  3d a2 67 7f a5 90 6c 5b
+3f 7d 8f 92 f2 28 bd a4  0d da 72 14 70 f9 fb f2
+97 b5 ae a6 17 64 6f ac  5c 03 27 2e 97 07 27 c6
+21 a7 91 41 ef 5f 7d e6  50 5e 5b fb c3 88 e9 33
+43 69 40 93 93 4a e4 d3  57 fa d6 aa cb
+|}
+
+let binder () =
+  let binder_hash = Cstruct.of_hex "63 22 4b 2e 45 73 f2 d3 45 4c a8 4b 9d 00 9a 04 f6 be 9e 05 71 1a 83 96 47 3a ef a0 1e 92 4a 14" in
+  Alcotest.check cs __LOC__ binder_hash (Nocrypto.Hash.digest `SHA256 ch_res_prefix)
+  (*  let binder_key =  *)
+
+
 let tests = [
   "initial extract", `Quick, extract_secret_early ;
   "initial derive", `Quick, derive_hs_secret ;
@@ -552,6 +615,9 @@ let tests = [
   "processed payload", `Quick, processed_payload ;
   "self signature", `Quick, self_signature ;
   "wire signature", `Quick, wire_signature ;
+  "res secret", `Quick, res_secret ;
+  "early resumed", `Quick, early1 ;
+  "binder", `Quick, binder
 ]
 
 let () =

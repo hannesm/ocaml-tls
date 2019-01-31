@@ -58,10 +58,29 @@ let answer_client_hello state ch raw =
     | None -> None
     | Some ids ->
       Log.info (fun m -> m "received %d ids" (List.length ids));
-      match List.filter (fun ((id, _), _) ->
-          (* TODO: verify max_age in here! *)
-          match state.config.Config.psk_cache id with
-            None -> false | Some _ -> true)
+
+      let cipher = `TLS_AES_128_GCM_SHA256 in
+      let log = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
+        | None -> Cstruct.empty
+        | Some c ->
+          (* log is: 254 00 00 length c :: HRR *)
+          let cs = Cstruct.create 4 in
+          Cstruct.set_uint8 cs 0 (Packet.handshake_type_to_int Packet.MESSAGE_HASH) ;
+          Cstruct.set_uint8 cs 3 (Cstruct.len c) ;
+          let group = Nocrypto.Dh.Group.ffdhe2048 in
+          let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie c ]} in
+          let hs_buf = Writer.assemble_handshake (HelloRetryRequest hrr) in
+          Cstruct.concat [ cs ; c ; hs_buf ]
+      in
+
+      let binders_len = binders_len ids in
+      let ch_part = Cstruct.(sub raw 0 (len raw - binders_len)) in
+      Log.info (fun m -> m "len is %d: %a" binders_len Cstruct.hexdump_pp ch_part) ;
+      match
+        List.filter (fun ((id, _), _) ->
+            (* TODO: verify max_age in here! *)
+            match state.config.Config.psk_cache id with
+              None -> false | Some _ -> true)
           ids
       with
       | [] ->
@@ -76,9 +95,32 @@ let answer_client_hello state ch raw =
           | None -> assert false (* see above *)
           | Some x -> x
         in
+        let psk =
+          (* old_epoch.resumption_secret + nonce *)
+(*          HKDF-Expand-Label
+            (resumption_master_secret, "resumption", ticket_nonce, Hash.length) *)
+          let nonce = match old_epoch.psk with
+            | None -> assert false
+            | Some psk -> psk.nonce
+          in
+          let prk = old_epoch.resumption_secret
+          and ctx =
+            let b = Cstruct.create 1 in
+            Cstruct.set_uint8 b 0 nonce ;
+            b
+          in
+          Handshake_crypto13.derive_secret_no_hash `SHA256 prk ~ctx "resumption"
+        in
+        let early_secret = Handshake_crypto13.derive (empty cipher) psk in
+        let binder' = Handshake_crypto13.derive_secret early_secret "res binder" (Cstruct.append log ch_part) in
+        if Cstruct.equal binder binder' then
+          Log.info (fun m -> m "binder matched")
+        else
+          Log.info (fun m -> m "binder mismatch %a vs %a"
+                       Cstruct.hexdump_pp binder Cstruct.hexdump_pp binder') ;
         (* (a) compute PSK
-           (b) compute binder (but that may be for HRR!? -- unclear)
-           (c) transfer properties from old_epoch *)
+           (b) compute binder (but that may be for HRR!? -- unclear and compare with received one!)
+           (c) transfer properties from old_epoch (q: which? all? client auth?) *)
         None
   and keyshare group =
     try Some (snd (List.find (fun (g, _) -> g = group) keyshares)) with Not_found -> None

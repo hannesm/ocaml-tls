@@ -255,3 +255,5 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 * <2019-01-18 Fri>
 * <2019-01-22 Tue>
 - pre-shared keys (resumption)
+* <2019-01-30 Wed>
+- resumption continued
