@@ -394,11 +394,12 @@ let assemble_digitally_signed_1_2 sigalg signature =
     (assemble_digitally_signed signature)
 
 let assemble_session_ticket se =
-  let buf = create 11 in
+  let buf = create 12 in
   BE.set_uint32 buf 0 se.lifetime ;
   BE.set_uint32 buf 4 se.age_add ;
-  set_uint8 buf 8 se.nonce ;
-  BE.set_uint16 buf 9 (len se.ticket) ;
+  set_uint8 buf 8 1 ; (* nonce length *)
+  set_uint8 buf 9 se.nonce ;
+  BE.set_uint16 buf 10 (len se.ticket) ;
   let ext_len = create 2 in
   buf <+> se.ticket <+> ext_len (* todo: extensions! *)
 

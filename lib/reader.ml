@@ -398,6 +398,7 @@ let parse_client_extension raw =
          let shares = parse_list parse_keyshare_entry (sub buf 2 ll) [] in
          `KeyShare shares
     | Some PRE_SHARED_KEY ->
+      (* TODO may only be last extension! *)
       let ids = parse_client_presharedkeys buf in
       `PreSharedKeys ids
     | Some EARLY_DATA ->
