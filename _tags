@@ -14,7 +14,7 @@ true : package(cstruct nocrypto result x509 sexplib hkdf logs)
 <lib> : include
 
 <tests/*> : package(oUnit cstruct-unix nocrypto.unix)
-<tests/key_derivation.{ml,byte,native}> : package(alcotest)
+<tests/key_derivation.{ml,byte,native}> : package(alcotest logs.fmt fmt.tty)
 
 <lwt/**/*> : package(lwt lwt.unix ptime.clock.os)
 <lwt> : include

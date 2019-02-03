@@ -537,15 +537,20 @@ let wire_signature () =
   | Ok () -> ()
   | Error e -> Alcotest.fail ("trace-verification failed " ^ (Engine.string_of_failure e))
 
-let res_secret_0 = Cstruct.of_hex {|
+let res_secret_00 = Cstruct.of_hex {|
 4e cd 0e b6 ec 3b 4d 87  f5 d6 02 8f 92 2c a4 c5
 85 1a 27 7f d4 13 11 c9  e6 2d 2c 94 92 e1 c4 f3
 |}
 
 let res_secret () =
-  let hash_val = Cstruct.create 2 in
-  Alcotest.check cs __LOC__ res_secret_0
-    (Handshake_crypto13.expand_label hash res_master "resumption" hash_val 32)
+  let nonce = Cstruct.create 2 in
+  Alcotest.check cs __LOC__ res_secret_00
+    (Handshake_crypto13.expand_label hash res_master "resumption" nonce 32) ;
+  Alcotest.check cs __LOC__ res_secret_00
+    (Handshake_crypto13.derive_secret_no_hash hash res_master ~ctx:nonce "resumption") ;
+  Alcotest.check cs __LOC__ res_secret_00
+    (Handshake_crypto13.res_secret hash res_master nonce)
+
 
 let early_secret1 = Cstruct.of_hex {|
 9b 21 88 e9 b2 fc 6d 64  d7 1d c3 29 90 0e 20 bb
@@ -554,7 +559,7 @@ let early_secret1 = Cstruct.of_hex {|
 
 let early1 () =
   let salt = Cstruct.empty
-  and ikm = res_secret_0
+  and ikm = res_secret_00
   in
   Alcotest.check cs __LOC__ early_secret1 (Hkdf.extract ~hash ~salt ikm) ;
   let t = Handshake_crypto13.(derive (empty cipher) ikm) in
@@ -630,5 +635,8 @@ let tests = [
 ]
 
 let () =
+  Fmt_tty.setup_std_outputs ();
+  Logs.set_level (Some Logs.Debug);
+  Logs.set_reporter (Logs_fmt.reporter ~dst:Format.std_formatter ()) ;
   Nocrypto_entropy_unix.initialize () ;
   Alcotest.run "Key derivation tests" [ "key extraction and derivation", tests ]

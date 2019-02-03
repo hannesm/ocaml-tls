@@ -156,9 +156,9 @@ type client13_handshake_state =
   [@@deriving sexp]
 
 type server13_handshake_state =
-  | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
-  | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
-  | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * Cstruct.t
+  | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
+  | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
+  | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
   | Established13
   [@@deriving sexp]
 

@@ -259,3 +259,5 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 - resumption continued
 * <2019-02-03 Sun>
 - resumption KDF, works with example traces now!
+- still missing: keyupdate, post-handshake auth, 0rtt
+- resumption (binder key) works now with gnutls and firefox, still need to fiddle it through

@@ -124,6 +124,9 @@ let app_ctx t log =
 let exporter t log = derive_secret t "exp master" log
 let resumption t log = derive_secret t "res master" log
 
+let res_secret hash secret nonce =
+  derive_secret_no_hash hash secret ~ctx:nonce "resumption"
+
 let finished hash secret data =
   let key = derive_secret_no_hash hash secret "finished" in
   Hash.mac hash ~key (Hash.digest hash data)
