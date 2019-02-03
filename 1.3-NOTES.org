@@ -257,3 +257,5 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 - pre-shared keys (resumption)
 * <2019-01-30 Wed>
 - resumption continued
+* <2019-02-03 Sun>
+- resumption KDF, works with example traces now!
