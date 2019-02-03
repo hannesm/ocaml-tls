@@ -740,9 +740,10 @@ let parse_digitally_signed_1_2 = catch @@ fun buf ->
 let parse_session_ticket buf =
   let lifetime = BE.get_uint32 buf 0
   and age_add = BE.get_uint32 buf 4
-  and nonce = get_uint8 buf 8
-  and ticket_len = BE.get_uint16 buf 9
+  and nonce_len = get_uint8 buf 8
   in
+  let nonce = sub buf 9 nonce_len in
+  let ticket_len = BE.get_uint16 buf (9 + nonce_len) in
   let ticket = sub buf 11 ticket_len in
   let ext_len = BE.get_uint16 buf (11 + ticket_len) in
   (* TODO parse extensions! *)

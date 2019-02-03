@@ -271,7 +271,7 @@ type hello_retry = {
 type session_ticket = {
   lifetime : int32 ;
   age_add : int32 ;
-  nonce : int ;
+  nonce : Cstruct.t ;
   ticket : Cstruct.t ;
   (* TODO extensions *)
 } [@@deriving sexp]
@@ -317,7 +317,7 @@ end
 type psk13 = {
   identifier : Cstruct.t ;
   obfuscation : int32 ;
-  nonce : int ; (* 0..255 *)
+  secret : Cstruct.t ; (* of len 0..255 *)
   (* origin : [ `Resumption | `External ] (* using different labels for binder_key *) *)
 } [@@deriving sexp]
 
