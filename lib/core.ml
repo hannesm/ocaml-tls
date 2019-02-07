@@ -92,13 +92,6 @@ module PreSharedKeyID = struct
   let equal = Cstruct.equal
 end
 
-type early_data = {
-  configuration_id : Cstruct.t ;
-  ciphersuite : ciphersuite ;
-  extensions : Cstruct.t ; (* XXX: extensions! *)
-  context : Cstruct.t ;
-} [@@deriving sexp]
-
 type psk_identity = (Cstruct.t * int32) * Cstruct.t [@@deriving sexp]
 
 let binders_len psks =
@@ -163,7 +156,7 @@ type client_extension = [
   | `ExtendedMasterSecret
   | `ALPN of string list
   | `KeyShare of (named_group * Cstruct_sexp.t) list
-  | `EarlyDataIndication of early_data
+  | `EarlyDataIndication
   | `PreSharedKeys of psk_identity list
   | `Draft of int
   | `SupportedVersions of tls_any_version list

@@ -327,21 +327,6 @@ let parse_client_presharedkeys buf =
   else
     id_binder
 
-let parse_early_data buf =
-  let cfgidlen = BE.get_uint16 buf 0 in
-  let configuration_id, rest = split (shift buf 2) cfgidlen in
-  match parse_ciphersuite rest with
-  | Some ciphersuite, rest ->
-     let extlen = BE.get_uint16 rest 0 in
-     let extensions, rest = split (shift rest 2) extlen in
-     let clen = get_uint8 rest 0 in
-     let context, rest = split (shift rest 1) clen in
-     if len rest <> 0 then
-       raise_trailing_bytes "early_data"
-     else
-       { configuration_id ; ciphersuite ; extensions ; context }
-  | None, _ -> raise_unknown "ciphersuite in early_data"
-
 let parse_cookie buf =
   let len = BE.get_uint16 buf 0 in
   (sub buf 2 len, shift buf (2 + len))
@@ -402,8 +387,10 @@ let parse_client_extension raw =
       let ids = parse_client_presharedkeys buf in
       `PreSharedKeys ids
     | Some EARLY_DATA ->
-       let ed = parse_early_data buf in
-       `EarlyDataIndication ed
+      if len buf <> 0 then
+        raise_trailing_bytes "early data"
+      else
+        `EarlyDataIndication
     | Some SUPPORTED_VERSIONS ->
       let versions, rt = parse_supported_versions buf in
       if len rt <> 0 then

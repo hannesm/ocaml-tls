@@ -267,3 +267,9 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 - TODO still unclear what to do with a TLS session that a client opened, successfully completed, and immediately closed
   - atm (since finished + alert may be in the same tcp frame) this session does not exist in tls_lwt etc.
   - gnutls-cli when started with -r behaves in this way, and it is a good idea to be able to count + cache this session
+- early data, from RFC:
+  - sessionticket needs to include early_data extension
+  - client sends early_data extension in client_hello
+  - uses first psk binder for early_data
+  - if server accepts this (by sending early_data ext in server_hello), needs to derive key and switch only when receiving endofearlydata to hs_ctx
+  - if server rejects, needs to trial decrypt with hs_ctx until it read finished (and throw away the pieces in between)

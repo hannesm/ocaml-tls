@@ -168,16 +168,6 @@ let assemble_alpn_protocol p =
 let assemble_alpn_protocols protocols =
   assemble_list Two assemble_alpn_protocol protocols
 
-let assemble_early_data (edi : early_data) =
-  let clen = create 2 in
-  BE.set_uint16 clen 0 (len edi.configuration_id) ;
-  let cs = assemble_ciphersuite edi.ciphersuite in
-  let extl = create 2 in
-  BE.set_uint16 extl 0 (len edi.extensions) ;
-  let conlen = create 1 in
-  set_uint8 conlen 0 (len edi.context) ;
-  clen <+> edi.configuration_id <+> cs <+> extl <+> edi.extensions <+> conlen <+> edi.context
-
 let assemble_supported_versions vs =
   assemble_list One assemble_any_protocol_version vs
 
@@ -249,8 +239,8 @@ let assemble_client_extension e =
       (assemble_list Two assemble_keyshare_entry ks, KEY_SHARE)
     | `PreSharedKeys ids ->
       (assemble_client_psks ids, PRE_SHARED_KEY)
-    | `EarlyDataIndication edi ->
-      (assemble_early_data edi, EARLY_DATA)
+    | `EarlyDataIndication ->
+      (create 0, EARLY_DATA)
     | `SupportedVersions vs ->
       (assemble_supported_versions vs, SUPPORTED_VERSIONS)
     | `PostHandshakeAuthentication ->
