@@ -141,20 +141,19 @@ let answer_client_hello state ch raw =
             (* need to verify binder, do the max_age computations + checking,
                figure out whether the id is in our psk cache, and use the resumption secret as input
                and return the idx *)
-            (*            let old_epoch = *)
-            let psk =
+            let old_epoch =
               match find_in_cache id (* state.config.Config.psk_cache id *) with
               | None -> assert false (* see above *)
               | Some x -> x
             in
-            (*            let psk = match old_epoch.psk with None -> assert false | Some psk -> psk.secret in *)
+            let psk = match old_epoch.psk with None -> assert false | Some psk -> psk.secret in
             let early_secret = secret ~psk () in
             let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
             let log = Cstruct.append log ch_part in
             let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
             if Cstruct.equal binder binder' then begin
               Log.info (fun m -> m "binder matched") ;
-              early_secret, None
+              early_secret, Some old_epoch
             end else begin
               Log.info (fun m -> m "binder mismatch %a vs %a"
                            Cstruct.hexdump_pp binder Cstruct.hexdump_pp binder') ;
@@ -162,7 +161,11 @@ let answer_client_hello state ch raw =
             end
       in
 
-      (* match resumed_session with ... *)
+      (* depending on PSK / PSK-DH (and our configuration) or not, we need to
+         - emit a PSK ext to client
+         - not emit a certificate + certificateverify *)
+      (* todo need the correct index into binders from above! *)
+      let psk = match resumed_session with None -> [] | Some _ -> [ `PreSharedKey 0 ] in
 
         (* if acceptable, do server hello *)
         let secret, public = Handshake_crypto13.dh_gen_key group in
@@ -171,7 +174,7 @@ let answer_client_hello state ch raw =
          | Some shared -> return shared) >>= fun es ->
         let hs_secret = Handshake_crypto13.derive early_secret es in
 
-        let sh, session = base_server_hello `DHE_RSA cipher [`KeyShare (group, public)] in
+        let sh, session = base_server_hello `DHE_RSA cipher (`KeyShare (group, public) :: psk) in
         let sh_raw = Writer.assemble_handshake (ServerHello sh) in
 
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
@@ -187,9 +190,10 @@ let answer_client_hello state ch raw =
 
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake ee ;
 
-        let cert_request, session = match state.config.Config.authenticator with
-          | None -> (None, session)
-          | Some _ ->
+        let cert_request, session = match state.config.Config.authenticator, resumed_session with
+          | None, _ -> (None, session)
+          | Some _, Some _ -> (None, session)
+          | Some _, None ->
             let certreq =
               let exts =
                 `SignatureAlgorithms state.config.Config.signature_algorithms ::
@@ -204,29 +208,39 @@ let answer_client_hello state ch raw =
             (Some (Writer.assemble_handshake certreq), { session with common_session_data13 })
         in
 
-        let crt, pr = match state.config.Config.own_certificates with
-          | `Single (chain, priv) -> chain, priv
-          | _ -> assert false
-        in
-        let certs = List.map X509.Encoding.cs_of_cert crt in
-        let cert = Certificate (Writer.assemble_certificates_1_3 Cstruct.empty certs) in
-        let cert_raw = Writer.assemble_handshake cert in
-
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
-
         let log =
           let req = match cert_request with None -> [] | Some xs -> [ xs ] in
-          Cstruct.concat (log :: ee_raw :: req @ [ cert_raw ])
+          Cstruct.concat (log :: ee_raw :: req)
         in
-        signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
-          log (Some sigalgs) state.config.Config.signature_algorithms pr >>= fun signed ->
-        let cv = CertificateVerify signed in
-        let cv_raw = Writer.assemble_handshake cv in
 
-        Tracing.cs ~tag:"cv" cv_raw ;
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
+        begin
+          if resumed_session = None then begin
+            let crt, pr = match state.config.Config.own_certificates with
+              | `Single (chain, priv) -> chain, priv
+              | _ -> assert false
+            in
+            let certs = List.map X509.Encoding.cs_of_cert crt in
+            let cert = Certificate (Writer.assemble_certificates_1_3 Cstruct.empty certs) in
+            let cert_raw = Writer.assemble_handshake cert in
 
-        let log = log <+> cv_raw in
+            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
+
+            let log = log <+> cert_raw in
+            signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
+              log (Some sigalgs) state.config.Config.signature_algorithms pr >|= fun signed ->
+            let cv = CertificateVerify signed in
+            let cv_raw = Writer.assemble_handshake cv in
+
+            Tracing.cs ~tag:"cv" cv_raw ;
+            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
+
+            let log = log <+> cv_raw in
+            let common_session_data13 = { session.common_session_data13 with own_private_key = Some pr ; own_certificate = crt } in
+            ([cert_raw; cv_raw], log, { session with common_session_data13 })
+          end else
+            Ok ([], log, session)
+        end >>= fun (c_out, log, session') ->
+
         let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
         Tracing.cs ~tag:"master-secret" master_secret.secret ;
 
@@ -253,14 +267,16 @@ let answer_client_hello state ch raw =
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
         let st_raw = Writer.assemble_handshake (SessionTicket st) in
 
+        (* TODO when resuming, verify old session (resumed_session) attributes
+           (hostname, client auth, ..) to match, and extend new session with
+           information.  also, remove pskid (to-be-used once!? - but not if
+           srp/exp, only for psk psks). *)
         let session =
           let common_session_data13 = {
-            session.common_session_data13 with
-            own_private_key = Some pr ;
-            own_certificate = crt ;
+            session'.common_session_data13 with
             master_secret = master_secret.secret
           } in
-          { session with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
+          { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
         let st, cert_req = match cert_request with
           | None -> AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
@@ -275,10 +291,8 @@ let answer_client_hello state ch raw =
          [ `Change_enc (Some server_ctx) ;
            `Change_dec (Some client_ctx) ;
            `Record (Packet.HANDSHAKE, ee_raw) ] @
-         cert_req
-         @ [ `Record (Packet.HANDSHAKE, cert_raw) ;
-             `Record (Packet.HANDSHAKE, cv_raw) ;
-             `Record (Packet.HANDSHAKE, fin_raw) ;
+         cert_req @ List.map (fun data -> `Record (Packet.HANDSHAKE, data)) c_out
+         @ [ `Record (Packet.HANDSHAKE, fin_raw) ;
              `Change_enc (Some server_app_ctx) ;
              `Record (Packet.HANDSHAKE, st_raw)
          ])
@@ -331,13 +345,15 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx s
     let resumption_secret = Handshake_crypto13.resumption sd.master_secret (log <+> raw) in
     let secret = Handshake_crypto13.res_secret (Ciphersuite.hash13 sd.ciphersuite13) resumption_secret st.nonce in
     let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret } in
-    add_to_cache st.ticket secret ;
     { sd with psk = Some psk ; resumption_secret }
   in
-  ({ state with
-     machina = Server13 Established13 ;
-     session = `TLS13 sd :: state.session },
-   [ `Change_dec (Some dec_ctx) ])
+  let state' =
+    { state with
+      machina = Server13 Established13 ;
+      session = `TLS13 sd :: state.session }
+  in
+  (match epoch_of_hs state' with None -> () | Some e -> add_to_cache st.ticket e) ;
+  (state', [ `Change_dec (Some dec_ctx) ])
 
 let handle_handshake cs hs buf =
   let open Reader in
