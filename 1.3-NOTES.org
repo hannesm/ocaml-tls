@@ -261,3 +261,9 @@ TODO we can precompute the sessionticket and send it after finished in the same 
 - resumption KDF, works with example traces now!
 - still missing: keyupdate, post-handshake auth, 0rtt
 - resumption (binder key) works now with gnutls and firefox, still need to fiddle it through
+* <2019-02-07 Thu>
+- hook up resumption (send PreSharedKey from server, avoid to send certificate, CV, CR if resumed session)
+- use correct early_secret
+- TODO still unclear what to do with a TLS session that a client opened, successfully completed, and immediately closed
+  - atm (since finished + alert may be in the same tcp frame) this session does not exist in tls_lwt etc.
+  - gnutls-cli when started with -r behaves in this way, and it is a good idea to be able to count + cache this session
