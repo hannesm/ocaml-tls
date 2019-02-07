@@ -109,7 +109,7 @@ let to_client_ext_type = function
   | `ExtendedMasterSecret  -> `ExtendedMasterSecret
   | `ALPN _                -> `ALPN
   | `KeyShare _            -> `KeyShare
-  | `EarlyDataIndication _ -> `EarlyDataIndication
+  | `EarlyDataIndication   -> `EarlyDataIndication
   | `PreSharedKeys _       -> `PreSharedKey
   | `Draft _               -> `Draft
   | `SupportedVersions _   -> `SupportedVersion

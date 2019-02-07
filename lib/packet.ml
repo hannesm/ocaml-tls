@@ -180,15 +180,6 @@ type max_fragment_length =
 
 (* TLS 1.3 *)
 [%%cenum
-type early_data_type =
-  | CLIENT_AUTHENTICATION [@id 1]
-  | EARLY_DATA [@id 2]
-  | CLIENT_AUTHENTICATION_AND_DATA [@id 3]
-  [@@uint8_t] [@@sexp]
-]
-
-
-[%%cenum
 type psk_key_exchange_mode =
   | PSK_KE [@id 0]
   | PSK_KE_DHE [@id 1]
