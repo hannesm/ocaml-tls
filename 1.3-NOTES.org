@@ -273,3 +273,10 @@ TODO we can precompute the sessionticket and send it after finished in the same 
   - uses first psk binder for early_data
   - if server accepts this (by sending early_data ext in server_hello), needs to derive key and switch only when receiving endofearlydata to hs_ctx
   - if server rejects, needs to trial decrypt with hs_ctx until it read finished (and throw away the pieces in between)
+* <2019-02-08 Fri>
+- more 0rtt design thoughts, and steps
+  a) extend sessionticket with earlydata
+  b) extend hello HS with end_of_early_data, also kdf / install decryptor
+   -> needs a new state in handshake13_server
+  c) extend engine to handle appdata earlier in case of 0rtt
+  d) trial decryption for client finished when not in 0rtt, but client sent 0rtt
