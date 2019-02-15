@@ -120,7 +120,7 @@ let min_rsa_key_size = 1024
 let dh_group = `FFDHE2048 (* ff-dhe draft 2048-bit group *)
 
 let supported_groups =
-  [ `FFDHE2048 ; `FFDHE3072 ; `FFDHE4096 ; `FFDHE6144 ; `FFDHE8192 ]
+  [ `FFDHE2048 ; `FFDHE3072 ; `FFDHE4096 ; `FFDHE6144 ; `FFDHE8192 ; `X25519 ]
 
 let default_config = {
   ciphers = Ciphers.default ;

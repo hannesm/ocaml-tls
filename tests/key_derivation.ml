@@ -610,6 +610,43 @@ let binder () =
     let finished = Cstruct.of_hex "3a dd 4f b2 d8 fd f8 22 a0 ca 3c f7 67 8e f5 e8 8d ae 99 01 41 c5 92 4d 57 bb 6f a3 1b 9e 5f 9d" in
     Alcotest.check cs __LOC__ finished (Handshake_crypto13.finished hash prk ch_res_prefix)
 
+let x25519 () =
+  let c_priv = Cstruct.of_hex {|
+49 af 42 ba 7f 79 94 85  2d 71 3e f2 78 4b cb ca
+a7 91 1d e2 6a dc 56 42  cb 63 45 40 e7 ea 50 05
+|}
+  and c_keyshare = Cstruct.of_hex {|
+99 38 1d e5 60 e4 bd 43  d2 3d 8e 43 5a 7d ba fe
+b3 c0 6e 51 c1 3c ae 4d  54 13 69 1e 52 9a af 2c
+|}
+  and s_priv = Cstruct.of_hex {|
+b1 58 0e ea df 6d d5 89  b8 ef 4f 2d 56 52 57 8c
+c8 10 e9 98 01 91 ec 8d  05 83 08 ce a2 16 a2 1e
+|}
+  and s_keyshare = Cstruct.of_hex {|
+c9 82 88 76 11 20 95 fe  66 76 2b db f7 c6 72 e1
+56 d6 cc 25 3b 83 3d f1  dd 69 b1 b0 4e 75 1f 0f
+|}
+  in
+  let check_pub pr pu =
+    match Hacl_x25519.of_cstruct pr with
+    | Ok priv ->
+      let pub = Hacl_x25519.public priv in
+      Alcotest.check cs __LOC__ pu (Hacl_x25519.to_cstruct pub)
+    | Error msg -> Alcotest.fail msg
+  in
+  let check_one p ks =
+    match Hacl_x25519.of_cstruct p, Hacl_x25519.of_cstruct ks with
+    | Ok priv, Ok pub ->
+      let shared = Hacl_x25519.key_exchange ~priv ~pub in
+      Alcotest.check cs __LOC__ ikm shared
+    | Error msg, _ | _, Error msg -> Alcotest.fail msg
+  in
+  check_one c_priv s_keyshare ;
+  check_one s_priv c_keyshare ;
+  check_pub c_priv c_keyshare ;
+  check_pub s_priv s_keyshare
+
 let tests = [
   "initial extract", `Quick, extract_secret_early ;
   "initial derive", `Quick, derive_hs_secret ;
@@ -631,7 +668,8 @@ let tests = [
   "wire signature", `Quick, wire_signature ;
   "res secret", `Quick, res_secret ;
   "early resumed", `Quick, early1 ;
-  "binder", `Quick, binder
+  "binder", `Quick, binder ;
+  "x25519", `Quick, x25519 ;
 ]
 
 let () =
