@@ -33,13 +33,7 @@ let dh_gen_key group =
     `Nocrypto sec, left_pad_dh nc_group shared
   | `Hacl `X25519 ->
     Logs.debug (fun m -> m "generating X25519 key!") ;
-    let bytes = Hacl_x25519.key_length_bytes in
-    let random =
-      let real = Nocrypto.Rng.generate (bytes / 2)
-      and empty = Cstruct.create (bytes / 2)
-      in
-      Cstruct.append real empty
-    in
+    let random = Nocrypto.Rng.generate Hacl_x25519.key_length_bytes in
     let secret =
       match Hacl_x25519.of_cstruct random with
       | Ok s -> s
