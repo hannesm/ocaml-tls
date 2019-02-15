@@ -19,9 +19,7 @@ let dh_shared group secret share =
     Logs.debug (fun m -> m "kex with X25519 key (share %a)!" Cstruct.hexdump_pp share) ;
     begin match Hacl_x25519.of_cstruct share with
       | Error _ -> None
-      | Ok public ->
-        let pub = Hacl_x25519.public public in
-        Some (Hacl_x25519.key_exchange ~pub ~priv)
+      | Ok public -> Some (Hacl_x25519.key_exchange ~pub:public ~priv)
     end
   | _ -> assert false
 
