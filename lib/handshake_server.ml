@@ -306,7 +306,7 @@ let answer_client_hello_common state reneg ch raw =
        ([ assemble_handshake certreq ], { session with common_session_data })
 
   and kex_dhe_rsa config (session : session_data) version sig_algs =
-    let group         = Config.dh_group in
+    let group         = match group_to_impl Config.dh_group with `Nocrypto nc_group -> nc_group in
     let (secret, msg) = Dh.gen_key group in
     let dh_state      = group, secret in
     let written =

@@ -22,11 +22,12 @@ let default_client_hello config =
     | TLS_1_3 ->
       let sig_alg = config.signature_algorithms (* TODO: filter deprecated ones *)
       and groups =
-         List.map Ciphersuite.group_to_any_group config.groups
+         List.map group_to_named_group config.groups
       and keyshares, secrets =
-        let secrets, shares = List.split (List.map Dh.gen_key config.groups) in
+        let groups = List.map (fun g -> match group_to_impl g with `Nocrypto g -> g) config.groups in
+        let secrets, shares = List.split (List.map Dh.gen_key groups) in
         (List.combine
-           (List.map Ciphersuite.group_to_any_group config.groups)
+           (List.map group_to_named_group config.groups)
            shares,
          List.combine config.groups secrets)
       in

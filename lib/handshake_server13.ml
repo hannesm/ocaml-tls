@@ -31,12 +31,12 @@ let answer_client_hello state ch raw =
 
   ( match map_find ~f:(function `SupportedGroups gs -> Some gs | _ -> None) ch.extensions with
     | None -> fail (`Fatal (`InvalidClientHello `NoSupportedGroupExtension))
-    | Some gs -> return (filter_map ~f:Ciphersuite.any_group_to_group gs )) >>= fun groups ->
+    | Some gs -> return (filter_map ~f:Core.named_group_to_group gs )) >>= fun groups ->
 
   ( match map_find ~f:(function `KeyShare ks -> Some ks | _ -> None) ch.extensions with
     | None -> fail (`Fatal (`InvalidClientHello `NoKeyShareExtension))
     | Some ks ->
-       let f (g, ks) = match Ciphersuite.any_group_to_group g with
+       let f (g, ks) = match Core.named_group_to_group g with
          | None -> None
          | Some g -> Some (g, ks)
        in
@@ -164,7 +164,7 @@ let answer_client_hello state ch raw =
       (* depending on PSK / PSK-DH (and our configuration) or not, we need to
          - emit a PSK ext to client
          - not emit a certificate + certificateverify *)
-      (* todo need the correct index into binders from above! *)
+      (* TODO need the correct index into binders from above! *)
       let psk = match resumed_session with None -> [] | Some _ -> [ `PreSharedKey 0 ] in
 
         (* if acceptable, do server hello *)
@@ -183,7 +183,7 @@ let answer_client_hello state ch raw =
         let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
 
         (* ONLY if client sent a `Hostname *)
-        let sg = `SupportedGroups (List.map Ciphersuite.group_to_any_group state.config.Config.groups) in
+        let sg = `SupportedGroups state.config.Config.groups in
         let ee = EncryptedExtensions [ ] (* sg ] (* `Hostname ] *) *) in
         (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
         let ee_raw = Writer.assemble_handshake ee in

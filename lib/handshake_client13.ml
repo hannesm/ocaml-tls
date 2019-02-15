@@ -92,8 +92,8 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
   | _ -> *) fail (`Fatal `InvalidServerHello)
 
 (* called from handshake_client.ml *)
-let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
-  guard (TLS_1_3 = hrr.retry_version) (`Fatal `InvalidMessage) >>= fun () ->
+let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log = assert false
+(*  guard (TLS_1_3 = hrr.retry_version) (`Fatal `InvalidMessage) >>= fun () ->
   let sg = Ciphersuite.group_to_any_group hrr.selected_group in
   (match map_find ~f:(function `SupportedGroups gs -> Some gs | _ -> None) ch.extensions with
     | None -> fail (`Fatal `InvalidMessage)
@@ -112,7 +112,7 @@ let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
 
   Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ClientHello new_ch);
 
-  return ({ state with machina = Client13 st }, [`Record (Packet.HANDSHAKE, new_ch_raw)])
+    return ({ state with machina = Client13 st }, [`Record (Packet.HANDSHAKE, new_ch_raw)]) *)
 
 let answer_encrypted_extensions state (session : session_data13) exts es ss ee raw log =
 (*  let st =

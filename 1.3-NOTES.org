@@ -280,3 +280,30 @@ TODO we can precompute the sessionticket and send it after finished in the same 
    -> needs a new state in handshake13_server
   c) extend engine to handle appdata earlier in case of 0rtt
   d) trial decryption for client finished when not in 0rtt, but client sent 0rtt
+* <2019-02-14 Thu>
+resumption: should each PSK only be used once? should a resumption HS contain a sessionticket?
+what are the security-related issues with 0rtt?
+- not forward secure (only using client random)
+- can be replayed
+  - a _client_ should not sent identifiable data (cookies!?)
+  - replay attacks possible (0rtt contains "delete", attacker can replay "delete")
+  --> application needs to be able to discover whether received data was 0rtt or not
+  --> either via epoch? or via another mechanism
+  --> esp. if 0rtt over a resumed, client authenticated session!?
+- mitigation:
+  - use-only-once ticket (as database key)
+  - record "unique" id (don't include everything..) of client hellos (avoiding replay) -- until max_lifetime exceeded
+- related: self-contained(&encrypted) session tickets vs those with database key
+  - configuration option?
+
+client side
+- needs "configuration option" whether 0rtt is desired
+  - this may be part of val client : Config.client -> (state * Cstruct.t)
+  - as a ?0rtt:Cstruct.t
+  --> information whether 0rtt was successfully sent must be preserved
+   --> i.e. if server denies, the client may need to retransmit the data (in one form or another, see alpn)
+* <2019-02-15 Fri>
+- read "[TLS] Server validation of a second ClientHello" thread (HRR, which exts to use (first or second CH), what to verify?)
+ -> our server doesn't check CH1 and CH2 (apart from cipher ++ group (used by log))
+ -> our server uses CH2 exts
+ --> we _could_ put more stuff into the cookie (to preserve stateless HRR ++ checking) maybe in the future?

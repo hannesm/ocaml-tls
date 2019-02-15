@@ -136,7 +136,7 @@ let assemble_named_group g =
   buf
 
 let assemble_group g =
-  assemble_named_group (Ciphersuite.group_to_any_group g)
+  assemble_named_group (group_to_named_group g)
 
 let assemble_supported_groups groups =
   assemble_list Two assemble_named_group groups
@@ -255,7 +255,7 @@ let assemble_server_extension e =
     | `ALPN protocol ->
       (assemble_alpn_protocols [protocol], APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
     | `KeyShare (g, ks) ->
-      let ng = Ciphersuite.group_to_any_group g in
+      let ng = group_to_named_group g in
       (assemble_keyshare_entry (ng, ks), KEY_SHARE)
     | `PreSharedKey id ->
       let data = create 2 in
@@ -271,7 +271,7 @@ let assemble_encrypted_extension e =
     | `ALPN protocol ->
       (assemble_alpn_protocols [protocol], APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
     | `SupportedGroups groups ->
-      (assemble_supported_groups groups, SUPPORTED_GROUPS)
+      (assemble_supported_groups (List.map group_to_named_group groups), SUPPORTED_GROUPS)
     | _ -> invalid_arg "unknown extension"
 
 let assemble_retry_extension e =
