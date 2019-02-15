@@ -40,6 +40,10 @@ depends: [
   "cstruct-unix" {with-test & >= "3.0.0"}
   "ounit" {with-test}
   "alcotest" {with-test}
+  "hacl_x25519"
+]
+pin_depends: [
+  [ "hacl_x25519.dev" "git+https://github.com/mirage/ocaml-hacl-ecc.git" ]
 ]
 depopts: [
   "lwt"

@@ -88,6 +88,7 @@ let answer_client_hello state ch raw =
   | _, None -> fail (`Error (`NoConfiguredCiphersuite ciphers))
   | Some group, Some cipher ->
     Log.info (fun m -> m "cipher %a" Sexplib.Sexp.pp_hum (Ciphersuite.sexp_of_ciphersuite13 cipher)) ;
+    Log.info (fun m -> m "group %a" Sexplib.Sexp.pp_hum (Core.sexp_of_group group)) ;
 
     (* TODO handle PSK here (check PSK_KEY_EXCHANGE_MODES as well), there's no
        need for keyshare in a PSK-only handshake *)

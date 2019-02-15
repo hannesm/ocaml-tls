@@ -9,18 +9,45 @@ let left_pad_dh group msg =
 
 let dh_shared group secret share =
   (* RFC 8556, Section 7.4.1 - we need zero-padding on the left *)
-  match Core.group_to_impl group with
-  | `Nocrypto nc_group ->
-    match Nocrypto.Dh.shared nc_group secret share with
-    | None -> None
-    | Some shared -> Some (left_pad_dh nc_group shared)
+  match Core.group_to_impl group, secret with
+  | `Nocrypto nc_group, `Nocrypto secret ->
+    begin match Nocrypto.Dh.shared nc_group secret share with
+      | None -> None
+      | Some shared -> Some (left_pad_dh nc_group shared)
+    end
+  | `Hacl `X25519, `Hacl priv ->
+    Logs.debug (fun m -> m "kex with X25519 key (share %a)!" Cstruct.hexdump_pp share) ;
+    begin match Hacl_x25519.of_cstruct share with
+      | Error _ -> None
+      | Ok public ->
+        let pub = Hacl_x25519.public public in
+        Some (Hacl_x25519.key_exchange ~pub ~priv)
+    end
+  | _ -> assert false
 
 let dh_gen_key group =
   (* RFC 8556, Section 4.2.8.1 - we need zero-padding on the left *)
   match Core.group_to_impl group with
   | `Nocrypto nc_group ->
     let sec, shared = Nocrypto.Dh.gen_key nc_group in
-    sec, left_pad_dh nc_group shared
+    `Nocrypto sec, left_pad_dh nc_group shared
+  | `Hacl `X25519 ->
+    Logs.debug (fun m -> m "generating X25519 key!") ;
+    let bytes = Hacl_x25519.key_length_bytes in
+    let random =
+      let real = Nocrypto.Rng.generate (bytes / 2)
+      and empty = Cstruct.create (bytes / 2)
+      in
+      Cstruct.append real empty
+    in
+    let secret =
+      match Hacl_x25519.of_cstruct random with
+      | Ok s -> s
+      | Error msg -> invalid_arg msg
+    in
+    let public = Hacl_x25519.(to_cstruct (public secret)) in
+    Logs.debug (fun m -> m "public is %a" Cstruct.hexdump_pp public) ;
+    (`Hacl secret, public)
 
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
 
