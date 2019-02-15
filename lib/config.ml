@@ -129,11 +129,10 @@ let min_dh_size = 1024
 
 let min_rsa_key_size = 1024
 
-let dh_group = Dh.Group.ffdhe2048 (* ff-dhe draft 2048-bit group *)
+let dh_group = `FFDHE2048 (* ff-dhe draft 2048-bit group *)
 
 let supported_groups =
-  let open Dh.Group in
-  [ ffdhe2048 ; ffdhe3072 ; ffdhe4096 ; ffdhe6144 ; ffdhe8192 ]
+  [ `FFDHE2048 ; `FFDHE3072 ; `FFDHE4096 ; `FFDHE6144 ; `FFDHE8192 ]
 
 let default_config = {
   ciphers = Ciphers.default ;

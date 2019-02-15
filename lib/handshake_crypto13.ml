@@ -9,14 +9,18 @@ let left_pad_dh group msg =
 
 let dh_shared group secret share =
   (* RFC 8556, Section 7.4.1 - we need zero-padding on the left *)
-  match Nocrypto.Dh.shared group secret share with
-  | None -> None
-  | Some shared -> Some (left_pad_dh group shared)
+  match Core.group_to_impl group with
+  | `Nocrypto nc_group ->
+    match Nocrypto.Dh.shared nc_group secret share with
+    | None -> None
+    | Some shared -> Some (left_pad_dh nc_group shared)
 
 let dh_gen_key group =
   (* RFC 8556, Section 4.2.8.1 - we need zero-padding on the left *)
-  let sec, shared = Nocrypto.Dh.gen_key group in
-  sec, left_pad_dh group shared
+  match Core.group_to_impl group with
+  | `Nocrypto nc_group ->
+    let sec, shared = Nocrypto.Dh.gen_key nc_group in
+    sec, left_pad_dh nc_group shared
 
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
 

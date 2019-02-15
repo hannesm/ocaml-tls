@@ -215,7 +215,7 @@ let parse_named_group buf =
 
 let parse_group buf =
   match parse_named_group buf with
-  | Some x, buf -> (Ciphersuite.any_group_to_group x, buf)
+  | Some x, buf -> (named_group_to_group x, buf)
   | None, buf -> (None, buf)
 
 let parse_supported_groups buf =
@@ -432,7 +432,7 @@ let parse_server_extension raw =
         | _, xs when len xs <> 0 -> raise_trailing_bytes "server keyshare"
         | None, _ -> raise_unknown "keyshare entry"
         | Some (g, ks), _ ->
-          match Ciphersuite.any_group_to_group g with
+          match named_group_to_group g with
           | Some g -> `KeyShare (g, ks)
           | None -> raise_unknown "keyshare entry")
     | Some PRE_SHARED_KEY ->
@@ -469,7 +469,8 @@ let parse_encrypted_extension raw =
         | _      -> raise_unknown "bad server name indication (multiple names)")
     | Some SUPPORTED_GROUPS ->
        let gs = parse_supported_groups buf in
-       `SupportedGroups gs
+       let supported = Utils.filter_map ~f:named_group_to_group gs in
+       `SupportedGroups supported
     | Some APPLICATION_LAYER_PROTOCOL_NEGOTIATION ->
       (match parse_alpn_protocols buf with
        | [protocol] -> `ALPN protocol

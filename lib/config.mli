@@ -69,7 +69,7 @@ val client :
   ?certificates : own_cert ->
   ?cached_session : epoch_data ->
   ?alpn_protocols : string list ->
-  ?groups : Dh.group list ->
+  ?groups : group list ->
   unit -> client
 
 (** [server ?ciphers ?version ?hashes ?reneg ?certificates ?acceptable_cas ?authenticator ?alpn_protocols]
@@ -87,7 +87,7 @@ val server :
   ?session_cache  : session_cache ->
   ?psk_cache : psk_cache ->
   ?alpn_protocols : string list ->
-  ?groups : Dh.group list ->
+  ?groups : group list ->
   unit -> server
 
 (** [peer client name] is [client] with [name] as [peer_name] *)
@@ -117,9 +117,9 @@ val min_dh_size : int
 ffdhe2048 group from
 {{:https://www.ietf.org/id/draft-ietf-tls-negotiated-ff-dhe-10.txt}Negotiated
 Finite Field Diffie-Hellman Ephemeral Parameters for TLS}) *)
-val dh_group : Dh.group
+val dh_group : group
 
-val supported_groups : Dh.group list
+val supported_groups : group list
 
 (** [min_rsa_key_size] is minimal RSA modulus key size in bits (currently 1024) *)
 val min_rsa_key_size : int

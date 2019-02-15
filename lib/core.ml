@@ -100,7 +100,38 @@ let binders_len psks =
   in
   2 (* binder len *) + List.fold_left (+) 0 (List.map binder_len psks)
 
-type group = Nocrypto.Dh.group [@@deriving sexp] (* for now *)
+type group = [
+  | `FFDHE2048
+  | `FFDHE3072
+  | `FFDHE4096
+  | `FFDHE6144
+  | `FFDHE8192
+  (*  | `X25519 *)
+] [@@deriving sexp]
+
+let named_group_to_group = function
+  | FFDHE2048 -> Some `FFDHE2048
+  | FFDHE3072 -> Some `FFDHE3072
+  | FFDHE4096 -> Some `FFDHE4096
+  | FFDHE6144 -> Some `FFDHE6144
+  | FFDHE8192 -> Some `FFDHE8192
+  (*  | X25519 -> Some `X25519 *)
+  | _ -> None
+
+let group_to_named_group = function
+  | `FFDHE2048 -> FFDHE2048
+  | `FFDHE3072 -> FFDHE3072
+  | `FFDHE4096 -> FFDHE4096
+  | `FFDHE6144 -> FFDHE6144
+  | `FFDHE8192 -> FFDHE8192
+(*  | `X25519 -> X25519 *)
+
+let group_to_impl = function
+  | `FFDHE2048 -> `Nocrypto Nocrypto.Dh.Group.ffdhe2048
+  | `FFDHE3072 -> `Nocrypto Nocrypto.Dh.Group.ffdhe3072
+  | `FFDHE4096 -> `Nocrypto Nocrypto.Dh.Group.ffdhe4096
+  | `FFDHE6144 -> `Nocrypto Nocrypto.Dh.Group.ffdhe6144
+  | `FFDHE8192 -> `Nocrypto Nocrypto.Dh.Group.ffdhe8192
 
 type signature_algorithm = [
   | `RSA_PKCS1_MD5
@@ -148,14 +179,14 @@ let signature_scheme_of_signature_algorithm = function
 type client_extension = [
   | `Hostname of string
   | `MaxFragmentLength of max_fragment_length
-  | `SupportedGroups of named_group list
+  | `SupportedGroups of Packet.named_group list
   | `ECPointFormats of ec_point_format list
   | `SecureRenegotiation of Cstruct_sexp.t
   | `Padding of int
   | `SignatureAlgorithms of signature_algorithm list
   | `ExtendedMasterSecret
   | `ALPN of string list
-  | `KeyShare of (named_group * Cstruct_sexp.t) list
+  | `KeyShare of (Packet.named_group * Cstruct_sexp.t) list
   | `EarlyDataIndication
   | `PreSharedKeys of psk_identity list
   | `Draft of int
@@ -188,7 +219,7 @@ type server_extension = [
 type encrypted_extension = [
   | `Hostname
   | `MaxFragmentLength of max_fragment_length
-  | `SupportedGroups of named_group list
+  | `SupportedGroups of group list
   | `ALPN of string
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
