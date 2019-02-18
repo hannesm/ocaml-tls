@@ -16,6 +16,6 @@ let sexpf ~tag ~f x = sexp ~tag @@ lazy (f x)
 
 let sexpfs ~tag ~f xs = List.iter (sexpf ~tag ~f) xs
 
-let cs ~tag = sexpf ~tag ~f:(fun cs -> Cstruct.hexdump cs ; Cstruct.sexp_of_t cs)
+let cs ~tag = sexpf ~tag ~f:(fun cs -> Cstruct.hexdump cs ; Sexplib.Sexp.Atom "")
 
 let css ~tag css = List.iter (cs ~tag) css

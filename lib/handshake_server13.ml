@@ -173,7 +173,9 @@ let answer_client_hello state ch raw =
         (match Handshake_crypto13.dh_shared group secret keyshare with
          | None -> fail (`Fatal `InvalidDH)
          | Some shared -> return shared) >>= fun es ->
+        Tracing.cs ~tag:"dh secret" es ;
         let hs_secret = Handshake_crypto13.derive early_secret es in
+        Tracing.cs ~tag:"hs secret" hs_secret.secret ;
 
         let sh, session = base_server_hello `DHE_RSA cipher (`KeyShare (group, public) :: psk) in
         let sh_raw = Writer.assemble_handshake (ServerHello sh) in
