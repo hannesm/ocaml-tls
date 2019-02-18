@@ -16,7 +16,9 @@ let dh_shared group secret share =
       | Some shared -> Some (left_pad_dh nc_group shared)
     end
   | `Hacl `X25519, `Hacl priv ->
-    Logs.debug (fun m -> m "kex with X25519 key (share %a)!" Cstruct.hexdump_pp share) ;
+    Logs.debug (fun m -> m "kex with X25519 key secret %a (share %a)!"
+                   Cstruct.hexdump_pp (Hacl_x25519.to_cstruct priv)
+                   Cstruct.hexdump_pp share) ;
     begin match Hacl_x25519.of_cstruct share with
       | Error _ -> None
       | Ok public -> Some (Hacl_x25519.key_exchange ~pub:public ~priv)
@@ -32,6 +34,7 @@ let dh_gen_key group =
   | `Hacl `X25519 ->
     Logs.debug (fun m -> m "generating X25519 key!") ;
     let random = Nocrypto.Rng.generate Hacl_x25519.key_length_bytes in
+    Logs.debug (fun m -> m "secrete %a" Cstruct.hexdump_pp random) ;
     let secret =
       match Hacl_x25519.of_cstruct random with
       | Ok s -> s
@@ -54,6 +57,7 @@ let expand_label hash prk label hashvalue length =
     Cstruct.set_uint8 hashlen 0 (Cstruct.len hashvalue) ;
     len <+> llen <+> label <+> hashlen <+> hashvalue
   in
+  Logs.info (fun m -> m "label info %a" Cstruct.hexdump_pp info) ;
   let key = Hkdf.expand ~hash ~prk ~info length in
   trace label key ;
   key
@@ -81,17 +85,22 @@ let hkdflabel label context length =
     Cstruct.set_uint8 l 0 (Cstruct.len context) ;
     l <+> context
   in
-  len <+> label <+> context
+  let lbl = len <+> label <+> context in
+  trace "hkdflabel" lbl ;
+  lbl
+
 
 let derive_secret_no_hash hash prk ?(ctx = Cstruct.empty) label =
   let length = Nocrypto.Hash.digest_size hash in
   let info = hkdflabel label ctx length in
+  trace "prk" prk ;
   let key = Hkdf.expand ~hash ~prk ~info length in
   trace ("derive_secret: " ^ label) key ;
   key
 
 let derive_secret t label log =
   let ctx = Nocrypto.Hash.digest t.State.hash log in
+  trace "derive secret ctx" ctx ;
   derive_secret_no_hash t.State.hash t.State.secret ~ctx label
 
 let empty cipher = {
@@ -107,6 +116,8 @@ let derive t secret_ikm =
     else
       derive_secret t "derived" Cstruct.empty
   in
+  trace "derive: secret_ikm" secret_ikm ;
+  trace "derive: salt" salt ;
   let secret = Hkdf.extract ~hash:t.State.hash ~salt secret_ikm in
   trace "derive (extracted secret)" secret ;
   { t with State.secret }
@@ -127,6 +138,8 @@ let ctx t label secret =
   { State.sequence = 0L ; cipher_st = Crypto.Ciphers.get_aead ~secret ~nonce pp }
 
 let hs_ctx t log =
+  Tracing.cs ~tag:"hs ctx with sec" t.State.secret ;
+  Tracing.cs ~tag:"log is" log ;
   let server_handshake_traffic_secret = derive_secret t "s hs traffic" log
   and client_handshake_traffic_secret = derive_secret t "c hs traffic" log
   in
