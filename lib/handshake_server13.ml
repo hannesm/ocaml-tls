@@ -79,30 +79,33 @@ let answer_client_hello state ch raw =
      error conditions:
       - no KS found that meets our demands -> HRR
       - TODO: what if KS found, but not part of supportedgroup?
-      - what is PSK + KS + SG found, but PSK does not match --> (EC)DHE *)
+      - what is PSK + KS + SG found, but PSK does not match --> (EC)DHE
+      ~> TODO: PSK (no DHE), fallback to 1.2 if no group/cipher is suitable for us *)
+  let keyshare_groups = List.map fst keyshares in
   match
-    first_match groups state.config.Config.groups,
+    first_match keyshare_groups state.config.Config.groups,
     first_match ciphers state.config.Config.ciphers13
   with
-  | None, _ -> fail (`Fatal `NoSupportedGroup)
   | _, None -> fail (`Error (`NoConfiguredCiphersuite ciphers))
+  | None, Some cipher ->
+    (* no keyshare, looks whether there's a supported group ++ send back HRR *)
+    begin match first_match groups state.config.Config.groups with
+      | None -> fail (`Fatal `NoSupportedGroup)
+      | Some group ->
+        let cookie = Nocrypto.Hash.digest (Ciphersuite.hash13 cipher) raw in
+        let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie cookie ] } in
+        let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
+        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
+        return (state, [ `Record (Packet.HANDSHAKE, hrr_raw) ])
+    end
   | Some group, Some cipher ->
     Log.info (fun m -> m "cipher %a" Sexplib.Sexp.pp_hum (Ciphersuite.sexp_of_ciphersuite13 cipher)) ;
     Log.info (fun m -> m "group %a" Sexplib.Sexp.pp_hum (Core.sexp_of_group group)) ;
 
-    (* TODO handle PSK here (check PSK_KEY_EXCHANGE_MODES as well), there's no
-       need for keyshare in a PSK-only handshake *)
-    (* DHE_PSK OTOH requires a good group *)
-
-    match keyshare group with
-    | None ->
-      let cookie = Nocrypto.Hash.digest (Ciphersuite.hash13 cipher) raw in
-      let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie cookie ] } in
-      let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
-      Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
-      return (state, [ `Record (Packet.HANDSHAKE, hrr_raw) ])
-    | Some keyshare ->
-      (* XXX: check sig_algs (better cert_sig_algs) whether we can present a
+    match List.mem group groups, keyshare group with
+    | false, _ | _, None -> fail (`Fatal `NoSupportedGroup) (* TODO: better error type? *)
+    | _, Some keyshare ->
+      (* TODO: check sig_algs (better cert_sig_algs) whether we can present a
          suitable certificate chain and signature *)
 
       (* DHE - full handshake *)
