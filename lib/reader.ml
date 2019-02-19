@@ -440,11 +440,6 @@ let parse_server_extension raw =
         raise_trailing_bytes "server pre_shared_key"
       else
         `PreSharedKey (BE.get_uint16 buf 0)
-    | Some EARLY_DATA ->
-       if len buf <> 0 then
-         raise_trailing_bytes "server early_data"
-       else
-         `EarlyDataIndication
     | Some SUPPORTED_GROUPS | Some SIGNATURE_ALGORITHMS | Some PADDING ->
        raise_unknown "invalid extension in server hello!"
     | Some APPLICATION_LAYER_PROTOCOL_NEGOTIATION ->
@@ -475,7 +470,12 @@ let parse_encrypted_extension raw =
       (match parse_alpn_protocols buf with
        | [protocol] -> `ALPN protocol
        | _ -> raise_unknown "bad ALPN (none or multiple names)")
-    | Some x -> raise_unknown ("bad encrypted extension " ^ (extension_type_to_string x))
+    | Some EARLY_DATA ->
+       if len buf <> 0 then
+         raise_trailing_bytes "server early_data"
+       else
+         `EarlyDataIndication
+    | Some x -> raise_unknown ("bad encrypted extension " ^ (extension_type_to_string x)) (* TODO maybe unknown instead? *)
     | None -> `UnknownExtension (etype, buf)
   in
   (Some data, shift raw (4 + length))
@@ -725,6 +725,19 @@ let parse_digitally_signed_1_2 = catch @@ fun buf ->
     (sig_alg, signature)
   | None -> raise_unknown "hash or signature algorithm"
 
+let parse_session_ticket_extension raw =
+  let etype, length, buf = parse_ext raw in
+  let data = match int_to_extension_type etype with
+    | Some EARLY_DATA ->
+      if len buf <> 4 then
+        raise_unknown "bad early_data extension in session ticket"
+      else
+        let size = BE.get_uint32 buf 0 in
+        `EarlyDataIndication size
+    | _ -> `UnknownExtension (etype, buf)
+  in
+  (Some data, shift raw (4 + length))
+
 let parse_session_ticket buf =
   let lifetime = BE.get_uint32 buf 0
   and age_add = BE.get_uint32 buf 4
@@ -732,13 +745,9 @@ let parse_session_ticket buf =
   in
   let nonce = sub buf 9 nonce_len in
   let ticket_len = BE.get_uint16 buf (9 + nonce_len) in
-  let ticket = sub buf 11 ticket_len in
-  let ext_len = BE.get_uint16 buf (11 + ticket_len) in
-  (* TODO parse extensions! *)
-  if len buf <> 13 + ticket_len + ext_len then
-    raise_trailing_bytes "1.3 session ticket"
-  else
-    { lifetime ; age_add ; nonce ; ticket }
+  let ticket, exts_buf = split (shift buf 11) ticket_len in
+  let extensions = parse_extensions parse_session_ticket_extension exts_buf in
+  { lifetime ; age_add ; nonce ; ticket ; extensions }
 
 let parse_client_key_exchange buf =
   let length = BE.get_uint16 buf 0 in
@@ -788,4 +797,6 @@ let parse_handshake = catch @@ fun buf ->
     | Some SESSION_TICKET ->
       let ticket = parse_session_ticket payload in
       SessionTicket ticket
+    | Some END_OF_EARLY_DATA ->
+      EndOfEarlyData
     | None  -> raise_unknown @@ "handshake type" ^ string_of_int typ

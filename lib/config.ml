@@ -38,6 +38,7 @@ type config = {
   cached_session : epoch_data option ;
   alpn_protocols : string list ;
   groups : group list ;
+  zero_rtt : int32 ;
 } [@@deriving sexp]
 
 module Ciphers = struct
@@ -137,6 +138,7 @@ let default_config = {
   alpn_protocols = [] ;
   groups = supported_groups ;
   psk_cache = (fun _ -> None) ;
+  zero_rtt = 0l ;
 }
 
 let invalid msg = invalid_arg ("Tls.Config: invalid configuration: " ^ msg)
@@ -288,7 +290,7 @@ let client
   ( validate_common config ; validate_client config ; config )
 
 let server
-  ?ciphers ?ciphers13 ?version ?signature_algorithms ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups () =
+  ?ciphers ?ciphers13 ?version ?signature_algorithms ?reneg ?certificates ?acceptable_cas ?authenticator ?session_cache ?psk_cache ?alpn_protocols ?groups ?zero_rtt () =
   let config =
     { default_config with
         ciphers = ciphers <?> default_config.ciphers ;
@@ -303,5 +305,6 @@ let server
         alpn_protocols = alpn_protocols <?> default_config.alpn_protocols ;
         psk_cache = psk_cache <?> default_config.psk_cache ;
         groups = groups <?> default_config.groups ;
+        zero_rtt = zero_rtt <?> default_config.zero_rtt ;
     } in
   ( validate_common config ; validate_server config ; config )

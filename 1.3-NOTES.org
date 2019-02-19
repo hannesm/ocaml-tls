@@ -303,7 +303,34 @@ client side
   --> information whether 0rtt was successfully sent must be preserved
    --> i.e. if server denies, the client may need to retransmit the data (in one form or another, see alpn)
 * <2019-02-15 Fri>
-- read "[TLS] Server validation of a second ClientHello" thread (HRR, which exts to use (first or second CH), what to verify?)
+- read (IETF tls WG) "[TLS] Server validation of a second ClientHello" thread (HRR, which exts to use (first or second CH), what to verify?)
  -> our server doesn't check CH1 and CH2 (apart from cipher ++ group (used by log))
  -> our server uses CH2 exts
  --> we _could_ put more stuff into the cookie (to preserve stateless HRR ++ checking) maybe in the future?
+* <2019-02-18 Mon>
+- ticket and lifetime
+  - server selects a lifetime (in seconds, uint32)
+  - server selects a ticket_age_add (uint32, obfuscated)
+  - client sends obfuscated_ticket_age: in ms, delta between ticket arrival and use
+ -> ok, [stateless session ticket story] server can put server time into ticket (encrypted)
+  -> then computes adjusted_creation_time = server_time + RTT
+  -> client reports adjusted_creation_time (encrypted), and ticket_age
+  -> server can check their _current_ wall clock time against ticket_age + adjusted_creation_time for checking
+-> server needs time getting passed in
+ -> what about different session ticket approaches? atm, it's recorded in epoch and can be retrieved
+  -> alternatives include: passing in a polyvar to config (plus specify size of cache (full/CH cache))
+ -> pick one, expose it properly, abstract if there's demand
+* <2019-02-19 Tue>
+reading IETF TLS WG threads on 0RTT, specifically:
+- [TLS] [PSA] 0-RTT tolerance is mandatory
+- [TLS] 0-RTT encrypted data limits
+- [TLS] Closing on 0-RTT
+- also RFC sec 4.2.10 and D.3
+
+resulting in:
+- if server is configured for 0rtt, and client sends 0rtt
+(a) key material matches and 0rtt is accepted
+(b) does not match and trial decryption is done
+both only ever up to configured max_size_limit! (not the one from the session ticket)
+
+- if server is not configured for 0rtt, client sends it ~> failure (violating 4.2.10)

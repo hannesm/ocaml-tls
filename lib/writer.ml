@@ -261,7 +261,6 @@ let assemble_server_extension e =
       let data = create 2 in
       BE.set_uint16 data 0 id ;
       (data, PRE_SHARED_KEY)
-    | `EarlyDataIndication -> (create 0, EARLY_DATA)
     | `SelectedVersion v -> (assemble_protocol_version v, SUPPORTED_VERSIONS)
     | x -> assemble_extension x
 
@@ -272,6 +271,7 @@ let assemble_encrypted_extension e =
       (assemble_alpn_protocols [protocol], APPLICATION_LAYER_PROTOCOL_NEGOTIATION)
     | `SupportedGroups groups ->
       (assemble_supported_groups (List.map group_to_named_group groups), SUPPORTED_GROUPS)
+    | `EarlyDataIndication -> (create 0, EARLY_DATA)
     | _ -> invalid_arg "unknown extension"
 
 let assemble_retry_extension e =
@@ -383,6 +383,14 @@ let assemble_digitally_signed_1_2 sigalg signature =
   (assemble_hash_signature sigalg) <+>
     (assemble_digitally_signed signature)
 
+let assemble_session_ticket_extension e =
+  assemble_ext @@ match e with
+  | `EarlyDataIndication max ->
+    let buf = create 4 in
+    BE.set_uint32 buf 0 max ;
+    (buf, EARLY_DATA)
+  | _ -> invalid_arg "unknown extension"
+
 let assemble_session_ticket se =
   let buf = create 9 in
   BE.set_uint32 buf 0 se.lifetime ;
@@ -390,8 +398,8 @@ let assemble_session_ticket se =
   set_uint8 buf 8 (len se.nonce) ;
   let ticketlen = create 2 in
   BE.set_uint16 ticketlen 0 (len se.ticket) ;
-  let ext_len = create 2 in
-  buf <+> se.nonce <+> ticketlen <+> se.ticket <+> ext_len (* todo: extensions! *)
+  let exts = assemble_extensions assemble_session_ticket_extension se.extensions in
+  buf <+> se.nonce <+> ticketlen <+> se.ticket <+> exts
 
 let assemble_client_key_exchange kex =
   let len = len kex in
