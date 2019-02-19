@@ -67,6 +67,8 @@ let alert_of_fatal = function
   | `NoApplicationProtocol -> Packet.NO_APPLICATION_PROTOCOL
   | `HelloRetryRequest -> Packet.HANDSHAKE_FAILURE (* TODO check *)
   | `InvalidMessage -> Packet.HANDSHAKE_FAILURE
+  | `NoPskKexExtension -> Packet.MISSING_EXTENSION
+  | `NoPskDheMode -> Packet.HANDSHAKE_FAILURE
 
 let alert_of_failure = function
   | `Error x -> alert_of_error x
@@ -189,7 +191,7 @@ let verify_mac sequence mac mac_k ty ver decrypted =
   body
 
 
-let decrypt (version : tls_version) (st : crypto_state) ty buf =
+let decrypt ?(trial = false) (version : tls_version) (st : crypto_state) ty buf =
 
   let compute_mac seq mac mac_k buf = verify_mac seq mac mac_k ty version buf in
   (* hmac is computed in this failure branch from the encrypted data, in the
@@ -271,7 +273,11 @@ let decrypt (version : tls_version) (st : crypto_state) ty buf =
           in
           let adata = Crypto.adata_1_3 (Cstruct.len buf) in
           (match Crypto.decrypt_aead ~adata ~cipher:c.cipher ~key:c.cipher_secret ~nonce buf with
-           | None -> fail (`Fatal `MACMismatch)
+           | None ->
+             if trial then
+               Ok (Some ctx, Cstruct.empty, Packet.APPLICATION_DATA)
+             else
+               fail (`Fatal `MACMismatch)
            | Some x ->
              unpad x >|= fun (data, ty) ->
              (Some { ctx with sequence = Int64.succ ctx.sequence }, data, ty))
@@ -354,6 +360,11 @@ let hs_can_handle_appdata s =
   | Client Established | Client AwaitServerHelloRenegotiate _ | Client13 Established13 -> true
   | _ -> false
 
+let early_data s =
+  match s.machina with
+  | Server13 (TrialUntilFinished13 _) | Server13 (AwaitEndOfEarlyData13 _) -> true
+  | _ -> false
+
 let rec separate_handshakes buf =
   match Reader.parse_handshake_frame buf with
   | None, rest   -> return ([], rest)
@@ -390,7 +401,7 @@ let handle_packet hs buf = function
         (hs, out, None, err)
 
   | Packet.APPLICATION_DATA ->
-    if hs_can_handle_appdata hs then
+    if hs_can_handle_appdata hs || early_data hs then
       (Tracing.cs ~tag:"application-data-in" buf;
        return (hs, [], non_empty buf, `No_err))
     else
@@ -426,7 +437,9 @@ let handle_raw_record state (hdr, buf as record : raw_record) =
     | _                          , TLS_1_3 -> guard (hdr.version = Supported TLS_1_2) (`Fatal (`BadRecordVersion hdr.version))
     | _                          , v       -> guard (version_eq hdr.version v) (`Fatal (`BadRecordVersion hdr.version)) )
   >>= fun () ->
-  decrypt version state.decryptor hdr.content_type buf
+  (* TODO: embed byte count *)
+  let trial = match hs.machina with Server13 (TrialUntilFinished13 _) -> true | _ -> false in
+  decrypt ~trial version state.decryptor hdr.content_type buf
   >>= fun (dec_st, dec, ty) ->
   Tracing.sexpf ~tag:"frame-in" ~f:sexp_of_record (ty, dec) ;
   handle_packet state.handshake dec ty

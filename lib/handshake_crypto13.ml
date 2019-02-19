@@ -137,6 +137,10 @@ let ctx t label secret =
   let pp = Ciphersuite.privprot13 t.State.cipher in
   { State.sequence = 0L ; cipher_st = Crypto.Ciphers.get_aead ~secret ~nonce pp }
 
+let early_traffic t log =
+  let secret = derive_secret t "c e traffic" log in
+  (secret, ctx t "client early traffic" secret)
+
 let hs_ctx t log =
   Tracing.cs ~tag:"hs ctx with sec" t.State.secret ;
   Tracing.cs ~tag:"log is" log ;

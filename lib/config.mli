@@ -36,6 +36,7 @@ type config = private {
   cached_session : epoch_data option ;
   alpn_protocols : string list ; (** optional ordered list of accepted alpn_protocols *)
   groups : group list ;
+  zero_rtt : int32 ;
 }
 
 val config_of_sexp : Sexplib.Sexp.t -> config
@@ -88,6 +89,7 @@ val server :
   ?psk_cache : psk_cache ->
   ?alpn_protocols : string list ->
   ?groups : group list ->
+  ?zero_rtt : int32 ->
   unit -> server
 
 (** [peer client name] is [client] with [name] as [peer_name] *)

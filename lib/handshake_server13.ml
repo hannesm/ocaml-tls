@@ -169,10 +169,22 @@ let answer_client_hello state ch raw =
          - emit a PSK ext to client
          - not emit a certificate + certificateverify *)
       (* TODO need the correct index into binders from above! *)
-      let psk = match resumed_session with None -> [] | Some _ -> [ `PreSharedKey 0 ] in
+      (match resumed_session with
+       | None -> Ok []
+       | Some _ ->
+         match Utils.map_find ~f:(function `PskKeyExchangeModes ms -> Some ms | _ -> None) ch.extensions with
+         | None -> fail (`Fatal `NoPskKexExtension)
+         | Some ms ->
+           guard (List.mem Packet.PSK_KE_DHE ms) (`Fatal `NoPskDheMode) >>= fun () ->
+           Ok [ `PreSharedKey 0 ]) >>= fun psk ->
 
-        (* if acceptable, do server hello *)
-        let secret, public = Handshake_crypto13.dh_gen_key group in
+      let use_early_data = resumed_session <> None && List.mem `EarlyDataIndication ch.extensions in
+      let early_traffic_secret, early_traffic_ctx =
+        Handshake_crypto13.early_traffic early_secret raw
+      in
+
+      (* if acceptable, do server hello *)
+      let secret, public = Handshake_crypto13.dh_gen_key group in
         (match Handshake_crypto13.dh_shared group secret keyshare with
          | None -> fail (`Fatal `InvalidDH)
          | Some shared -> return shared) >>= fun es ->
@@ -190,7 +202,8 @@ let answer_client_hello state ch raw =
 
         (* ONLY if client sent a `Hostname *)
         let sg = `SupportedGroups state.config.Config.groups in
-        let ee = EncryptedExtensions [ ] (* sg ] (* `Hostname ] *) *) in
+        let ee_data = if use_early_data then [ `EarlyDataIndication ] else [] in
+        let ee = EncryptedExtensions ee_data (* sg ] (* `Hostname ] *) *) in
         (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
         let ee_raw = Writer.assemble_handshake ee in
 
@@ -263,15 +276,23 @@ let answer_client_hello state ch raw =
 
         (* send sessionticket early *)
         (* TODO track the nonce across handshakes / newsessionticket messages (i.e. after post-handshake auth) - needs to be unique! *)
-        let age_add =
-          let cs = Nocrypto.Rng.generate 4 in
-          Cstruct.BE.get_uint32 cs 0
+        (* TODO no newsessionticket if resumed session!? *)
+        let st, st_raw =
+          let age_add =
+            let cs = Nocrypto.Rng.generate 4 in
+            Cstruct.BE.get_uint32 cs 0
+          in
+          let psk_id = Nocrypto.Rng.generate 32 in
+          let nonce = Nocrypto.Rng.generate 4 in
+          let extensions = match state.config.Config.zero_rtt with
+            | 0l -> []
+            | x -> [ `EarlyDataIndication x ]
+          in
+          let st = { lifetime = 30000l ; age_add ; nonce ; ticket = psk_id ; extensions } in
+          Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
+          let st_raw = Writer.assemble_handshake (SessionTicket st) in
+          (st, st_raw)
         in
-        let psk_id = Nocrypto.Rng.generate 32 in
-        let nonce = Nocrypto.Rng.generate 4 in
-        let st = { lifetime = 30000l ; age_add ; nonce ; ticket = psk_id } in
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
-        let st_raw = Writer.assemble_handshake (SessionTicket st) in
 
         (* TODO when resuming, verify old session (resumed_session) attributes
            (hostname, client auth, ..) to match, and extend new session with
@@ -284,8 +305,21 @@ let answer_client_hello state ch raw =
           } in
           { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
         (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
+        (* confused by RFC (Section 2 vs Appendix A) how this is all supposed to work?
+           namely: in sec 2, if there's PSK/PSK_DHE involved, no cert_request!
+           if 0RTT, no cert_request
+           in appendix a, everything is different, and these transitions are valid
+           - A.1 also says "Wait_ee" "recv EE" and then branches on using psk vs using certificate
+        *)
         let st, cert_req = match cert_request with
-          | None -> AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
+          | None ->
+            if List.mem `EarlyDataIndication ch.extensions then
+              if use_early_data then
+                AwaitEndOfEarlyData13 (session, client_hs_secret, client_ctx, client_app_ctx, st, log), []
+              else
+                TrialUntilFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
+            else
+              AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
           | Some creq -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log),
                          [ `Record (Packet.HANDSHAKE, creq) ]
         in
@@ -295,7 +329,7 @@ let answer_client_hello state ch raw =
           | None -> []
           | Some _ -> [`Record change_cipher_spec]) @
          [ `Change_enc (Some server_ctx) ;
-           `Change_dec (Some client_ctx) ;
+           `Change_dec (Some (if use_early_data then early_traffic_ctx else client_ctx)) ;
            `Record (Packet.HANDSHAKE, ee_raw) ] @
          cert_req @ List.map (fun data -> `Record (Packet.HANDSHAKE, data)) c_out
          @ [ `Record (Packet.HANDSHAKE, fin_raw) ;
@@ -361,6 +395,12 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx s
   (match epoch_of_hs state' with None -> () | Some e -> add_to_cache st.ticket e) ;
   (state', [ `Change_dec (Some dec_ctx) ])
 
+let handle_end_of_early_data state sd cf hs_ctx cc st buf log =
+  (* TODO do sth with buf? where does hs_ctx come from? *)
+  (* TODO crypto-wise, what happens with early_data ++ endofearlydata? *)
+  let machina = AwaitClientFinished13 (sd, cf, cc, st, log <+> buf) in
+  Ok ({ state with machina = Server13 machina }, [ `Change_dec (Some hs_ctx) ])
+
 let handle_handshake cs hs buf =
   let open Reader in
   match parse_handshake buf with
@@ -372,6 +412,10 @@ let handle_handshake cs hs buf =
       | AwaitClientCertificateVerify13 (sd, cf, cc, st, log), CertificateVerify cv ->
         answer_client_certificate_verify hs cv sd cf cc st buf log
       | AwaitClientFinished13 (sd, cf, cc, st, log), Finished x ->
+         answer_client_finished hs x sd cf cc st buf log
+      | AwaitEndOfEarlyData13 (sd, cf, hs_c, cc, st, log), EndOfEarlyData ->
+        handle_end_of_early_data hs sd cf hs_c cc st buf log
+      | TrialUntilFinished13 (sd, cf, cc, st, log), Finished x ->
          answer_client_finished hs x sd cf cc st buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )
   | Error re -> fail (`Fatal (`ReaderError re))

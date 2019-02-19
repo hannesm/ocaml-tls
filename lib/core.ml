@@ -212,7 +212,6 @@ type server_extension = [
   | `SecureRenegotiation of Cstruct_sexp.t
   | `ExtendedMasterSecret
   | `ALPN of string
-  | `EarlyDataIndication
   | `Draft of int
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
@@ -222,6 +221,7 @@ type encrypted_extension = [
   | `MaxFragmentLength of max_fragment_length
   | `SupportedGroups of group list
   | `ALPN of string
+  | `EarlyDataIndication
   | `UnknownExtension of (int * Cstruct_sexp.t)
 ] [@@deriving sexp]
 
@@ -293,12 +293,17 @@ type hello_retry = {
   extensions : hello_retry_extension list
 } [@@deriving sexp]
 
+type session_ticket_extension = [
+  | `EarlyDataIndication of int32
+  | `UnknownExtension of int * Cstruct.t
+] [@@deriving sexp]
+
 type session_ticket = {
   lifetime : int32 ;
   age_add : int32 ;
   nonce : Cstruct.t ;
   ticket : Cstruct.t ;
-  (* TODO extensions *)
+  extensions : session_ticket_extension list
 } [@@deriving sexp]
 
 type certificate_request_extension = [
@@ -326,6 +331,7 @@ type tls_handshake =
   | Finished of Cstruct_sexp.t
   | SessionTicket of session_ticket
   | KeyUpdate
+  | EndOfEarlyData
   [@@deriving sexp]
 
 type tls_alert = alert_level * alert_type [@@deriving sexp]
