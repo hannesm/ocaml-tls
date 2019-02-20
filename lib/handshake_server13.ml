@@ -167,156 +167,155 @@ let answer_client_hello state ch raw =
 
       (* if acceptable, do server hello *)
       let secret, public = Handshake_crypto13.dh_gen_key group in
-        (match Handshake_crypto13.dh_shared group secret keyshare with
-         | None -> fail (`Fatal `InvalidDH)
-         | Some shared -> return shared) >>= fun es ->
-        Tracing.cs ~tag:"dh secret" es ;
-        let hs_secret = Handshake_crypto13.derive early_secret es in
-        Tracing.cs ~tag:"hs secret" hs_secret.secret ;
+      (match Handshake_crypto13.dh_shared group secret keyshare with
+       | None -> fail (`Fatal `InvalidDH)
+       | Some shared -> return shared) >>= fun es ->
+      let hs_secret = Handshake_crypto13.derive early_secret es in
+      Tracing.cs ~tag:"hs secret" hs_secret.secret ;
 
-        let sh, session = base_server_hello `DHE_RSA cipher (`KeyShare (group, public) :: psk) in
-        let sh_raw = Writer.assemble_handshake (ServerHello sh) in
+      let sh, session = base_server_hello `DHE_RSA cipher (`KeyShare (group, public) :: psk) in
+      let sh_raw = Writer.assemble_handshake (ServerHello sh) in
 
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
+      Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
 
-        let log = log <+> raw <+> sh_raw in
-        let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
+      let log = log <+> raw <+> sh_raw in
+      let server_hs_secret, server_ctx, client_hs_secret, client_ctx = hs_ctx hs_secret log in
 
-        (* ONLY if client sent a `Hostname *)
-        let sg = `SupportedGroups state.config.Config.groups in
-        let ee_data = if use_early_data then [ `EarlyDataIndication ] else [] in
-        let ee = EncryptedExtensions ee_data (* sg ] (* `Hostname ] *) *) in
-        (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
-        let ee_raw = Writer.assemble_handshake ee in
+      (* ONLY if client sent a `Hostname *)
+      let sg = `SupportedGroups state.config.Config.groups in
+      let ee_data = if use_early_data then [ `EarlyDataIndication ] else [] in
+      let ee = EncryptedExtensions ee_data (* sg ] (* `Hostname ] *) *) in
+      (* TODO also max_fragment_length ; client_certificate_url ; trusted_ca_keys ; user_mapping ; client_authz ; server_authz ; cert_type ; use_srtp ; heartbeat ; alpn ; status_request_v2 ; signed_cert_timestamp ; client_cert_type ; server_cert_type *)
+      let ee_raw = Writer.assemble_handshake ee in
 
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake ee ;
+      Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake ee ;
 
-        let cert_request, session = match state.config.Config.authenticator, resumed_session with
-          | None, _ -> (None, session)
-          | Some _, Some _ -> (None, session)
-          | Some _, None ->
-            let certreq =
-              let exts =
-                `SignatureAlgorithms state.config.Config.signature_algorithms ::
-                (match state.config.Config.acceptable_cas with
-                 | [] -> []
-                 | cas -> [ `CertificateAuthorities cas ])
-              in
-              CertificateRequest (Writer.assemble_certificate_request_1_3 exts)
+      let cert_request, session = match state.config.Config.authenticator, resumed_session with
+        | None, _ -> (None, session)
+        | Some _, Some _ -> (None, session)
+        | Some _, None ->
+          let certreq =
+            let exts =
+              `SignatureAlgorithms state.config.Config.signature_algorithms ::
+              (match state.config.Config.acceptable_cas with
+               | [] -> []
+               | cas -> [ `CertificateAuthorities cas ])
             in
-            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake certreq ;
-            let common_session_data13 = { session.common_session_data13 with client_auth = true } in
-            (Some (Writer.assemble_handshake certreq), { session with common_session_data13 })
-        in
-
-        let log =
-          let req = match cert_request with None -> [] | Some xs -> [ xs ] in
-          Cstruct.concat (log :: ee_raw :: req)
-        in
-
-        begin
-          if resumed_session = None then begin
-            let crt, pr = match state.config.Config.own_certificates with
-              | `Single (chain, priv) -> chain, priv
-              | _ -> assert false
-            in
-            let certs = List.map X509.Encoding.cs_of_cert crt in
-            let cert = Certificate (Writer.assemble_certificates_1_3 Cstruct.empty certs) in
-            let cert_raw = Writer.assemble_handshake cert in
-
-            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
-
-            let log = log <+> cert_raw in
-            signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
-              log (Some sigalgs) state.config.Config.signature_algorithms pr >|= fun signed ->
-            let cv = CertificateVerify signed in
-            let cv_raw = Writer.assemble_handshake cv in
-
-            Tracing.cs ~tag:"cv" cv_raw ;
-            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
-
-            let log = log <+> cv_raw in
-            let common_session_data13 = { session.common_session_data13 with own_private_key = Some pr ; own_certificate = crt } in
-            ([cert_raw; cv_raw], log, { session with common_session_data13 })
-          end else
-            Ok ([], log, session)
-        end >>= fun (c_out, log, session') ->
-
-        let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
-        Tracing.cs ~tag:"master-secret" master_secret.secret ;
-
-        let f_data = finished hs_secret.hash server_hs_secret log in
-        let fin = Finished f_data in
-        let fin_raw = Writer.assemble_handshake fin in
-
-        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake fin ;
-
-        let log = log <+> fin_raw in
-        let _, server_app_ctx, _, client_app_ctx = app_ctx master_secret log in
-
-        guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
-
-        (* send sessionticket early *)
-        (* TODO track the nonce across handshakes / newsessionticket messages (i.e. after post-handshake auth) - needs to be unique! *)
-        (* TODO no newsessionticket if resumed session!? *)
-        let st, st_raw =
-          let age_add =
-            let cs = Nocrypto.Rng.generate 4 in
-            Cstruct.BE.get_uint32 cs 0
+            CertificateRequest (Writer.assemble_certificate_request_1_3 exts)
           in
-          let psk_id = Nocrypto.Rng.generate 32 in
-          let nonce = Nocrypto.Rng.generate 4 in
-          let extensions = match state.config.Config.zero_rtt with
-            | 0l -> []
-            | x -> [ `EarlyDataIndication x ]
-          in
-          let st = { lifetime = 30000l ; age_add ; nonce ; ticket = psk_id ; extensions } in
-          Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
-          let st_raw = Writer.assemble_handshake (SessionTicket st) in
-          (st, st_raw)
-        in
+          Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake certreq ;
+          let common_session_data13 = { session.common_session_data13 with client_auth = true } in
+          (Some (Writer.assemble_handshake certreq), { session with common_session_data13 })
+      in
 
-        (* TODO when resuming, verify old session (resumed_session) attributes
-           (hostname, client auth, ..) to match, and extend new session with
-           information.  also, remove pskid (to-be-used once!? - but not if
-           srp/exp, only for psk psks). *)
-        let session =
-          let common_session_data13 = {
-            session'.common_session_data13 with
-            master_secret = master_secret.secret
-          } in
-          { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
-        (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
-        (* confused by RFC (Section 2 vs Appendix A) how this is all supposed to work?
-           namely: in sec 2, if there's PSK/PSK_DHE involved, no cert_request!
-           if 0RTT, no cert_request
-           in appendix a, everything is different, and these transitions are valid
-           - A.1 also says "Wait_ee" "recv EE" and then branches on using psk vs using certificate
-        *)
-        let st, cert_req = match cert_request with
-          | None ->
-            if List.mem `EarlyDataIndication ch.extensions then
-              if use_early_data then
-                AwaitEndOfEarlyData13 (session, client_hs_secret, client_ctx, client_app_ctx, st, log), []
-              else
-                TrialUntilFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
+      let log =
+        let req = match cert_request with None -> [] | Some xs -> [ xs ] in
+        Cstruct.concat (log :: ee_raw :: req)
+      in
+
+      begin
+        if resumed_session = None then begin
+          let crt, pr = match state.config.Config.own_certificates with
+            | `Single (chain, priv) -> chain, priv
+            | _ -> assert false
+          in
+          let certs = List.map X509.Encoding.cs_of_cert crt in
+          let cert = Certificate (Writer.assemble_certificates_1_3 Cstruct.empty certs) in
+          let cert_raw = Writer.assemble_handshake cert in
+
+          Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
+
+          let log = log <+> cert_raw in
+          signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
+            log (Some sigalgs) state.config.Config.signature_algorithms pr >|= fun signed ->
+          let cv = CertificateVerify signed in
+          let cv_raw = Writer.assemble_handshake cv in
+
+          Tracing.cs ~tag:"cv" cv_raw ;
+          Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
+
+          let log = log <+> cv_raw in
+          let common_session_data13 = { session.common_session_data13 with own_private_key = Some pr ; own_certificate = crt } in
+          ([cert_raw; cv_raw], log, { session with common_session_data13 })
+        end else
+          Ok ([], log, session)
+      end >>= fun (c_out, log, session') ->
+
+      let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
+      Tracing.cs ~tag:"master-secret" master_secret.secret ;
+
+      let f_data = finished hs_secret.hash server_hs_secret log in
+      let fin = Finished f_data in
+      let fin_raw = Writer.assemble_handshake fin in
+
+      Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake fin ;
+
+      let log = log <+> fin_raw in
+      let _, server_app_ctx, _, client_app_ctx = app_ctx master_secret log in
+
+      guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
+
+      (* send sessionticket early *)
+      (* TODO track the nonce across handshakes / newsessionticket messages (i.e. after post-handshake auth) - needs to be unique! *)
+      (* TODO no newsessionticket if resumed session!? *)
+      let st, st_raw =
+        let age_add =
+          let cs = Nocrypto.Rng.generate 4 in
+          Cstruct.BE.get_uint32 cs 0
+        in
+        let psk_id = Nocrypto.Rng.generate 32 in
+        let nonce = Nocrypto.Rng.generate 4 in
+        let extensions = match state.config.Config.zero_rtt with
+          | 0l -> []
+          | x -> [ `EarlyDataIndication x ]
+        in
+        let st = { lifetime = 30000l ; age_add ; nonce ; ticket = psk_id ; extensions } in
+        Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
+        let st_raw = Writer.assemble_handshake (SessionTicket st) in
+        (st, st_raw)
+      in
+
+      (* TODO when resuming, verify old session (resumed_session) attributes
+         (hostname, client auth, ..) to match, and extend new session with
+         information.  also, remove pskid (to-be-used once!? - but not if
+         srp/exp, only for psk psks). *)
+      let session =
+        let common_session_data13 = {
+          session'.common_session_data13 with
+          master_secret = master_secret.secret
+        } in
+        { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
+      (* new state: one of AwaitClientCertificate13 , AwaitClientFinished13 *)
+      (* confused by RFC (Section 2 vs Appendix A) how this is all supposed to work?
+         namely: in sec 2, if there's PSK/PSK_DHE involved, no cert_request!
+         if 0RTT, no cert_request
+         in appendix a, everything is different, and these transitions are valid
+         - A.1 also says "Wait_ee" "recv EE" and then branches on using psk vs using certificate
+      *)
+      let st, cert_req = match cert_request with
+        | None ->
+          if List.mem `EarlyDataIndication ch.extensions then
+            if use_early_data then
+              AwaitEndOfEarlyData13 (session, client_hs_secret, client_ctx, client_app_ctx, st, log), []
             else
-              AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
-          | Some creq -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log),
-                         [ `Record (Packet.HANDSHAKE, creq) ]
-        in
-        ({ state with machina = Server13 st },
-         `Record (Packet.HANDSHAKE, sh_raw) ::
-         (match ch.sessionid with
-          | None -> []
-          | Some _ -> [`Record change_cipher_spec]) @
-         [ `Change_enc (Some server_ctx) ;
-           `Change_dec (Some (if use_early_data then early_traffic_ctx else client_ctx)) ;
-           `Record (Packet.HANDSHAKE, ee_raw) ] @
-         cert_req @ List.map (fun data -> `Record (Packet.HANDSHAKE, data)) c_out
-         @ [ `Record (Packet.HANDSHAKE, fin_raw) ;
-             `Change_enc (Some server_app_ctx) ;
-             `Record (Packet.HANDSHAKE, st_raw)
+              TrialUntilFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
+          else
+            AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
+        | Some creq -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log),
+                       [ `Record (Packet.HANDSHAKE, creq) ]
+      in
+      ({ state with machina = Server13 st },
+       `Record (Packet.HANDSHAKE, sh_raw) ::
+       (match ch.sessionid with
+        | None -> []
+        | Some _ -> [`Record change_cipher_spec]) @
+       [ `Change_enc (Some server_ctx) ;
+         `Change_dec (Some (if use_early_data then early_traffic_ctx else client_ctx)) ;
+         `Record (Packet.HANDSHAKE, ee_raw) ] @
+       cert_req @ List.map (fun data -> `Record (Packet.HANDSHAKE, data)) c_out
+       @ [ `Record (Packet.HANDSHAKE, fin_raw) ;
+           `Change_enc (Some server_app_ctx) ;
+           `Record (Packet.HANDSHAKE, st_raw)
          ])
 
 let answer_client_certificate state cert (sd : session_data13) client_fini dec_ctx st raw log =
