@@ -65,17 +65,6 @@ let answer_client_hello state ch raw =
   and keyshare group =
     try Some (snd (List.find (fun (g, _) -> g = group) keyshares)) with Not_found -> None
   in
-
-  (* KEX to use:
-    - if client has keyshare (+supportedgroup) ext, we can use (EC)DHE (if we have the same)
-    - if client has presharedkey ext, plus PSK is in our databse, we can use PSK!
-    - if client has keyshare (+supportedgroup) + presharedkey, we can use (EC)DHE-PSK
-
-     error conditions:
-      - no KS found that meets our demands -> HRR
-      - TODO: what if KS found, but not part of supportedgroup?
-      - what is PSK + KS + SG found, but PSK does not match --> (EC)DHE
-      ~> TODO: PSK (no DHE), fallback to 1.2 if no group/cipher is suitable for us *)
   let keyshare_groups = List.map fst keyshares in
   match
     first_match keyshare_groups state.config.Config.groups,
@@ -108,12 +97,10 @@ let answer_client_hello state ch raw =
         | None -> Cstruct.empty
         | Some c ->
           (* log is: 254 00 00 length c :: HRR *)
-          let cs = Cstruct.create 4 in
-          Cstruct.set_uint8 cs 0 (Packet.handshake_type_to_int Packet.MESSAGE_HASH) ;
-          Cstruct.set_uint8 cs 3 (Cstruct.len c) ;
+          let hash_hdr = Writer.assemble_message_hash (Cstruct.len c) in
           let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie c ]} in
           let hs_buf = Writer.assemble_handshake (HelloRetryRequest hrr) in
-          Cstruct.concat [ cs ; c ; hs_buf ]
+          Cstruct.concat [ hash_hdr ; c ; hs_buf ]
       in
 
       let early_secret, resumed_session =

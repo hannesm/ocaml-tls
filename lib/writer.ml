@@ -422,6 +422,15 @@ let assemble_hello_retry_request hrr =
   let extensions = assemble_extensions ~none_if_empty:true assemble_retry_extension exts in
   v <+> helloretryrequest <+> sid <+> cs <+> cm <+> extensions
 
+let assemble_hs typ len =
+  let buf = create 4 in
+  set_uint8 buf 0 (handshake_type_to_int typ);
+  set_uint24_len (shift buf 1) len;
+  buf
+
+let assemble_message_hash len =
+  assemble_hs MESSAGE_HASH len
+
 let assemble_handshake hs =
   let (payload, payload_type) =
     match hs with
@@ -443,9 +452,7 @@ let assemble_handshake hs =
     | KeyUpdate -> (create 0, KEY_UPDATE)
   in
   let pay_len = len payload in
-  let buf = create 4 in
-  set_uint8 buf 0 (handshake_type_to_int payload_type);
-  set_uint24_len (shift buf 1) pay_len;
+  let buf = assemble_hs payload_type pay_len in
   buf <+> payload
 
 let assemble_alert ?(level = Packet.FATAL) typ =
