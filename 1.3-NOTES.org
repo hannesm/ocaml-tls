@@ -335,4 +335,5 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 
 - if server is not configured for 0rtt, client sends it ~> failure (violating 4.2.10)
 * <2019-02-20 Wed>
-- downgrade
+- downgrade (tls13-downgrade)
+- fiat (tls13-fiat)

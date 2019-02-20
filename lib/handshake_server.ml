@@ -463,10 +463,7 @@ let answer_client_hello state (ch : client_hello) raw =
   in
 
   agreed_version state.config.protocol_versions ch >>= function
-  | TLS_1_3 ->
-    (* TODO on some errors (e.g. no group found, no cipher found), fall back
-       to an earlier (supported) version  *)
-    Handshake_server13.answer_client_hello state ch raw
+  | TLS_1_3 -> Handshake_server13.answer_client_hello state ch raw
   | protocol_version -> process protocol_version
 
 let answer_client_hello_reneg state (ch : client_hello) raw =
