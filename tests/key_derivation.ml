@@ -34,7 +34,7 @@ let expand0 = Cstruct.of_hex {|
 let derive_hs_secret () =
   let hash_val = Nocrypto.Hash.digest hash Cstruct.empty in
   Alcotest.check cs __LOC__ expand0
-    (Handshake_crypto13.expand_label hash secret0 "derived" hash_val 32)
+    (Handshake_crypto13.derive_secret_no_hash hash secret0 ~ctx:hash_val "derived")
 
 let hs_secret = Cstruct.of_hex {|
 1d c8 26 e9 36 06 aa 6f  dc 0a ad c1 2f 74 1b 01
@@ -99,7 +99,7 @@ let derive_c_hs_traffic () =
   let log = Cstruct.append ch sh in
   let hash_val = Nocrypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ c_hs_traffic_secret
-    (Handshake_crypto13.expand_label hash hs_secret "c hs traffic" hash_val 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash hs_secret ~ctx:hash_val "c hs traffic") ;
   match !my_secret with
   | None -> Alcotest.fail "expected my secret"
   | Some t ->
@@ -111,9 +111,9 @@ let derive_c_hs_traffic () =
 
 let derive_read_handshake_keys () =
   Alcotest.check cs __LOC__ read_handshake_key
-    (Handshake_crypto13.expand_label hash c_hs_traffic_secret "key" Cstruct.empty 16) ;
+    (Handshake_crypto13.derive_secret_no_hash hash c_hs_traffic_secret ~length:16 "key") ;
   Alcotest.check cs __LOC__ read_handshake_iv
-    (Handshake_crypto13.expand_label hash c_hs_traffic_secret "iv" Cstruct.empty 12)
+    (Handshake_crypto13.derive_secret_no_hash hash c_hs_traffic_secret ~length:12 "iv")
 
 let s_hs_traffic_secret = Cstruct.of_hex {|
 b6 7b 7d 69 0c c1 6c 4e  75 e5 42 13 cb 2d 37 b4
@@ -132,7 +132,7 @@ let derive_s_hs_traffic () =
   let log = Cstruct.append ch sh in
   let hash_val = Nocrypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ s_hs_traffic_secret
-    (Handshake_crypto13.expand_label hash hs_secret "s hs traffic" hash_val 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash hs_secret ~ctx:hash_val "s hs traffic") ;
   match !my_secret with
   | None -> Alcotest.fail "expected my secret"
   | Some t ->
@@ -144,9 +144,9 @@ let derive_s_hs_traffic () =
 
 let derive_write_handshake_keys () =
   Alcotest.check cs __LOC__ write_handshake_key
-    (Handshake_crypto13.expand_label hash s_hs_traffic_secret "key" Cstruct.empty 16) ;
+    (Handshake_crypto13.derive_secret_no_hash hash s_hs_traffic_secret ~length:16 "key") ;
   Alcotest.check cs __LOC__ write_handshake_iv
-    (Handshake_crypto13.expand_label hash s_hs_traffic_secret "iv" Cstruct.empty 12)
+    (Handshake_crypto13.derive_secret_no_hash hash s_hs_traffic_secret ~length:12"iv")
 
 let finished_expanded = Cstruct.of_hex {|
 00 8d 3b 66 f8 16 ea 55  9f 96 b5 37 e8 85 c3 1f
@@ -210,7 +210,7 @@ d3 be 15 2a 3d a5 04 3e  06 3d da 65 cd f5 ae a2
 let derive_finished () =
   let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ] in
   Alcotest.check cs __LOC__ finished_expanded
-    (Handshake_crypto13.expand_label hash s_hs_traffic_secret "finished" Cstruct.empty 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash s_hs_traffic_secret "finished") ;
   let hash_val = Nocrypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ finished_key
     (Nocrypto.Hash.mac hash ~key:finished_expanded hash_val) ;
@@ -236,7 +236,7 @@ let master = Cstruct.of_hex {|
 let derive_master () =
   let hash_val = Nocrypto.Hash.digest hash Cstruct.empty in
   Alcotest.check cs __LOC__ master
-    (Handshake_crypto13.expand_label hash hs_secret "derived" hash_val 32)
+    (Handshake_crypto13.derive_secret_no_hash hash hs_secret ~ctx:hash_val "derived")
 
 let master_secret = Cstruct.of_hex {|
 18 df 06 84 3d 13 a0 8b  f2 a4 49 84 4c 5f 8a 47
@@ -287,11 +287,11 @@ let derive_traffic_keys () =
   let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ; finished ] in
   let hash_val = Nocrypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ c_ap_traffic
-    (Handshake_crypto13.expand_label hash master_secret "c ap traffic" hash_val 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash master_secret ~ctx:hash_val "c ap traffic") ;
   Alcotest.check cs __LOC__ s_ap_traffic
-    (Handshake_crypto13.expand_label hash master_secret "s ap traffic" hash_val 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash master_secret ~ctx:hash_val "s ap traffic") ;
   Alcotest.check cs __LOC__ exp_master
-    (Handshake_crypto13.expand_label hash master_secret "exp master" hash_val 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash master_secret ~ctx:hash_val "exp master") ;
   match !my_secret with
   | None -> Alcotest.fail "expected some secret"
   | Some t ->
@@ -308,15 +308,15 @@ let derive_traffic_keys () =
 
 let appdata_write () =
   Alcotest.check cs __LOC__ app_write_key
-    (Handshake_crypto13.expand_label hash s_ap_traffic "key" Cstruct.empty 16) ;
+    (Handshake_crypto13.derive_secret_no_hash hash s_ap_traffic ~length:16 "key") ;
   Alcotest.check cs __LOC__ app_write_iv
-    (Handshake_crypto13.expand_label hash s_ap_traffic "iv" Cstruct.empty 12)
+    (Handshake_crypto13.derive_secret_no_hash hash s_ap_traffic ~length:12 "iv")
 
 let appdata_read () =
   Alcotest.check cs __LOC__ app_read_key
-    (Handshake_crypto13.expand_label hash c_ap_traffic "key" Cstruct.empty 16) ;
+    (Handshake_crypto13.derive_secret_no_hash hash c_ap_traffic ~length:16 "key") ;
   Alcotest.check cs __LOC__ app_read_iv
-    (Handshake_crypto13.expand_label hash c_ap_traffic "iv" Cstruct.empty 12)
+    (Handshake_crypto13.derive_secret_no_hash hash c_ap_traffic ~length:12 "iv")
 
 let server_payload = Cstruct.of_hex {|
 08 00 00 24 00 22 00 0a  00 14 00 12 00 1d 00 17
@@ -443,7 +443,7 @@ let resumption () =
   let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ; finished ; c_finished ] in
   let hash_val = Nocrypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ res_master
-    (Handshake_crypto13.expand_label hash master_secret "res master" hash_val 32) ;
+    (Handshake_crypto13.derive_secret_no_hash hash master_secret ~ctx:hash_val "res master") ;
   match !my_secret with
   | None -> Alcotest.fail "expected some secret"
   | Some s -> Alcotest.check cs __LOC__ res_master (Handshake_crypto13.resumption s log)
@@ -544,8 +544,6 @@ let res_secret_00 = Cstruct.of_hex {|
 
 let res_secret () =
   let nonce = Cstruct.create 2 in
-  Alcotest.check cs __LOC__ res_secret_00
-    (Handshake_crypto13.expand_label hash res_master "resumption" nonce 32) ;
   Alcotest.check cs __LOC__ res_secret_00
     (Handshake_crypto13.derive_secret_no_hash hash res_master ~ctx:nonce "resumption") ;
   Alcotest.check cs __LOC__ res_secret_00
