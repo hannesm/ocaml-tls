@@ -19,8 +19,8 @@ let answer_client_hello state ch raw =
   (match client_hello_valid ch with
    | `Error e -> fail (`Fatal (`InvalidClientHello e))
    | `Ok -> return () ) >>= fun () ->
+  Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version TLS_1_3 ;
 
-  (* TODO: if early_data 0RTT *)
   let ciphers =
     filter_map ~f:Ciphersuite.any_ciphersuite_to_ciphersuite13 ch.ciphersuites
   in
@@ -65,11 +65,6 @@ let answer_client_hello state ch raw =
   and keyshare group =
     try Some (snd (List.find (fun (g, _) -> g = group) keyshares)) with Not_found -> None
   in
-
-  (* TODO a bit too early, may still be the case that we've to bail out if there
-     is no matching cipher / group  *)
-  Tracing.sexpf ~tag:"version" ~f:sexp_of_tls_version TLS_1_3 ;
-  Log.info (fun m -> m "TLS 1.3");
 
   (* KEX to use:
     - if client has keyshare (+supportedgroup) ext, we can use (EC)DHE (if we have the same)
