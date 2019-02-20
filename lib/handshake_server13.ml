@@ -378,8 +378,6 @@ let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx s
   (state', [ `Change_dec (Some dec_ctx) ])
 
 let handle_end_of_early_data state sd cf hs_ctx cc st buf log =
-  (* TODO do sth with buf? where does hs_ctx come from? *)
-  (* TODO crypto-wise, what happens with early_data ++ endofearlydata? *)
   let machina = AwaitClientFinished13 (sd, cf, cc, st, log <+> buf) in
   Ok ({ state with machina = Server13 machina }, [ `Change_dec (Some hs_ctx) ])
 

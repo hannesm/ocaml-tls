@@ -46,22 +46,6 @@ let dh_gen_key group =
 
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
 
-let expand_label hash prk label hashvalue length =
-  let info =
-    let len = Cstruct.create 2 in
-    Cstruct.BE.set_uint16 len 0 length ;
-    let label = Cstruct.of_string ("tls13 " ^ label) in
-    let llen = Cstruct.create 1 in
-    Cstruct.set_uint8 llen 0 (Cstruct.len label) ;
-    let hashlen = Cstruct.create 1 in
-    Cstruct.set_uint8 hashlen 0 (Cstruct.len hashvalue) ;
-    len <+> llen <+> label <+> hashlen <+> hashvalue
-  in
-  Logs.info (fun m -> m "label info %a" Cstruct.hexdump_pp info) ;
-  let key = Hkdf.expand ~hash ~prk ~info length in
-  trace label key ;
-  key
-
 let pp_hash_k_n ciphersuite =
   let open Ciphersuite in
   let pp = privprot13 ciphersuite
@@ -89,9 +73,11 @@ let hkdflabel label context length =
   trace "hkdflabel" lbl ;
   lbl
 
-
-let derive_secret_no_hash hash prk ?(ctx = Cstruct.empty) label =
-  let length = Nocrypto.Hash.digest_size hash in
+let derive_secret_no_hash hash prk ?length ?(ctx = Cstruct.empty) label =
+  let length = match length with
+    | None -> Nocrypto.Hash.digest_size hash
+    | Some x -> x
+  in
   let info = hkdflabel label ctx length in
   trace "prk" prk ;
   let key = Hkdf.expand ~hash ~prk ~info length in
