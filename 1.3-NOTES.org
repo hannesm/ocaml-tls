@@ -334,3 +334,5 @@ resulting in:
 both only ever up to configured max_size_limit! (not the one from the session ticket)
 
 - if server is not configured for 0rtt, client sends it ~> failure (violating 4.2.10)
+* <2019-02-20 Wed>
+- downgrade
