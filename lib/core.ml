@@ -107,6 +107,7 @@ type group = [
   | `FFDHE6144
   | `FFDHE8192
   | `X25519
+  | `P256
 ] [@@deriving sexp]
 
 let named_group_to_group = function
@@ -116,6 +117,7 @@ let named_group_to_group = function
   | FFDHE6144 -> Some `FFDHE6144
   | FFDHE8192 -> Some `FFDHE8192
   | X25519 -> Some `X25519
+  | SECP256R1 -> Some `P256
   | _ -> None
 
 let group_to_named_group = function
@@ -125,6 +127,7 @@ let group_to_named_group = function
   | `FFDHE6144 -> FFDHE6144
   | `FFDHE8192 -> FFDHE8192
   | `X25519 -> X25519
+  | `P256 -> SECP256R1
 
 let group_to_impl = function
   | `FFDHE2048 -> `Nocrypto Nocrypto.Dh.Group.ffdhe2048
@@ -133,6 +136,7 @@ let group_to_impl = function
   | `FFDHE6144 -> `Nocrypto Nocrypto.Dh.Group.ffdhe6144
   | `FFDHE8192 -> `Nocrypto Nocrypto.Dh.Group.ffdhe8192
   | `X25519 -> `Hacl `X25519
+  | `P256 -> `Fiat `P256
 
 type signature_algorithm = [
   | `RSA_PKCS1_MD5

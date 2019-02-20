@@ -39,6 +39,7 @@ depends: [
   "ounit" {with-test}
   "alcotest" {with-test}
   "hacl_x25519"
+  "fiat_p256"
 ]
 pin_depends: [
   [ "hacl_x25519.dev" "git+https://github.com/mirage/ocaml-hacl-ecc.git" ]

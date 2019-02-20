@@ -23,6 +23,11 @@ let dh_shared group secret share =
       | Error _ -> None
       | Ok public -> Some (Hacl_x25519.key_exchange ~pub:public ~priv)
     end
+  | `Fiat `P256, `Fiat scalar ->
+    begin match Fiat_p256.point_of_cs share with
+      | None -> None
+      | Some point -> Some (Fiat_p256.dh ~scalar ~point)
+    end
   | _ -> assert false
 
 let dh_gen_key group =
@@ -43,6 +48,13 @@ let dh_gen_key group =
     let public = Hacl_x25519.(to_cstruct (public secret)) in
     Logs.debug (fun m -> m "public is %a" Cstruct.hexdump_pp public) ;
     (`Hacl secret, public)
+  | `Fiat `P256 ->
+    let random = Nocrypto.Rng.generate 32 in (* TODO *)
+    match Fiat_p256.scalar_of_cs random with
+    | None -> invalid_arg "bad random / secret"
+    | Some sc ->
+      let pub = Fiat_p256.public sc in
+      (`Fiat sc, Fiat_p256.point_to_cs pub)
 
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
 
