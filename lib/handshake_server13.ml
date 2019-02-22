@@ -128,11 +128,11 @@ let answer_client_hello state ch raw =
             | [] ->
               Log.info (fun m -> m "found no id in psk cache") ;
               no_resume
-            | (idx, ((id, max_age), binder))::_ ->
-              (* need to verify binder, do the max_age computations + checking,
+            | (idx, ((id, obf_age), binder))::_ ->
+              (* need to verify binder, do the obf_age computations + checking,
                  figure out whether the id is in our psk cache, and use the resumption secret as input
                  and return the idx *)
-              let psk, old_epoch =
+              let old_ts, psk, old_epoch =
                 match find_in_cache id (* config.Config.psk_cache id *) with
                 | None -> assert false (* see above *)
                 | Some x -> x
@@ -146,16 +146,28 @@ let answer_client_hello state ch raw =
                    | Some x, Some y -> String.equal x y
                    | _ -> false
                 then
-                  let early_secret = secret ~psk:psk.secret () in
-                  let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
-                  let binders_len = binders_len ids in
-                  let ch_part = Cstruct.(sub raw 0 (len raw - binders_len)) in
-                  let log = Cstruct.append log ch_part in
-                  let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
-                  if Cstruct.equal binder binder' then begin
-                    Log.info (fun m -> m "binder matched") ;
-                    early_secret, Some old_epoch, [ `PreSharedKey idx ], idx = 0
-                  end else
+                  let now = cache.Config.timestamp () in
+                  let server_delta_t = Ptime.diff now old_ts in
+                  let client_delta_t = Ptime.Span.of_float_s Int32.(to_float (sub obf_age psk.obfuscation) /. 1000.) in
+                  (* ensure server&client_delta_t are not too far off! *)
+                  (* if ticket_creation ts + lifetime > now, continue *)
+                  let until = match Ptime.add_span old_ts (Ptime.Span.of_int_s (Int32.to_int cache.Config.lifetime)) with
+                    | None -> Ptime.epoch
+                    | Some ts -> ts
+                  in
+                  if Ptime.is_earlier now ~than:until then
+                    let early_secret = secret ~psk:psk.secret () in
+                    let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
+                    let binders_len = binders_len ids in
+                    let ch_part = Cstruct.(sub raw 0 (len raw - binders_len)) in
+                    let log = Cstruct.append log ch_part in
+                    let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
+                    if Cstruct.equal binder binder' then begin
+                      Log.info (fun m -> m "binder matched") ;
+                      early_secret, Some old_epoch, [ `PreSharedKey idx ], idx = 0
+                    end else
+                      no_resume
+                  else
                     no_resume
                 else
                   no_resume
@@ -366,8 +378,9 @@ let answer_client_finished state fin client_fini dec_ctx st raw log =
      (match epoch_of_hs state with
       | None -> ()
       | Some e ->
+        let now = cache.Config.timestamp () in
         (* cache.ticket_granted psk e *)
-        add_to_cache st.ticket (psk, e))) ;
+        add_to_cache st.ticket (now, psk, e))) ;
   let state' = { state with machina = Server13 Established13 } in
   (state', [ `Change_dec (Some dec_ctx) ])
 
