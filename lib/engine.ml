@@ -356,8 +356,10 @@ let hs_can_handle_appdata s =
      --> thus only ok for Established
      - but ok if server sent a HelloRequest and can get first some appdata then ClientHello
      --> or converse: client sent ClientHello, waiting for ServerHello *)
+  (* turns out, rules in 1.3 are slightly different -- server may send appdata after its first flight!
+     this means in any observable state! *)
   match s.machina with
-  | Server Established | Server AwaitClientHelloRenegotiate | Server13 Established13
+  | Server Established | Server AwaitClientHelloRenegotiate | Server13 _
   | Client Established | Client AwaitServerHelloRenegotiate _ | Client13 Established13 -> true
   | _ -> false
 
