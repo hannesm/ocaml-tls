@@ -120,6 +120,7 @@ type fatal = [
   | `InvalidMessage
   | `NoPskKexExtension
   | `NoPskDheMode
+  | `Toomany0rttbytes
 ]
 
 (** type of failures *)

@@ -307,6 +307,7 @@ client side
  -> our server doesn't check CH1 and CH2 (apart from cipher ++ group (used by log))
  -> our server uses CH2 exts
  --> we _could_ put more stuff into the cookie (to preserve stateless HRR ++ checking) maybe in the future?
+- X25519 hacl
 * <2019-02-18 Mon>
 - ticket and lifetime
   - server selects a lifetime (in seconds, uint32)
@@ -336,4 +337,9 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 - if server is not configured for 0rtt, client sends it ~> failure (violating 4.2.10)
 * <2019-02-20 Wed>
 - downgrade (tls13-downgrade)
-- fiat (tls13-fiat)
+- P256 fiat
+* <2019-02-21 Thu>
+- cleanups
+- 0rtt bytes
+* <2019-02-22 Fri>
+- really limit bytes of 0rtt

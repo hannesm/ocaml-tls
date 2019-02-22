@@ -69,6 +69,7 @@ let alert_of_fatal = function
   | `InvalidMessage -> Packet.HANDSHAKE_FAILURE
   | `NoPskKexExtension -> Packet.MISSING_EXTENSION
   | `NoPskDheMode -> Packet.HANDSHAKE_FAILURE
+  | `Toomany0rttbytes -> Packet.UNEXPECTED_MESSAGE
 
 let alert_of_failure = function
   | `Error x -> alert_of_error x
@@ -421,6 +422,27 @@ let handle_packet hs buf = function
 
   | Packet.HEARTBEAT -> fail (`Fatal `NoHeartbeat)
 
+let decrement_early_data hs ty buf =
+  let bytes left cipher =
+    let count = Cstruct.len buf - fst (Ciphersuite.kn (Ciphersuite.privprot13 cipher)) in
+    let left' = Int32.sub left (Int32.of_int count) in
+    if left' < 0l then
+      Error (`Fatal `Toomany0rttbytes)
+    else
+      Ok left'
+  in
+  (if ty = Packet.APPLICATION_DATA then
+     match hs.machina with
+     | Server13 (AwaitEndOfEarlyData13 (left, sd, cf, cc, cc', st, log)) ->
+       bytes left sd.ciphersuite13 >|= fun left' ->
+       Server13 (AwaitEndOfEarlyData13 (left', sd, cf, cc, cc', st, log))
+     | Server13 (TrialUntilFinished13 (left, sd, cf, cc, st, log)) ->
+       bytes left sd.ciphersuite13 >|= fun left' ->
+       Server13 (TrialUntilFinished13 (left', sd, cf, cc, st, log))
+     | x -> Ok x
+   else
+     Ok hs.machina) >|= fun machina ->
+  { hs with machina }
 
 (* the main thingy *)
 let handle_raw_record state (hdr, buf as record : raw_record) =
@@ -439,8 +461,9 @@ let handle_raw_record state (hdr, buf as record : raw_record) =
   let trial = match hs.machina with Server13 (TrialUntilFinished13 _) -> true | _ -> false in
   decrypt ~trial version state.decryptor hdr.content_type buf
   >>= fun (dec_st, dec, ty) ->
+  decrement_early_data state.handshake ty buf >>= fun handshake ->
   Tracing.sexpf ~tag:"frame-in" ~f:sexp_of_record (ty, dec) ;
-  handle_packet state.handshake dec ty
+  handle_packet handshake dec ty
   >|= fun (handshake, items, data, err) ->
   let (encryptor, decryptor, encs) =
     List.fold_left (fun (enc, dec, es) -> function

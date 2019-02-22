@@ -295,10 +295,11 @@ let answer_client_hello state ch raw =
       let st, cert_req = match cert_request with
         | None ->
           if List.mem `EarlyDataIndication ch.extensions then
+            let length = state.config.Config.zero_rtt in
             if use_early_data then
-              AwaitEndOfEarlyData13 (session, client_hs_secret, client_ctx, client_app_ctx, st, log), []
+              AwaitEndOfEarlyData13 (length, session, client_hs_secret, client_ctx, client_app_ctx, st, log), []
             else
-              TrialUntilFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
+              TrialUntilFinished13 (length, session, client_hs_secret, client_app_ctx, st, log), []
           else
             AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log), []
         | Some creq -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log),
@@ -391,10 +392,10 @@ let handle_handshake cs hs buf =
       | AwaitClientCertificateVerify13 (sd, cf, cc, st, log), CertificateVerify cv ->
         answer_client_certificate_verify hs cv sd cf cc st buf log
       | AwaitClientFinished13 (sd, cf, cc, st, log), Finished x ->
-         answer_client_finished hs x sd cf cc st buf log
-      | AwaitEndOfEarlyData13 (sd, cf, hs_c, cc, st, log), EndOfEarlyData ->
+        answer_client_finished hs x sd cf cc st buf log
+      | AwaitEndOfEarlyData13 (_, sd, cf, hs_c, cc, st, log), EndOfEarlyData ->
         handle_end_of_early_data hs sd cf hs_c cc st buf log
-      | TrialUntilFinished13 (sd, cf, cc, st, log), Finished x ->
-         answer_client_finished hs x sd cf cc st buf log
+      | TrialUntilFinished13 (_, sd, cf, cc, st, log), Finished x ->
+        answer_client_finished hs x sd cf cc st buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )
   | Error re -> fail (`Fatal (`ReaderError re))

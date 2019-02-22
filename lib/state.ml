@@ -160,8 +160,8 @@ type server13_handshake_state =
   | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
   | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
   | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
-  | TrialUntilFinished13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
-  | AwaitEndOfEarlyData13 of session_data13 * Cstruct.t * crypto_context * crypto_context * session_ticket * Cstruct.t
+  | TrialUntilFinished13 of int32 * session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
+  | AwaitEndOfEarlyData13 of int32 * session_data13 * Cstruct.t * crypto_context * crypto_context * session_ticket * Cstruct.t
   | Established13
   [@@deriving sexp]
 
@@ -271,6 +271,7 @@ type fatal = [
   | `InvalidMessage
   | `NoPskKexExtension
   | `NoPskDheMode
+  | `Toomany0rttbytes
 ] [@@deriving sexp]
 
 type failure = [
