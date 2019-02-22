@@ -103,9 +103,6 @@ let empty_session13 cipher = {
   common_session_data13 = empty_common_session_data ;
   ciphersuite13         = cipher ;
   kex13                 = `DHE_RSA ;
-  resumption_secret     = Cstruct.empty ;
-  exporter_secret       = Cstruct.empty ;
-  psk                   = None ;
   master_secret         = Handshake_crypto13.empty cipher
 }
 
@@ -140,8 +137,6 @@ let session13_of_epoch cipher (epoch : epoch_data) : session_data13 =
     common_session_data13 ;
     ciphersuite13 = cipher ;
     (*    kex13 = Ciphersuite.hash13 cipher ; *)
-    resumption_secret = epoch.resumption_secret ;
-    exporter_secret = epoch.exporter_secret
   }
 
 let supported_protocol_version (min, max) v =

@@ -21,6 +21,7 @@ let sexp_of_session_cache _ = Sexplib.Sexp.Atom "SESSION_CACHE"
 
 type ticket_cache = {
   lookup : Cstruct.t -> (psk13 * epoch_data) option ;
+  ticket_granted : psk13 -> epoch_data -> unit ;
   lifetime : int32 ;
   timestamp : unit -> Ptime.t
 }

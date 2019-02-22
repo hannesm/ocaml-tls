@@ -368,7 +368,4 @@ type epoch_data = {
   session_id             : SessionID.t ;
   extended_ms            : bool ;
   alpn_protocol          : string option ;
-  resumption_secret      : Cstruct.t ;
-  exporter_secret        : Cstruct.t ;
-  psk                    : psk13 option ;
 } [@@deriving sexp]
