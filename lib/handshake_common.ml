@@ -118,10 +118,9 @@ let empty_session13 cipher = {
   master_secret         = Handshake_crypto13.empty cipher
 }
 
-let session_of_epoch (epoch : epoch_data) : session_data =
-  let empty = empty_session in
-  let common_session_data = {
-    empty_session.common_session_data with
+let common_session_data_of_epoch (epoch : epoch_data) common_session_data =
+  {
+    common_session_data with
     peer_certificate = epoch.peer_certificate ;
     trust_anchor = epoch.trust_anchor ;
     own_certificate = epoch.own_certificate ;
@@ -131,12 +130,27 @@ let session_of_epoch (epoch : epoch_data) : session_data =
     master_secret = epoch.master_secret ;
     own_name = epoch.own_name ;
     alpn_protocol = epoch.alpn_protocol ;
-  } in
+  }
+
+let session_of_epoch (epoch : epoch_data) : session_data =
+  let empty = empty_session in
+  let common_session_data = common_session_data_of_epoch epoch empty.common_session_data in
   { empty with
     common_session_data ;
     ciphersuite = epoch.ciphersuite ;
     session_id = epoch.session_id ;
     extended_ms = epoch.extended_ms ;
+  }
+
+let session13_of_epoch cipher (epoch : epoch_data) : session_data13 =
+  let empty = empty_session13 cipher in
+  let common_session_data13 = common_session_data_of_epoch epoch empty.common_session_data13 in
+  { empty with
+    common_session_data13 ;
+    ciphersuite13 = cipher ;
+    (*    kex13 = Ciphersuite.hash13 cipher ; *)
+    resumption_secret = epoch.resumption_secret ;
+    exporter_secret = epoch.exporter_secret
   }
 
 let supported_protocol_version (min, max) v =
