@@ -136,32 +136,6 @@ let sig_algs (client_hello : client_hello) =
     ~f:(function `SignatureAlgorithms xs -> Some xs | _ -> None)
     client_hello.extensions
 
-let rec find_matching host certs =
-  match certs with
-  | (s::_, _) as chain ::xs ->
-    if X509.Certificate.supports_hostname s host then
-      Some chain
-    else
-      find_matching host xs
-  | _::xs -> find_matching host xs (* this should never happen! *)
-  | [] -> None
-
-let agreed_cert certs hostname =
-  let match_host ?default host certs =
-    match find_matching host certs with
-    | Some x -> return x
-    | None   -> match default with
-      | Some c -> return c
-      | None   -> fail (`Error (`NoMatchingCertificateFound (Domain_name.to_string host)))
-  in
-  match certs, hostname with
-  | `None                    , _      -> fail (`Error `NoCertificateConfigured)
-  | `Single c                , _      -> return c
-  | `Multiple_default (c, _) , None   -> return c
-  | `Multiple cs             , Some h -> match_host h cs
-  | `Multiple_default (c, cs), Some h -> match_host h cs ~default:c
-  | _                                 -> fail (`Error `CouldntSelectCertificate)
-
 let agreed_cipher cert requested =
   let type_usage_matches cipher =
     let cstyp, csusage =
@@ -228,7 +202,7 @@ let answer_client_hello_common state reneg ch raw =
         agreed_cert config.own_certificates host >>= function
         | (c::cs, priv) -> let cciphers = agreed_cipher c cciphers in
                            return (cciphers, c::cs, Some priv)
-        | _ -> fail (`Fatal `InvalidSession) (* TODO: assert false / remove by types in config *)
+        | ([], _) -> fail (`Fatal `InvalidSession) (* TODO: assert false / remove by types in config *)
       else
         return (cciphers, [], None) ) >>= fun (cciphers, chain, priv) ->
 
@@ -242,16 +216,7 @@ let answer_client_hello_common state reneg ch raw =
 
     Tracing.sexpf ~tag:"cipher" ~f:Ciphersuite.sexp_of_ciphersuite cipher ;
 
-    ( match config.alpn_protocols, get_alpn_protocols ch with
-      | _, None | [], _ -> return None
-      | configured, Some client -> match first_match client configured with
-        | Some proto -> return (Some proto)
-        | None ->
-          (* RFC7301 Section 3.2:
-             In the event that the server supports no protocols that the client
-             advertises, then the server SHALL respond with a fatal
-             "no_application_protocol" alert. *)
-          fail (`Fatal `NoApplicationProtocol) ) >|= fun alpn_protocol ->
+    alpn_protocol config ch >|= fun alpn_protocol ->
 
     let own_name = match host with None -> None | Some h -> Some (Domain_name.to_string h) in
     let session =

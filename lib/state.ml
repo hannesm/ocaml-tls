@@ -157,11 +157,11 @@ type client13_handshake_state =
 
 (* TODO: session ticket should be an option! *)
 type server13_handshake_state =
-  | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
-  | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
-  | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
-  | TrialUntilFinished13 of int32 * session_data13 * Cstruct.t * crypto_context * session_ticket * Cstruct.t
-  | AwaitEndOfEarlyData13 of int32 * session_data13 * Cstruct.t * crypto_context * crypto_context * session_ticket * Cstruct.t
+  | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
+  | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
+  | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
+  | TrialUntilFinished13 of int32 * session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
+  | AwaitEndOfEarlyData13 of int32 * session_data13 * Cstruct.t * crypto_context * crypto_context * session_ticket option * Cstruct.t
   | Established13
   [@@deriving sexp]
 

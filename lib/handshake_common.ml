@@ -32,6 +32,35 @@ let hostname (h : client_hello) : [ `host ] Domain_name.t option =
   host_name_opt
     (map_find ~f:(function `Hostname s -> Some s | _ -> None) h.extensions)
 
+let rec find_matching host certs =
+  match certs with
+  | (s::_, _) as chain ::xs ->
+    if X509.supports_hostname s host then
+      Some chain
+    else
+      find_matching host xs
+  | _::xs -> find_matching host xs (* this should never happen! *)
+  | [] -> None
+
+let agreed_cert certs hostname =
+  let match_host ?default host certs =
+     let host = String.lowercase host in
+     match find_matching (`Strict host) certs with
+     | Some x -> return x
+     | None   -> match find_matching (`Wildcard host) certs with
+                 | Some x -> return x
+                 | None   -> match default with
+                             | Some c -> return c
+                             | None   -> fail (`Error (`NoMatchingCertificateFound host))
+  in
+  match certs, hostname with
+  | `None                    , _      -> fail (`Error `NoCertificateConfigured)
+  | `Single c                , _      -> return c
+  | `Multiple_default (c, _) , None   -> return c
+  | `Multiple cs             , Some h -> match_host h cs
+  | `Multiple_default (c, cs), Some h -> match_host h cs ~default:c
+  | _                                 -> fail (`Error `CouldntSelectCertificate)
+
 let get_secure_renegotiation exts =
   map_find
     exts
@@ -39,6 +68,18 @@ let get_secure_renegotiation exts =
 
 let get_alpn_protocols (ch : client_hello) =
   map_find ~f:(function `ALPN protocols -> Some protocols | _ -> None) ch.extensions
+
+let alpn_protocol config ch =
+  match config.Config.alpn_protocols, get_alpn_protocols ch with
+  | _, None | [], _ -> return None
+  | configured, Some client -> match first_match client configured with
+    | Some proto -> return (Some proto)
+    | None ->
+      (* RFC7301 Section 3.2:
+         In the event that the server supports no protocols that the client
+         advertises, then the server SHALL respond with a fatal
+         "no_application_protocol" alert. *)
+      fail (`Fatal `NoApplicationProtocol)
 
 let get_alpn_protocol (sh : server_hello) =
   map_find ~f:(function `ALPN protocol -> Some protocol | _ -> None) sh.extensions
