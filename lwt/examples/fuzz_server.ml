@@ -14,6 +14,12 @@ let add_to_cache, find_in_cache =
      | None -> None
      | Some (_, ep) -> Some ep)
 
+let ticket_cache = {
+  Tls.Config.lookup = find_in_cache ;
+  lifetime = 300l ;
+  timestamp = Ptime_clock.now
+}
+
 let serve_ssl port callback =
 
   let tag = "server" in
@@ -46,7 +52,7 @@ let serve_ssl port callback =
   yap ~tag ("-> start @ " ^ string_of_int port) >>= fun () ->
   let rec loop s =
     X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-    let config = Tls.Config.server ~psk_cache:find_in_cache ~reneg:true ~certificates:(`Single cert) (* ~authenticator *) ~version:(Tls.Core.TLS_1_2, Tls.Core.TLS_1_3) ~zero_rtt:1024l () in
+    let config = Tls.Config.server ~ticket_cache ~reneg:true ~certificates:(`Single cert) (* ~authenticator *) ~version:(Tls.Core.TLS_1_2, Tls.Core.TLS_1_3) ~zero_rtt:1024l () in
     (Lwt.catch
        (fun () -> Tls_lwt.Unix.accept config s >|= fun r -> `R r)
        (function
@@ -59,7 +65,7 @@ let serve_ssl port callback =
        | `Error -> ()
        | `Ok ep -> match ep.Tls.Core.psk with
          | None -> ()
-         | Some psk -> add_to_cache psk.Tls.Core.identifier ep) ;
+         | Some psk -> add_to_cache psk.Tls.Core.identifier (psk, ep)) ;
       let channels = Tls_lwt.of_t t in
       yap ~tag "-> connect" >>= fun () -> ( handle channels addr ; loop s )
     | `L (msg) ->

@@ -18,7 +18,13 @@ type own_cert = [
 
 type session_cache = SessionID.t -> epoch_data option
 
-type psk_cache = Cstruct.t -> epoch_data option
+type ticket_cache = {
+  lookup : Cstruct.t -> (psk13 * epoch_data) option ;
+  lifetime : int32 ;
+  timestamp : unit -> Ptime.t
+}
+
+type ticket_cache_opt = ticket_cache option
 
 (** configuration parameters *)
 type config = private {
@@ -32,7 +38,7 @@ type config = private {
   own_certificates : own_cert ; (** optional default certificate chain and other certificate chains *)
   acceptable_cas : X509.distinguished_name list ; (** ordered list of acceptable certificate authorities *)
   session_cache : session_cache ;
-  psk_cache : psk_cache ;
+  ticket_cache : ticket_cache_opt ;
   cached_session : epoch_data option ;
   alpn_protocols : string list ; (** optional ordered list of accepted alpn_protocols *)
   groups : group list ;
@@ -86,7 +92,7 @@ val server :
   ?acceptable_cas : X509.distinguished_name list ->
   ?authenticator : X509.Authenticator.a ->
   ?session_cache  : session_cache ->
-  ?psk_cache : psk_cache ->
+  ?ticket_cache : ticket_cache ->
   ?alpn_protocols : string list ->
   ?groups : group list ->
   ?zero_rtt : int32 ->

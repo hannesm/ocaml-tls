@@ -343,3 +343,49 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 - 0rtt bytes
 * <2019-02-22 Fri>
 - really limit bytes of 0rtt
+- TODO when should a server be able to send application data? according to spec, it is after its first flight
+ - but that means there's no EPOCH yet :/
+ - and if the server demanded client authentication, that hasn't happened yet
+--> maybe install epoch earlier, and wait until client's second flight if client authentication is enabled?
+- general semantics of blocking etc:
+  - effectful layer call handle_tls / send_application_data
+  - the former changes state, the latter uses can_handle_appdata (and returns None if not)
+  - effectful layer blocks in accept/connect (via drain_handshake) until handshake_in_progress == false
+  - reneg as well calls drain_handshake to wait until handshake is completed
+  --> a t that is not in established should never leak (it does in the reneg case, though, since it may be shared to another task)
+- whenever internal state changes to Established, a new session is prepended to the state, accessible via epoch
+ -> a t in `InitialEpoch never escapes!
+- in 1.0/1.1/1.2 this is slightly wrong, since while a hellorequest / clienthello was sent, the handshake is not required to happen next (there may be any appdata in transit, and we may as well send some more appdata)
+ -> but it's a useful semantics!
+- now 1.3 walks into the door, where application data can be send/received earlier:
+  - client side may use 0rtt and just send data after clienthello
+  - server side may send after their finished any data
+    - what about keyupdate and post-handshake auth?
+      - keyupdate shouldn't affect
+      - post-hs auth is initiated by the server (sending a certificateverify), support signaled by client (client hello extension)
+       -> should be blocking in the server (+new epoch, drop old data to distinguish which was authenticated)
+     - in theory, multiple post-hs auth may be in transit at the same time (ctx field), but where is this useful for an application programmer?
+  - epochs are also more and earlier:
+    - earlydata (not ephemeral)
+    - hs (ephemeral)
+    - appdata (ephemeral)
+  -> this means that write is allowed earlier, read as well
+  --> epoch needs to be installed earlier! as soon as read/write works, an epoch should be available
+   --> should it be tagged with "0rtt" etc.?
+- client API for connect including 0rtt which is denied
+ -> first step: do we have a ticket that allows 0rtt?
+ -> second step: allow write early - but what to return here?
+- drop is only for "we'd like a new epoch for client auth"
+- on recv side, you block on read (or not), handle the data (using epoch to inspect which if you like), and call read again (potentially in a new epoch)
+- or accept / server_of_fd returns not only a t, but also a cstruct.t option -- then accept can only return when end of early data is received (but we could want to send application data earlier, directly after our finished)
+-- the 1.3 model suggests we've separate can_x_application_data for send and receive
+- whenever acc/conn returns:
+  accept : server -> ?read_zero_rtt:bool -> fd -> (t * sockaddr * buffer option) io
+              (* or via config? *) (* where would this be if zero_rtt is via config? *)
+  could: accept_0rtt : server -> fd -> (t * sockaddr * buffer option)
+  connect : client -> ?zero_rtt:buffer -> host * port -> t * zero_rtt_sent:bool io
+    actually:
+       Engine.client : Config.client -> Cstruct.t option -> (state * Cstruct.t *)
+ - we can call read and write on it
+ - then we can write on it, and it has an epoch
+ - read doesn't read 0rtt. if you want it, you get all at once.

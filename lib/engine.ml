@@ -565,6 +565,7 @@ let can_handle_appdata s = hs_can_handle_appdata s.handshake
 let handshake_in_progress s = match s.handshake.machina with
   | Client Established | Server Established -> false
   | Client13 Established13 | Server13 Established13 -> false
+  (*  | Server13 (TrialUntilFinished13 _) | Server13 (AwaitEndOfEarlyData13 _) | Server13 (AwaitClientFinished13 _) -> false *)
   | _ -> true
 
 (* another entry for user data *)
