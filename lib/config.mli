@@ -19,8 +19,8 @@ type own_cert = [
 type session_cache = SessionID.t -> epoch_data option
 
 type ticket_cache = {
-  lookup : Cstruct.t -> (psk13 * epoch_data) option ;
-  ticket_granted : psk13 -> epoch_data -> unit ;
+  lookup : Cstruct.t -> (Ptime.t * psk13 * epoch_data) option ;
+  ticket_granted : Ptime.t -> psk13 -> epoch_data -> unit ;
   lifetime : int32 ;
   timestamp : unit -> Ptime.t
 }
