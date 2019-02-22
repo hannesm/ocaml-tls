@@ -33,6 +33,7 @@ end
 
 type ticket_cache = {
   lookup : Cstruct.t -> (psk13 * epoch_data) option ;
+  ticket_granted : psk13 -> epoch_data -> unit ;
   lifetime : int32 ;
   timestamp : unit -> Ptime.t
 }

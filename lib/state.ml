@@ -140,10 +140,7 @@ type session_data13 = {
   common_session_data13  : common_session_data ;
   ciphersuite13          : Ciphersuite.ciphersuite13 ;
   kex13                  : Ciphersuite.key_exchange_algorithm13 ;
-  resumption_secret      : Cstruct.t ;
-  exporter_secret        : Cstruct.t ;
   master_secret          : kdf ;
-  psk                    : psk13 option ; (* should be a map once we hand out multiple psk (then also contain sni/client_auth/...) -- requires notification protocol to API client about new PSK *)
 } [@@deriving sexp]
 
 type client13_handshake_state =
@@ -155,13 +152,12 @@ type client13_handshake_state =
   | Established13
   [@@deriving sexp]
 
-(* TODO: session ticket should be an option! *)
 type server13_handshake_state =
   | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
   | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | AwaitClientFinished13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | TrialUntilFinished13 of int32 * session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | AwaitEndOfEarlyData13 of int32 * session_data13 * Cstruct.t * crypto_context * crypto_context * session_ticket option * Cstruct.t
+  | AwaitClientFinished13 of Cstruct.t * crypto_context * session_ticket option * Cstruct.t
+  | TrialUntilFinished13 of int32 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
+  | AwaitEndOfEarlyData13 of int32 * Cstruct.t * crypto_context * crypto_context * session_ticket option * Cstruct.t
   | Established13
   [@@deriving sexp]
 
@@ -315,9 +311,6 @@ let common_data_to_epoch common is_server peer_name =
       alpn_protocol          = common.alpn_protocol ;
       session_id             = Cstruct.empty ;
       extended_ms            = false ;
-      resumption_secret      = Cstruct.empty ;
-      exporter_secret        = Cstruct.empty ;
-      psk                    = None
     } in
   epoch
 
@@ -345,7 +338,4 @@ let epoch_of_hs hs =
       epoch with
       ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
       extended_ms            = true ; (* RFC 8446, Appendix D, last paragraph *)
-      resumption_secret      = session.resumption_secret ;
-      exporter_secret        = session.exporter_secret ;
-      psk                    = session.psk ;
     }

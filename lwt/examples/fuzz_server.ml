@@ -7,15 +7,17 @@ let string_of_unix_err err f p =
 
 let add_to_cache, find_in_cache =
   let c = ref [] in
-  (fun id session ->
+  (fun ticket session ->
+     let id = ticket.Tls.Core.identifier in
      Logs.info (fun m -> m "adding id %a to cache" Cstruct.hexdump_pp id) ;
-     c := (id, session) :: !c),
+     c := (id, (ticket, session)) :: !c),
   (fun id -> match List.find_opt (fun (id', _) -> Cstruct.compare id id' = 0) !c with
      | None -> None
      | Some (_, ep) -> Some ep)
 
 let ticket_cache = {
   Tls.Config.lookup = find_in_cache ;
+  ticket_granted = add_to_cache ;
   lifetime = 300l ;
   timestamp = Ptime_clock.now
 }
@@ -61,11 +63,6 @@ let serve_ssl port callback =
          | Tls_lwt.Tls_failure f -> return (`L (Tls.Engine.string_of_failure f))
          | exn -> let str = Printexc.to_string exn in return (`L ("loop: exception " ^ str)))) >>= function
     | `R (t, addr) ->
-      (match Tls_lwt.Unix.epoch t with
-       | `Error -> ()
-       | `Ok ep -> match ep.Tls.Core.psk with
-         | None -> ()
-         | Some psk -> add_to_cache psk.Tls.Core.identifier (psk, ep)) ;
       let channels = Tls_lwt.of_t t in
       yap ~tag "-> connect" >>= fun () -> ( handle channels addr ; loop s )
     | `L (msg) ->

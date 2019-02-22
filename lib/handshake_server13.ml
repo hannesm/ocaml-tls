@@ -132,7 +132,7 @@ let answer_client_hello state ch raw =
               (* need to verify binder, do the max_age computations + checking,
                  figure out whether the id is in our psk cache, and use the resumption secret as input
                  and return the idx *)
-              let old_epoch =
+              let psk, old_epoch =
                 match find_in_cache id (* config.Config.psk_cache id *) with
                 | None -> assert false (* see above *)
                 | Some x -> x
@@ -146,8 +146,7 @@ let answer_client_hello state ch raw =
                    | Some x, Some y -> String.equal x y
                    | _ -> false
                 then
-                  let psk = match old_epoch.psk with None -> assert false | Some psk -> psk.secret in
-                  let early_secret = secret ~psk () in
+                  let early_secret = secret ~psk:psk.secret () in
                   let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
                   let binders_len = binders_len ids in
                   let ch_part = Cstruct.(sub raw 0 (len raw - binders_len)) in
@@ -206,8 +205,7 @@ let answer_client_hello state ch raw =
 
       begin
         match epoch with
-        | Some epoch ->
-          return ([], log, session)
+        | Some _ -> return ([], log, session)
         | None ->
           let out, log, session = match config.Config.authenticator with
             | None -> [], log, session
@@ -285,19 +283,20 @@ let answer_client_hello state ch raw =
       let session =
         let common_session_data13 = { session'.common_session_data13 with master_secret = master_secret.secret } in
         { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
-      let st =
+      let st, session =
+        let session' = `TLS13 session :: state.session in
         match epoch, List.mem `EarlyDataIndication ch.extensions, session.common_session_data13.client_auth with
         | Some _, true, _ ->
           let length = config.Config.zero_rtt in
-          if can_use_early_data then
-            AwaitEndOfEarlyData13 (length, session, client_hs_secret, client_ctx, client_app_ctx, st, log)
-          else
-            TrialUntilFinished13 (length, session, client_hs_secret, client_app_ctx, st, log)
-        | None, _, true -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log)
-        | _ -> AwaitClientFinished13 (session, client_hs_secret, client_app_ctx, st, log)
+          (if can_use_early_data then
+             AwaitEndOfEarlyData13 (length, client_hs_secret, client_ctx, client_app_ctx, st, log)
+           else
+             TrialUntilFinished13 (length, client_hs_secret, client_app_ctx, st, log)), session'
+        | None, _, true -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session
+        | _ -> AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session'
       in
       (* embed session into state *)
-      ({ state with machina = Server13 st },
+      ({ state with machina = Server13 st ; session },
        `Record (Packet.HANDSHAKE, sh_raw) ::
        (match ch.sessionid with
         | None -> []
@@ -323,8 +322,8 @@ let answer_client_certificate state cert (sd : session_data13) client_fini dec_c
         in
         let common_session_data13 = { sd.common_session_data13 with trust_anchor } in
         let sd = { sd with common_session_data13 } in
-        let st = AwaitClientFinished13 (sd, client_fini, dec_ctx, st, log <+> raw) in
-        Ok ({ state with machina = Server13 st }, [])
+        let st = AwaitClientFinished13 (client_fini, dec_ctx, st, log <+> raw) in
+        Ok ({ state with machina = Server13 st ; session = `TLS13 sd :: state.session }, [])
       | `Fail e -> fail (`Error (`AuthenticationFailure e))
     end
   | Ok (_ctx, cert_exts), auth ->
@@ -346,35 +345,34 @@ let answer_client_certificate state cert (sd : session_data13) client_fini dec_c
 
 let answer_client_certificate_verify state cv (sd : session_data13) client_fini dec_ctx st raw log =
   verify_digitally_signed TLS_1_3 ~context_string:"TLS 1.3, client CertificateVerify" state.config.Config.signature_algorithms cv log sd.common_session_data13.peer_certificate >|= fun () ->
-  let st = AwaitClientFinished13 (sd, client_fini, dec_ctx, st, log <+> raw) in
-  ({ state with machina = Server13 st }, [])
+  let st = AwaitClientFinished13 (client_fini, dec_ctx, st, log <+> raw) in
+  ({ state with machina = Server13 st ; session = `TLS13 sd :: state.session }, [])
 
-let answer_client_finished state fin (sd : session_data13) client_fini dec_ctx st raw log =
-  let hash = Ciphersuite.hash13 sd.ciphersuite13 in
+let answer_client_finished state fin client_fini dec_ctx st raw log =
+  let session = match state.session with
+    | `TLS13 sd :: _ -> sd
+    | _ -> assert false
+  in
+  let hash = Ciphersuite.hash13 session.ciphersuite13 in
   let data = finished hash client_fini log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
-  let sd =
-    match st with
-    | None -> sd
-    | Some st ->
-      let resumption_secret = Handshake_crypto13.resumption sd.master_secret (log <+> raw) in
-      let secret = Handshake_crypto13.res_secret (Ciphersuite.hash13 sd.ciphersuite13) resumption_secret st.nonce in
-      let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret } in
-      { sd with psk = Some psk ; resumption_secret }
-  in
-  let state' =
-    { state with
-      machina = Server13 Established13 ;
-      session = `TLS13 sd :: state.session }
-  in
-  (match epoch_of_hs state', st with
+  (match st, state.config.Config.ticket_cache with
    | None, _ | _, None -> ()
-   | Some e, Some t -> add_to_cache t.ticket e) ;
+   | Some st, Some cache ->
+     let resumption_secret = Handshake_crypto13.resumption session.master_secret (log <+> raw) in
+     let secret = Handshake_crypto13.res_secret hash resumption_secret st.nonce in
+     let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret } in
+     (match epoch_of_hs state with
+      | None -> ()
+      | Some e ->
+        (* cache.ticket_granted psk e *)
+        add_to_cache st.ticket (psk, e))) ;
+  let state' = { state with machina = Server13 Established13 } in
   (state', [ `Change_dec (Some dec_ctx) ])
 
-let handle_end_of_early_data state sd cf hs_ctx cc st buf log =
-  let machina = AwaitClientFinished13 (sd, cf, cc, st, log <+> buf) in
+let handle_end_of_early_data state cf hs_ctx cc st buf log =
+  let machina = AwaitClientFinished13 (cf, cc, st, log <+> buf) in
   Ok ({ state with machina = Server13 machina }, [ `Change_dec (Some hs_ctx) ])
 
 let handle_handshake cs hs buf =
@@ -387,11 +385,11 @@ let handle_handshake cs hs buf =
         answer_client_certificate hs cert sd cf cc st buf log
       | AwaitClientCertificateVerify13 (sd, cf, cc, st, log), CertificateVerify cv ->
         answer_client_certificate_verify hs cv sd cf cc st buf log
-      | AwaitClientFinished13 (sd, cf, cc, st, log), Finished x ->
-        answer_client_finished hs x sd cf cc st buf log
-      | AwaitEndOfEarlyData13 (_, sd, cf, hs_c, cc, st, log), EndOfEarlyData ->
-        handle_end_of_early_data hs sd cf hs_c cc st buf log
-      | TrialUntilFinished13 (_, sd, cf, cc, st, log), Finished x ->
-        answer_client_finished hs x sd cf cc st buf log
+      | AwaitClientFinished13 (cf, cc, st, log), Finished x ->
+        answer_client_finished hs x cf cc st buf log
+      | AwaitEndOfEarlyData13 (_, cf, hs_c, cc, st, log), EndOfEarlyData ->
+        handle_end_of_early_data hs cf hs_c cc st buf log
+      | TrialUntilFinished13 (_, cf, cc, st, log), Finished x ->
+        answer_client_finished hs x cf cc st buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )
   | Error re -> fail (`Fatal (`ReaderError re))

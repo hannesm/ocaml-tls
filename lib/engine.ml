@@ -436,13 +436,17 @@ let decrement_early_data hs ty buf =
       Ok left'
   in
   (if ty = Packet.APPLICATION_DATA then
+     let cipher = match hs.session with
+       | `TLS13 sd::_ -> sd.ciphersuite13
+       | _ -> assert false
+     in
      match hs.machina with
-     | Server13 (AwaitEndOfEarlyData13 (left, sd, cf, cc, cc', st, log)) ->
-       bytes left sd.ciphersuite13 >|= fun left' ->
-       Server13 (AwaitEndOfEarlyData13 (left', sd, cf, cc, cc', st, log))
-     | Server13 (TrialUntilFinished13 (left, sd, cf, cc, st, log)) ->
-       bytes left sd.ciphersuite13 >|= fun left' ->
-       Server13 (TrialUntilFinished13 (left', sd, cf, cc, st, log))
+     | Server13 (AwaitEndOfEarlyData13 (left, cf, cc, cc', st, log)) ->
+       bytes left cipher >|= fun left' ->
+       Server13 (AwaitEndOfEarlyData13 (left', cf, cc, cc', st, log))
+     | Server13 (TrialUntilFinished13 (left, cf, cc, st, log)) ->
+       bytes left cipher >|= fun left' ->
+       Server13 (TrialUntilFinished13 (left', cf, cc, st, log))
      | x -> Ok x
    else
      Ok hs.machina) >|= fun machina ->

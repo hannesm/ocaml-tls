@@ -20,9 +20,6 @@ let cached_session =
     master_secret = hex "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" ;
     session_id = Cstruct.create 0 ;
     extended_ms = true ;
-    resumption_secret = hex "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" ;
-    exporter_secret = Cstruct.empty ;
-    psk = None ;
     alpn_protocol = None ;
   }
 
