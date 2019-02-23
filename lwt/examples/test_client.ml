@@ -21,6 +21,7 @@ let cached_session =
     session_id = Cstruct.create 0 ;
     extended_ms = true ;
     alpn_protocol = None ;
+    state = `Established ;
   }
 
 let test_client _ =

@@ -350,8 +350,11 @@ type psk13 = {
   (* origin : [ `Resumption | `External ] (* using different labels for binder_key *) *)
 } [@@deriving sexp]
 
+type epoch_state = [ `ZeroRTT | `Established ] [@@deriving sexp]
+
 (** information about an open session *)
 type epoch_data = {
+  state                  : epoch_state ;
   protocol_version       : tls_version ;
   ciphersuite            : Ciphersuite.ciphersuite ;
   peer_random            : Cstruct.t ;

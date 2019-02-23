@@ -42,7 +42,7 @@ let answer_client_hello state ch raw =
        in
        return (filter_map ~f ks) ) >>= fun keyshares ->
 
-  let base_server_hello ?epoch kex cipher extensions =
+  let base_server_hello ?epoch cipher extensions =
     let ciphersuite = (cipher :> Ciphersuite.ciphersuite) in
     let sh =
       { server_version = TLS_1_3 ;
@@ -58,7 +58,7 @@ let answer_client_hello state ch raw =
         server_random = sh.server_random ;
         client_random = ch.client_random ;
       } in
-      { base with common_session_data13 ; ciphersuite13 = cipher ; kex13 = kex }
+      { base with common_session_data13 ; ciphersuite13 = cipher }
     in
     (sh, session)
   and keyshare group =
@@ -197,7 +197,7 @@ let answer_client_hello state ch raw =
       let hs_secret = Handshake_crypto13.derive early_secret es in
       Tracing.cs ~tag:"hs secret" hs_secret.secret ;
 
-      let sh, session = base_server_hello ?epoch `DHE_RSA cipher (`KeyShare (group, public) :: exts) in
+      let sh, session = base_server_hello ?epoch cipher (`KeyShare (group, public) :: exts) in
       let sh_raw = Writer.assemble_handshake (ServerHello sh) in
       Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ServerHello sh) ;
 
@@ -285,42 +285,41 @@ let answer_client_hello state ch raw =
       (* send sessionticket early *)
       (* TODO track the nonce across handshakes / newsessionticket messages (i.e. after post-handshake auth) - needs to be unique! *)
       let st, st_raw =
-        match epoch with
-        | Some _ -> None, []
-        | None ->
-          match config.Config.ticket_cache with
-          | None -> None, []
-          | Some cache ->
-            let age_add =
-              let cs = Nocrypto.Rng.generate 4 in
-              Cstruct.BE.get_uint32 cs 0
-            in
-            let psk_id = Nocrypto.Rng.generate 32 in
-            let nonce = Nocrypto.Rng.generate 4 in
-            let extensions = match config.Config.zero_rtt with
-              | 0l -> []
-              | x -> [ `EarlyDataIndication x ]
-            in
-            let st = { lifetime = cache.Config.lifetime ; age_add ; nonce ; ticket = psk_id ; extensions } in
-            Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
-            let st_raw = Writer.assemble_handshake (SessionTicket st) in
-            (Some st, [st_raw])
+        match epoch, config.Config.ticket_cache with
+        | Some _, _ | _, None -> None, []
+        | None, Some cache ->
+          let age_add =
+            let cs = Nocrypto.Rng.generate 4 in
+            Cstruct.BE.get_uint32 cs 0
+          in
+          let psk_id = Nocrypto.Rng.generate 32 in
+          let nonce = Nocrypto.Rng.generate 4 in
+          let extensions = match config.Config.zero_rtt with
+            | 0l -> []
+            | x -> [ `EarlyDataIndication x ]
+          in
+          let st = { lifetime = cache.Config.lifetime ; age_add ; nonce ; ticket = psk_id ; extensions } in
+          Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (SessionTicket st);
+          let st_raw = Writer.assemble_handshake (SessionTicket st) in
+          (Some st, [st_raw])
       in
 
       let session =
         let common_session_data13 = { session'.common_session_data13 with master_secret = master_secret.secret } in
-        { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) } in
+        { session' with common_session_data13 ; master_secret (* TODO ; exporter_secret *) }
+      in
       let st, session =
         let session' = `TLS13 session :: state.session in
         match epoch, List.mem `EarlyDataIndication ch.extensions, session.common_session_data13.client_auth with
         | Some _, true, _ ->
           let length = config.Config.zero_rtt in
-          (if can_use_early_data then
-             AwaitEndOfEarlyData13 (length, client_hs_secret, client_ctx, client_app_ctx, st, log)
-           else
-             TrialUntilFinished13 (length, client_hs_secret, client_app_ctx, st, log)), session'
-        | None, _, true -> AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session
-        | _ -> AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session'
+          if can_use_early_data then
+            (AwaitEndOfEarlyData13 (length, client_hs_secret, client_ctx, client_app_ctx, st, log),
+             `TLS13 { session with state = `ZeroRTT } :: state.session)
+          else
+             (TrialUntilFinished13 (length, client_hs_secret, client_app_ctx, st, log), session')
+        | None, _, true -> (AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session)
+        | _ -> (AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session')
       in
       (* embed session into state *)
       ({ state with machina = Server13 st ; session },
@@ -401,7 +400,11 @@ let answer_client_finished state fin client_fini dec_ctx st raw log =
 
 let handle_end_of_early_data state cf hs_ctx cc st buf log =
   let machina = AwaitClientFinished13 (cf, cc, st, log <+> buf) in
-  Ok ({ state with machina = Server13 machina }, [ `Change_dec (Some hs_ctx) ])
+  let session = match state.session with
+    | `TLS13 s1 :: _ -> `TLS13 { s1 with state = `Established } :: state.session
+    | _ -> assert false
+  in
+  Ok ({ state with machina = Server13 machina ; session }, [ `Change_dec (Some hs_ctx) ])
 
 let handle_handshake cs hs buf =
   let open Reader in
