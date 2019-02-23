@@ -434,7 +434,7 @@ let decrement_early_data hs ty buf =
   (if ty = Packet.APPLICATION_DATA then
      let cipher = match hs.session with
        | `TLS13 sd::_ -> sd.ciphersuite13
-       | _ -> assert false
+       | _ -> `TLS_AES_128_GCM_SHA256 (* TODO assert (but ensure it never happens) *)
      in
      match hs.machina with
      | Server13 (AwaitEndOfEarlyData13 (left, cf, cc, cc', st, log)) ->
