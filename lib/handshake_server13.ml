@@ -148,27 +148,42 @@ let answer_client_hello state ch raw =
                 then
                   let now = cache.Config.timestamp () in
                   let server_delta_t = Ptime.diff now old_ts in
-                  let client_delta_t = Ptime.Span.of_float_s Int32.(to_float (sub obf_age psk.obfuscation) /. 1000.) in
-                  (* ensure server&client_delta_t are not too far off! *)
-                  (* if ticket_creation ts + lifetime > now, continue *)
-                  let until = match Ptime.add_span old_ts (Ptime.Span.of_int_s (Int32.to_int cache.Config.lifetime)) with
-                    | None -> Ptime.epoch
-                    | Some ts -> ts
+                  let client_delta_t =
+                    match Ptime.Span.of_float_s Int32.(to_float (sub obf_age psk.obfuscation) /. 1000.) with
+                    | None ->
+                      Logs.debug (fun m -> m "client_delta is not computable, using 0") ;
+                      Ptime.Span.zero
+                    | Some x -> x
                   in
-                  if Ptime.is_earlier now ~than:until then
-                    let early_secret = secret ~psk:psk.secret () in
-                    let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
-                    let binders_len = binders_len ids in
-                    let ch_part = Cstruct.(sub raw 0 (len raw - binders_len)) in
-                    let log = Cstruct.append log ch_part in
-                    let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
-                    if Cstruct.equal binder binder' then begin
-                      Log.info (fun m -> m "binder matched") ;
-                      early_secret, Some old_epoch, [ `PreSharedKey idx ], idx = 0
-                    end else
-                      no_resume
-                  else
+                  (* ensure server&client_delta_t are not too far off! *)
+                  match Ptime.Span.(to_int_s (abs (sub server_delta_t client_delta_t))) with
+                  | None ->
+                    Logs.debug (fun m -> m "s_c_delta computation lead nowhere") ;
                     no_resume
+                  | Some s_c_delta ->
+                    if s_c_delta > 10 then begin
+                      Logs.debug (fun m -> m "delta between client and server is %d seconds, ignoring this ticket!" s_c_delta);
+                      no_resume
+                    end else
+                      (* if ticket_creation ts + lifetime > now, continue *)
+                      let until = match Ptime.add_span old_ts (Ptime.Span.of_int_s (Int32.to_int cache.Config.lifetime)) with
+                        | None -> Ptime.epoch
+                        | Some ts -> ts
+                      in
+                      if Ptime.is_earlier now ~than:until then
+                        let early_secret = secret ~psk:psk.secret () in
+                        let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
+                        let binders_len = binders_len ids in
+                        let ch_part = Cstruct.(sub raw 0 (len raw - binders_len)) in
+                        let log = Cstruct.append log ch_part in
+                        let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
+                        if Cstruct.equal binder binder' then begin
+                          Log.info (fun m -> m "binder matched") ;
+                          early_secret, Some old_epoch, [ `PreSharedKey idx ], idx = 0
+                        end else
+                          no_resume
+                      else
+                        no_resume
                 else
                   no_resume
       in
