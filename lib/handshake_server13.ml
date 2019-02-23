@@ -321,7 +321,6 @@ let answer_client_hello state ch raw =
         | None, _, true -> (AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session)
         | _ -> (AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session')
       in
-      (* embed session into state *)
       ({ state with machina = Server13 st ; session },
        `Record (Packet.HANDSHAKE, sh_raw) ::
        (match ch.sessionid with
