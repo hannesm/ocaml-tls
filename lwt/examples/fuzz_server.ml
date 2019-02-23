@@ -54,7 +54,7 @@ let serve_ssl port callback =
   yap ~tag ("-> start @ " ^ string_of_int port) >>= fun () ->
   let rec loop s =
     X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-    let config = Tls.Config.server ~ticket_cache ~reneg:true ~certificates:(`Single cert) ~authenticator ~version:(Tls.Core.TLS_1_2, Tls.Core.TLS_1_3) ~zero_rtt:1024l () in
+    let config = Tls.Config.server ~ticket_cache ~reneg:true ~certificates:(`Single cert) (* ~authenticator *) ~version:(Tls.Core.TLS_1_2, Tls.Core.TLS_1_3) ~zero_rtt:32768l () in
     (Lwt.catch
        (fun () -> Tls_lwt.Unix.accept config s >|= fun r -> `R r)
        (function
@@ -74,14 +74,14 @@ let echo_server port =
   serve_ssl port @@ fun (ic, oc) addr ->
     yap ~tag:"handler" "accepted" >>= fun () ->
     let out = "HTTP/1.1 404 Not Found\r\n\r\n" in
-    Lwt_io.write_from_string_exactly oc out 0 (String.length out)  >>= fun () ->
-    Lwt_io.close oc (*
+    Lwt_io.write_from_string_exactly oc out 0 (String.length out) >>= fun () ->
+    (*    Lwt_io.close oc *)
     let rec loop () =
       Lwt_io.read_line ic >>= fun line ->
       yap ~tag:"handler" ("+ " ^ line) >>= fun () ->
       loop ()
     in
-    loop () *)
+    loop ()
 
 let jump _ port =
   Lwt_main.run (echo_server port);

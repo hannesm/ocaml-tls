@@ -390,4 +390,9 @@ both only ever up to configured max_size_limit! (not the one from the session ti
  - then we can write on it, and it has an epoch
  - read doesn't read 0rtt. if you want it, you get all at once.
 * <2019-02-23 Sat>
-TODO embed kex info into epoch!
+- TODO embed kex info into epoch!
+- what should session.state contain?
+ - why do we keep old sessions around? should it instead of a list be an option?
+ - track epoch/crypto context numbers?
+   - None ~> Some `Handshake ~> Some `AppX ~> Some `AppX+1
+   - but that's different for the two peers, can a API client make use out of that info?
