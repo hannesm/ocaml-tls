@@ -139,8 +139,8 @@ type kdf = {
 type session_data13 = {
   common_session_data13  : common_session_data ;
   ciphersuite13          : Ciphersuite.ciphersuite13 ;
-  kex13                  : Ciphersuite.key_exchange_algorithm13 ;
   master_secret          : kdf ;
+  state                  : epoch_state ;
 } [@@deriving sexp]
 
 type client13_handshake_state =
@@ -295,8 +295,9 @@ let common_data_to_epoch common is_server peer_name =
       common.client_random, common.server_random
   in
   let epoch : epoch_data =
-    { protocol_version       = TLS_1_0 ;
-      ciphersuite           = `TLS_DHE_RSA_WITH_AES_256_CBC_SHA ;
+    { state                  = `Established ;
+      protocol_version       = TLS_1_0 ;
+      ciphersuite            = `TLS_DHE_RSA_WITH_AES_256_CBC_SHA ;
       peer_random ;
       peer_certificate       = common.peer_certificate ;
       peer_certificate_chain = common.peer_certificate_chain ;
@@ -338,4 +339,5 @@ let epoch_of_hs hs =
       epoch with
       ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
       extended_ms            = true ; (* RFC 8446, Appendix D, last paragraph *)
+      state                  = session.state ;
     }

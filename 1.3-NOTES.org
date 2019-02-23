@@ -389,3 +389,5 @@ both only ever up to configured max_size_limit! (not the one from the session ti
  - we can call read and write on it
  - then we can write on it, and it has an epoch
  - read doesn't read 0rtt. if you want it, you get all at once.
+* <2019-02-23 Sat>
+TODO embed kex info into epoch!
