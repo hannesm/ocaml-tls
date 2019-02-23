@@ -47,7 +47,7 @@ let alert_of_fatal = function
   | `InvalidCertificateExtendedUsage -> Packet.BAD_CERTIFICATE
   | `NoVersions _ -> Packet.PROTOCOL_VERSION
   | `InvalidDH -> Packet.INSUFFICIENT_SECURITY
-  | `BadFinished -> Packet.HANDSHAKE_FAILURE
+  | `BadFinished -> Packet.DECRYPT_ERROR
   | `HandshakeFragmentsNotEmpty -> Packet.HANDSHAKE_FAILURE
   | `InvalidSession -> Packet.HANDSHAKE_FAILURE
   | `UnexpectedCCS -> Packet.UNEXPECTED_MESSAGE
