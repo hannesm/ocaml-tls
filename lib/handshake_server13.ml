@@ -25,10 +25,6 @@ let answer_client_hello state ch raw =
     filter_map ~f:Ciphersuite.any_ciphersuite_to_ciphersuite13 ch.ciphersuites
   in
 
-  ( match map_find ~f:(function `SignatureAlgorithms sa -> Some sa | _ -> None) ch.extensions with
-    | None -> fail (`Fatal (`InvalidClientHello `NoSignatureAlgorithmsExtension))
-    | Some sa -> return sa ) >>= fun sigalgs ->
-
   ( match map_find ~f:(function `SupportedGroups gs -> Some gs | _ -> None) ch.extensions with
     | None -> fail (`Fatal (`InvalidClientHello `NoSupportedGroupExtension))
     | Some gs -> return (filter_map ~f:Core.named_group_to_group gs )) >>= fun groups ->
@@ -261,6 +257,9 @@ let answer_client_hello state ch raw =
           Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
           let log = log <+> cert_raw in
 
+          ( match map_find ~f:(function `SignatureAlgorithms sa -> Some sa | _ -> None) ch.extensions with
+                | None -> fail (`Fatal (`InvalidClientHello `NoSignatureAlgorithmsExtension))
+                | Some sa -> return sa ) >>= fun sigalgs ->
           (* TODO respect certificate_signature_algs if present *)
           signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
             log (Some sigalgs) config.Config.signature_algorithms priv >|= fun signed ->
