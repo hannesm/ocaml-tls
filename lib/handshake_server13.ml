@@ -103,9 +103,10 @@ let answer_client_hello state ch raw =
       in
 
       let hostname = hostname ch in
+      let hlen = Nocrypto.Hash.digest_size (Ciphersuite.hash13 cipher) in
 
       let early_secret, epoch, exts, can_use_early_data =
-        let secret ?(psk = Cstruct.create 32) () = Handshake_crypto13.(derive (empty cipher) psk) in
+        let secret ?(psk = Cstruct.create hlen) () = Handshake_crypto13.(derive (empty cipher) psk) in
         let no_resume = secret (), None, [], false in
         match
           config.Config.ticket_cache,
@@ -264,8 +265,13 @@ let answer_client_hello state ch raw =
                 | None -> fail (`Fatal (`InvalidClientHello `NoSignatureAlgorithmsExtension))
                 | Some sa -> return sa ) >>= fun sigalgs ->
           (* TODO respect certificate_signature_algs if present *)
+          let configured_sig_algs =
+            List.filter (fun sa ->
+                hash_of_signature_algorithm sa = Ciphersuite.hash13 cipher)
+              config.Config.signature_algorithms
+          in
           signature TLS_1_3 ~context_string:"TLS 1.3, server CertificateVerify"
-            log (Some sigalgs) config.Config.signature_algorithms priv >|= fun signed ->
+            log (Some sigalgs) configured_sig_algs priv >|= fun signed ->
           let cv = CertificateVerify signed in
           let cv_raw = Writer.assemble_handshake cv in
           Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cv ;
@@ -273,7 +279,7 @@ let answer_client_hello state ch raw =
           (out @ [cert_raw; cv_raw], log, session)
       end >>= fun (c_out, log, session') ->
 
-      let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create 32) in
+      let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create hlen) in
       Tracing.cs ~tag:"master-secret" master_secret.secret ;
 
       let f_data = finished hs_secret.hash server_hs_secret log in
