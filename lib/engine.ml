@@ -261,7 +261,7 @@ let decrypt ?(trial = false) (version : tls_version) (st : crypto_state) ty buf 
           let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
           let unpad x =
             let rec eat = function
-              | 0 -> fail (`Fatal `MissingContentType)
+              | -1 -> fail (`Fatal `MissingContentType)
               | idx -> match Cstruct.get_uint8 x idx with
                 | 0 -> eat (pred idx)
                 | n -> match Packet.int_to_content_type n with
