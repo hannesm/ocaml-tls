@@ -38,8 +38,8 @@ let parse_version_exn buf =
   match tls_version_of_pair version with
   | Some x -> x
   | None   ->
-     let major, minor = version in
-     raise_unknown @@ "version " ^ string_of_int major ^ "." ^ string_of_int minor
+    let major, minor = version in
+    raise (Reader_error (UnknownVersion (major, minor)))
 
 let parse_any_version_opt buf =
   let version = parse_version_int buf in
@@ -48,7 +48,9 @@ let parse_any_version_opt buf =
 let parse_any_version_exn buf =
   match parse_any_version_opt buf with
   | Some x, _ -> x
-  | None, _ -> raise_unknown @@ Printf.sprintf "version %02X" (get_uint8 buf 0)
+  | None, _ ->
+    let major, minor = (get_uint8 buf 0, get_uint8 buf 1) in
+    raise (Reader_error (UnknownVersion (major, minor)))
 
 let parse_version = catch parse_version_exn
 
