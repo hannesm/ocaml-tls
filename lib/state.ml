@@ -265,9 +265,8 @@ type fatal = [
   | `NoApplicationProtocol
   | `HelloRetryRequest
   | `InvalidMessage
-  | `NoPskKexExtension
-  | `NoPskDheMode
   | `Toomany0rttbytes
+  | `MissingContentType
 ] [@@deriving sexp]
 
 type failure = [
