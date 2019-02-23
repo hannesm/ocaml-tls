@@ -101,6 +101,7 @@ let new_state config role =
   let handshake = {
     session          = [] ;
     protocol_version = version ;
+    early_data_left  = 0l ;
     machina          = handshake_state ;
     config           = config ;
     hs_fragment      = Cstruct.create 0 ;
@@ -363,7 +364,9 @@ let hs_can_handle_appdata s =
 
 let early_data s =
   match s.machina with
-  | Server13 (TrialUntilFinished13 _) | Server13 (AwaitEndOfEarlyData13 _) -> true
+  | Server AwaitClientHello
+  | Server13 (AwaitEndOfEarlyData13 _) | Server13 (AwaitClientFinished13 _)
+  | Server13 (AwaitClientCertificate13 _) | Server13 (AwaitClientCertificateVerify13 _) -> true
   | _ -> false
 
 let rec separate_handshakes buf =
@@ -402,7 +405,7 @@ let handle_packet hs buf = function
         (hs, out, None, err)
 
   | Packet.APPLICATION_DATA ->
-    if hs_can_handle_appdata hs || early_data hs then
+    if hs_can_handle_appdata hs || (early_data hs && Cstruct.len hs.hs_fragment = 0) then
       (Tracing.cs ~tag:"application-data-in" buf;
        return (hs, [], non_empty buf, `No_err))
     else
@@ -428,27 +431,17 @@ let decrement_early_data hs ty buf =
   let bytes left cipher =
     let count = Cstruct.len buf - fst (Ciphersuite.kn (Ciphersuite.privprot13 cipher)) in
     let left' = Int32.sub left (Int32.of_int count) in
-    if left' < 0l then
-      Error (`Fatal `Toomany0rttbytes)
-    else
-      Ok left'
+    if left' < 0l then Error (`Fatal `Toomany0rttbytes) else Ok left'
   in
-  (if ty = Packet.APPLICATION_DATA then
-     let cipher = match hs.session with
-       | `TLS13 sd::_ -> sd.ciphersuite13
-       | _ -> `TLS_AES_128_GCM_SHA256 (* TODO assert (but ensure it never happens) *)
-     in
-     match hs.machina with
-     | Server13 (AwaitEndOfEarlyData13 (left, cf, cc, cc', st, log)) ->
-       bytes left cipher >|= fun left' ->
-       Server13 (AwaitEndOfEarlyData13 (left', cf, cc, cc', st, log))
-     | Server13 (TrialUntilFinished13 (left, cf, cc, st, log)) ->
-       bytes left cipher >|= fun left' ->
-       Server13 (TrialUntilFinished13 (left', cf, cc, st, log))
-     | x -> Ok x
-   else
-     Ok hs.machina) >|= fun machina ->
-  { hs with machina }
+  if ty = Packet.APPLICATION_DATA && early_data hs then
+    let cipher = match hs.session with
+      | `TLS13 sd::_ -> sd.ciphersuite13
+      | _ -> `TLS_AES_128_GCM_SHA256 (* TODO assert (but ensure it never happens) *)
+    in
+    bytes hs.early_data_left cipher >|= fun early_data_left ->
+    { hs with early_data_left }
+  else
+    Ok hs
 
 (* the main thingy *)
 let handle_raw_record state (hdr, buf as record : raw_record) =
@@ -463,11 +456,14 @@ let handle_raw_record state (hdr, buf as record : raw_record) =
     | _                          , TLS_1_3 -> guard (hdr.version = Supported TLS_1_2) (`Fatal (`BadRecordVersion hdr.version))
     | _                          , v       -> guard (version_eq hdr.version v) (`Fatal (`BadRecordVersion hdr.version)) )
   >>= fun () ->
-  (* TODO: embed byte count *)
-  let trial = match hs.machina with Server13 (TrialUntilFinished13 _) -> true | _ -> false in
+  let trial = match hs.machina with
+    | Server13 (AwaitEndOfEarlyData13 _) | Server13 Established13 -> false
+    | Server AwaitClientHello | Server13 _ -> hs.early_data_left > 0l && Cstruct.len hs.hs_fragment = 0
+    | _ -> false
+  in
   decrypt ~trial version state.decryptor hdr.content_type buf
   >>= fun (dec_st, dec, ty) ->
-  decrement_early_data state.handshake ty buf >>= fun handshake ->
+  decrement_early_data hs ty buf >>= fun handshake ->
   Tracing.sexpf ~tag:"frame-in" ~f:sexp_of_record (ty, dec) ;
   handle_packet handshake dec ty
   >|= fun (handshake, items, data, err) ->

@@ -76,10 +76,12 @@ let answer_client_hello state ch raw =
         let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie cookie ] } in
         let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
-        return (state, `Record (Packet.HANDSHAKE, hrr_raw) ::
-                       (match ch.sessionid with
-                        | None -> []
-                        | Some _ -> [`Record change_cipher_spec]))
+        let early_data_left = if List.mem `EarlyDataIndication ch.extensions then config.Config.zero_rtt else 0l in
+        return ({ state with early_data_left },
+                `Record (Packet.HANDSHAKE, hrr_raw) ::
+                (match ch.sessionid with
+                 | None -> []
+                 | Some _ -> [`Record change_cipher_spec]))
     end
   | Some group, Some cipher ->
     Log.info (fun m -> m "cipher %a" Sexplib.Sexp.pp_hum (Ciphersuite.sexp_of_ciphersuite13 cipher)) ;
@@ -102,7 +104,6 @@ let answer_client_hello state ch raw =
 
       let hostname = hostname ch in
 
-      (* TODO check rfc, only resume if no hrr *)
       let early_secret, epoch, exts, can_use_early_data =
         let secret ?(psk = Cstruct.create 32) () = Handshake_crypto13.(derive (empty cipher) psk) in
         let no_resume = secret (), None, [], false in
@@ -178,7 +179,9 @@ let answer_client_hello state ch raw =
                         let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
                         if Cstruct.equal binder binder' then begin
                           Log.info (fun m -> m "binder matched") ;
-                          early_secret, Some old_epoch, [ `PreSharedKey idx ], idx = 0
+                          (* from 4.1.2 - earlydata is not allowed after hrr *)
+                          let zero = idx = 0 && not was_hrr in
+                          early_secret, Some old_epoch, [ `PreSharedKey idx ], zero
                         end else
                           no_resume
                       else
@@ -312,18 +315,18 @@ let answer_client_hello state ch raw =
       in
       let st, session =
         let session' = `TLS13 session :: state.session in
-        match epoch, List.mem `EarlyDataIndication ch.extensions, session.common_session_data13.client_auth with
-        | Some _, true, _ ->
-          let length = config.Config.zero_rtt in
-          if can_use_early_data then
-            (AwaitEndOfEarlyData13 (length, client_hs_secret, client_ctx, client_app_ctx, st, log),
-             `TLS13 { session with state = `ZeroRTT } :: state.session)
+        match List.mem `EarlyDataIndication ch.extensions, can_use_early_data with
+        | true, true ->
+          (AwaitEndOfEarlyData13 (client_hs_secret, client_ctx, client_app_ctx, st, log),
+           `TLS13 { session with state = `ZeroRTT } :: state.session)
+        | _, _ ->
+          if session.common_session_data13.client_auth then
+            (AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session)
           else
-             (TrialUntilFinished13 (length, client_hs_secret, client_app_ctx, st, log), session')
-        | None, _, true -> (AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session)
-        | _ -> (AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session')
+            (AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session')
       in
-      ({ state with machina = Server13 st ; session },
+      let early_data_left = if List.mem `EarlyDataIndication ch.extensions then config.Config.zero_rtt else 0l in
+      ({ state with machina = Server13 st ; session ; early_data_left },
        `Record (Packet.HANDSHAKE, sh_raw) ::
        (match ch.sessionid with
         | Some _ when not was_hrr -> [`Record change_cipher_spec]
@@ -419,9 +422,7 @@ let handle_handshake cs hs buf =
         answer_client_certificate_verify hs cv sd cf cc st buf log
       | AwaitClientFinished13 (cf, cc, st, log), Finished x ->
         answer_client_finished hs x cf cc st buf log
-      | AwaitEndOfEarlyData13 (_, cf, hs_c, cc, st, log), EndOfEarlyData ->
+      | AwaitEndOfEarlyData13 (cf, hs_c, cc, st, log), EndOfEarlyData ->
         handle_end_of_early_data hs cf hs_c cc st buf log
-      | TrialUntilFinished13 (_, cf, cc, st, log), Finished x ->
-        answer_client_finished hs x cf cc st buf log
       | _, hs -> fail (`Fatal (`UnexpectedHandshake hs)) )
   | Error re -> fail (`Fatal (`ReaderError re))

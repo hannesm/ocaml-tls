@@ -156,8 +156,7 @@ type server13_handshake_state =
   | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
   | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
   | AwaitClientFinished13 of Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | TrialUntilFinished13 of int32 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | AwaitEndOfEarlyData13 of int32 * Cstruct.t * crypto_context * crypto_context * session_ticket option * Cstruct.t
+  | AwaitEndOfEarlyData13 of Cstruct.t * crypto_context * crypto_context * session_ticket option * Cstruct.t
   | Established13
   [@@deriving sexp]
 
@@ -172,6 +171,7 @@ type handshake_machina_state =
 type handshake_state = {
   session          : [ `TLS of session_data | `TLS13 of session_data13 ] list ;
   protocol_version : tls_version ;
+  early_data_left  : int32 ;
   machina          : handshake_machina_state ; (* state machine state *)
   config           : Config.config ; (* given config *)
   hs_fragment      : Cstruct.t ; (* handshake messages can be fragmented, leftover from before *)
