@@ -117,9 +117,8 @@ type fatal = [
   | `NoApplicationProtocol
   | `HelloRetryRequest
   | `InvalidMessage
-  | `NoPskKexExtension
-  | `NoPskDheMode
   | `Toomany0rttbytes
+  | `MissingContentType
 ]
 
 (** type of failures *)

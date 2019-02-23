@@ -67,9 +67,8 @@ let alert_of_fatal = function
   | `NoApplicationProtocol -> Packet.NO_APPLICATION_PROTOCOL
   | `HelloRetryRequest -> Packet.HANDSHAKE_FAILURE (* TODO check *)
   | `InvalidMessage -> Packet.HANDSHAKE_FAILURE
-  | `NoPskKexExtension -> Packet.MISSING_EXTENSION
-  | `NoPskDheMode -> Packet.HANDSHAKE_FAILURE
   | `Toomany0rttbytes -> Packet.UNEXPECTED_MESSAGE
+  | `MissingContentType -> Packet.UNEXPECTED_MESSAGE
 
 let alert_of_failure = function
   | `Error x -> alert_of_error x
@@ -261,14 +260,13 @@ let decrypt ?(trial = false) (version : tls_version) (st : crypto_state) ty buf 
         | AEAD c ->
           let nonce = Crypto.aead_nonce c.nonce ctx.sequence in
           let unpad x =
-            (* TODO error values (atm both MACUnderflow) *)
             let rec eat = function
-              | 0 -> fail (`Fatal `MACUnderflow)
+              | 0 -> fail (`Fatal `MissingContentType)
               | idx -> match Cstruct.get_uint8 x idx with
                 | 0 -> eat (pred idx)
                 | n -> match Packet.int_to_content_type n with
                   | Some ct -> return (Cstruct.sub x 0 idx, ct)
-                  | None -> fail (`Fatal `MACUnderflow)
+                  | None -> fail (`Fatal `MACUnderflow) (* TODO better error? *)
             in
             eat (pred (Cstruct.len x))
           in
