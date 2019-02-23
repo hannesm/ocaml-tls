@@ -80,7 +80,10 @@ let answer_client_hello state ch raw =
         let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie cookie ] } in
         let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
-        return (state, [ `Record (Packet.HANDSHAKE, hrr_raw) ])
+        return (state, `Record (Packet.HANDSHAKE, hrr_raw) ::
+                       (match ch.sessionid with
+                        | None -> []
+                        | Some _ -> [`Record change_cipher_spec]))
     end
   | Some group, Some cipher ->
     Log.info (fun m -> m "cipher %a" Sexplib.Sexp.pp_hum (Ciphersuite.sexp_of_ciphersuite13 cipher)) ;
@@ -91,14 +94,14 @@ let answer_client_hello state ch raw =
     | _, Some keyshare ->
       (* DHE - full handshake *)
 
-      let log = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
-        | None -> Cstruct.empty
+      let log, was_hrr = match map_find ~f:(function `Cookie c -> Some c | _ -> None) ch.extensions with
+        | None -> Cstruct.empty, false
         | Some c ->
           (* log is: 254 00 00 length c :: HRR *)
           let hash_hdr = Writer.assemble_message_hash (Cstruct.len c) in
           let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie c ]} in
           let hs_buf = Writer.assemble_handshake (HelloRetryRequest hrr) in
-          Cstruct.concat [ hash_hdr ; c ; hs_buf ]
+          Cstruct.concat [ hash_hdr ; c ; hs_buf ], true
       in
 
       let hostname = hostname ch in
@@ -324,8 +327,8 @@ let answer_client_hello state ch raw =
       ({ state with machina = Server13 st ; session },
        `Record (Packet.HANDSHAKE, sh_raw) ::
        (match ch.sessionid with
-        | None -> []
-        | Some _ -> [`Record change_cipher_spec]) @
+        | Some _ when not was_hrr -> [`Record change_cipher_spec]
+        | _ -> []) @
        [ `Change_enc (Some server_ctx) ;
          `Change_dec (Some (if can_use_early_data then early_traffic_ctx else client_ctx)) ;
          `Record (Packet.HANDSHAKE, ee_raw) ] @
