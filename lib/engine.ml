@@ -447,7 +447,6 @@ let decrement_early_data hs ty buf =
 let handle_raw_record state (hdr, buf as record : raw_record) =
 
   Tracing.sexpf ~tag:"record-in" ~f:sexp_of_raw_record record ;
-
   let hs = state.handshake in
   let version = hs.protocol_version in
   ( match hs.machina, version with
