@@ -91,7 +91,7 @@ let common_server_hello_validation config reneg (sh : server_hello) (ch : client
     | None, Some x -> guard (Cs.null x) (`Fatal `InvalidRenegotiation)
     | None, None -> return ()
   in
-  guard (List.mem sh.ciphersuite config.ciphers)
+  guard (List.mem sh.ciphersuite (config.ciphers @ (config.ciphers13 :> Ciphersuite.ciphersuite list)))
     (`Error (`NoConfiguredCiphersuite [sh.ciphersuite])) >>= fun () ->
   guard (server_hello_valid sh &&
          server_exts_subset_of_client sh.extensions ch.extensions)
@@ -146,8 +146,11 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
   (let piece = Cstruct.sub sh.server_random 24 8 in
    match any_version_to_version ch.client_version, sh.server_version with
    | Some TLS_1_3, x when x = TLS_1_2 || x = TLS_1_1 || x = TLS_1_0 ->
+     (* TODO wrong way around: if Packet.downgrade12/13 is that piece, than do sth
+        -> but not require it to (not) be that piece *)
      guard (not (Cstruct.equal Packet.downgrade13 piece)) (`Fatal `InvalidServerHello)
    | Some TLS_1_2, x when x = TLS_1_1 || x = TLS_1_0 ->
+     (* TODO a bit too restrictive given plain TLS_1_2 servers *)
      guard (not (Cstruct.equal Packet.downgrade12 piece)) (`Fatal `InvalidServerHello)
    | _ -> return ()) >>= fun () ->
 

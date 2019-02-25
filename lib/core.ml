@@ -68,7 +68,7 @@ let version_eq a b =
 
 let version_ge a b =
   match a with
-  | Supported x -> compare_tls_version x b = 1
+  | Supported x -> compare_tls_version x b >= 0
   | SSL_3       -> false
   | TLS_1_X _   -> true
 

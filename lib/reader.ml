@@ -545,7 +545,7 @@ let parse_server_hello buf =
   (* depending on the content of the server_random we have to diverge in behaviour *)
   if Cstruct.equal server_random helloretryrequest then begin
     (* hello retry request, TODO: verify cmp=empty *)
-    match Ciphersuite.(any_ciphersuite_to_ciphersuite13 (ciphersuite_to_any_ciphersuite ciphersuite)) with
+    match Ciphersuite.ciphersuite_to_ciphersuite13 ciphersuite with
     | None -> raise_unknown "unsupported ciphersuite in hello retry request"
     | Some ciphersuite ->
       let extensions =
@@ -747,7 +747,7 @@ let parse_session_ticket buf =
   in
   let nonce = sub buf 9 nonce_len in
   let ticket_len = BE.get_uint16 buf (9 + nonce_len) in
-  let ticket, exts_buf = split (shift buf 11) ticket_len in
+  let ticket, exts_buf = split (shift buf (11 + nonce_len)) ticket_len in
   let extensions = parse_extensions parse_session_ticket_extension exts_buf in
   { lifetime ; age_add ; nonce ; ticket ; extensions }
 
