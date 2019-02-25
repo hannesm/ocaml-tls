@@ -37,16 +37,13 @@ let dh_gen_key group =
     let sec, shared = Nocrypto.Dh.gen_key nc_group in
     `Nocrypto sec, left_pad_dh nc_group shared
   | `Hacl `X25519 ->
-    Logs.debug (fun m -> m "generating X25519 key!") ;
     let random = Nocrypto.Rng.generate Hacl_x25519.key_length_bytes in
-    Logs.debug (fun m -> m "secrete %a" Cstruct.hexdump_pp random) ;
     let secret =
       match Hacl_x25519.of_cstruct random with
       | Ok s -> s
       | Error msg -> invalid_arg msg
     in
     let public = Hacl_x25519.(to_cstruct (public secret)) in
-    Logs.debug (fun m -> m "public is %a" Cstruct.hexdump_pp public) ;
     (`Hacl secret, public)
   | `Fiat `P256 ->
     let random = Nocrypto.Rng.generate 32 in (* TODO *)

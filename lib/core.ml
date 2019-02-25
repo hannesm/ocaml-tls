@@ -25,6 +25,23 @@ let compare_tls_version a b = match a, b with
   | TLS_1_2, TLS_1_2 -> 0 | TLS_1_2, _ -> -1 | _, TLS_1_2 -> 1
   | TLS_1_3, TLS_1_3 -> 0
 
+let next = function
+  | TLS_1_0 -> Some TLS_1_1
+  | TLS_1_1 -> Some TLS_1_2
+  | TLS_1_2 -> Some TLS_1_3
+  | TLS_1_3 -> None
+
+let all_versions (min, max) =
+  let rec gen curr =
+    if compare_tls_version max curr >= 0 then
+      match next curr with
+      | None -> [curr]
+      | Some c -> curr :: gen c
+    else
+      []
+  in
+  gen min
+
 let tls_version_of_pair = function
   | (3, 1) -> Some TLS_1_0
   | (3, 2) -> Some TLS_1_1

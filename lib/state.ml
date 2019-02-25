@@ -70,6 +70,15 @@ type hs_log = Cstruct_sexp.t list [@@deriving sexp]
 (* diffie hellman group and secret *)
 type dh_sent = Dh.group * Dh.secret [@@deriving sexp]
 
+type dh_secret = [
+  | `Fiat of Fiat_p256.scalar
+  | `Hacl of Hacl_x25519.priv Hacl_x25519.key
+  | `Nocrypto of Nocrypto.Dh.secret
+]
+let sexp_of_dh_secret _ = Sexp.Atom "dh_secret"
+let dh_secret_of_sexp = Conv.of_sexp_error "dh_secret_of_sexp: not implemented"
+
+
 (* a collection of client and server verify bytes for renegotiation *)
 type reneg_params = Cstruct_sexp.t * Cstruct_sexp.t [@@deriving sexp]
 
@@ -116,7 +125,7 @@ type server_handshake_state =
 (* state machine of the client *)
 type client_handshake_state =
   | ClientInitial (* initial state *)
-  | AwaitServerHello of client_hello * (group * Dh.secret) list * hs_log (* client hello is sent, handshake_params are half-filled *)
+  | AwaitServerHello of client_hello * (group * dh_secret) list * hs_log (* client hello is sent, handshake_params are half-filled *)
   | AwaitServerHelloRenegotiate of session_data * client_hello * hs_log (* client hello is sent, handshake_params are half-filled *)
   | AwaitCertificate_RSA of session_data * hs_log (* certificate expected with RSA key exchange *)
   | AwaitCertificate_DHE_RSA of session_data * hs_log (* certificate expected with DHE_RSA key exchange *)
