@@ -1,4 +1,3 @@
-
 open Lwt
 open Ex_common
 
@@ -14,12 +13,19 @@ let test_client _ =
   ] in
   Lwt_io.(write oc req >>= fun () -> read ic >>= print >>= fun () -> printf "++ done.\n%!")
 
-let () =
+let jump _ =
   try
-    Lwt_main.run (test_client ())
+    Lwt_main.run (test_client ()) ; `Ok ()
   with
   | Tls_lwt.Tls_alert alert as exn ->
       print_alert "remote end" alert ; raise exn
   | Tls_lwt.Tls_failure alert as exn ->
       print_fail "our end" alert ; raise exn
 
+open Cmdliner
+
+let cmd =
+  Term.(ret (const jump $ setup_log)),
+  Term.info "test_client" ~version:"%%VERSION_NUM%%"
+
+let () = match Term.eval cmd with `Ok () -> exit 0 | _ -> exit 1

@@ -135,6 +135,10 @@ type ciphersuite = [
   | `TLS_RSA_WITH_AES_128_CCM
 ]  [@@deriving sexp]
 
+let ciphersuite_to_ciphersuite13 : ciphersuite -> ciphersuite13 option = function
+  | #ciphersuite13 as cs -> Some cs
+  | _ -> None
+
 let any_ciphersuite_to_ciphersuite = function
   | Packet.TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 -> Some `TLS_DHE_RSA_WITH_AES_256_CBC_SHA256
   | Packet.TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 -> Some `TLS_DHE_RSA_WITH_AES_128_CBC_SHA256
