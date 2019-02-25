@@ -396,3 +396,14 @@ both only ever up to configured max_size_limit! (not the one from the session ti
  - track epoch/crypto context numbers?
    - None ~> Some `Handshake ~> Some `AppX ~> Some `AppX+1
    - but that's different for the two peers, can a API client make use out of that info?
+- SHA384 fixes (empty psk must be hash len, certificateverify uses the same hash)
+ - TODO is the latter necessary? can PSS-SHA256 be used with AES-256-GCM-SHA384?
+* <2019-02-25 Mon>
+- server side things
+  - preserve resumption_secret for future session tickets (computed in _finished)
+    - track nonce
+  - respect certificate_signature_algorithms in agreed_certs
+  - post-handshake authentication
+  - keyupdate
+  - API: 0rtt (see above discussion)
+- working on client side

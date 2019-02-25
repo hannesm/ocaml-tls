@@ -23,16 +23,24 @@ let default_client_hello config =
       let sig_alg = config.signature_algorithms (* TODO: filter deprecated ones *)
       and groups =
          List.map group_to_named_group config.groups
-      and keyshares, secrets =
-        let groups = List.map (fun g -> match group_to_impl g with `Nocrypto g -> g) config.groups in
-        let secrets, shares = List.split (List.map Dh.gen_key groups) in
-        (List.combine
-           (List.map group_to_named_group config.groups)
-           shares,
-         List.combine config.groups secrets)
+      and secrets, keyshares =
+        (* OTOH, we could send all the keyshares (but this is pretty substantial size) *)
+        (* instead we pick the first two groups and send keyshares *)
+        let rec gen c gs acc = match c with
+          | 0 -> List.rev acc
+          | _ -> match gs with
+            | [] -> List.rev acc (* TODO log? complain? *)
+            | g::gs' ->
+              let priv, share = Handshake_crypto13.dh_gen_key g in
+              let acc' = ((g, priv),(group_to_named_group g, share)) :: acc in
+              gen (pred c) gs' acc'
+        in
+        List.split (gen 2 config.groups [])
       in
+      let all = all_versions config.protocol_versions in
+      let supported_versions = List.map (fun v -> Supported v) all in
       let exts =
-         [`SignatureAlgorithms sig_alg ; `SupportedGroups groups ; `KeyShare keyshares ; `Draft draft ]
+        [`SignatureAlgorithms sig_alg ; `SupportedGroups groups ; `KeyShare keyshares ; `SupportedVersions supported_versions ]
       in
 (*  TODO    let psk = match config.cached_session with
         | Some { psk_id ; _ } when Cstruct.len psk_id > 0 -> [`PreSharedKey [ psk_id ]]
@@ -45,15 +53,20 @@ let default_client_hello config =
     | protocols -> [`ALPN protocols]
   in
   let ciphers =
-    let cs = config.ciphers in
     let cs =
-      if psk then cs
-      else List.filter (o not Ciphersuite.ciphersuite_psk) cs
+      match
+        min_protocol_version config.protocol_versions,
+        max_protocol_version config.protocol_versions
+      with
+      | TLS_1_3, _ -> (config.ciphers13 :> Ciphersuite.ciphersuite list)
+      | _, TLS_1_3 -> config.ciphers @ (config.ciphers13 :> Ciphersuite.ciphersuite list)
+      | _, TLS_1_1 | _, TLS_1_0 -> List.filter (o not Ciphersuite.ciphersuite_tls12_only) config.ciphers
+      | _ -> config.ciphers
     in
-    match version with
-    | TLS_1_0 | TLS_1_1 -> List.filter (o not Ciphersuite.ciphersuite_tls12_only) cs
-    | TLS_1_2 -> cs
-    | TLS_1_3 -> cs (* for 1.3 only, we should filter for Ciphersuite.ciphersuite_tls13 *)
+    if psk then
+      cs
+    else
+      List.filter (o not Ciphersuite.ciphersuite_psk) cs
   and sessionid =
     match config.use_reneg, config.cached_session with
     | _, Some { session_id ; extended_ms ; _ } when extended_ms && not (Cs.null session_id) -> Some session_id
