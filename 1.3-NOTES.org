@@ -407,3 +407,10 @@ both only ever up to configured max_size_limit! (not the one from the session ti
   - keyupdate
   - API: 0rtt (see above discussion)
 - working on client side
+  - handshake
+  - hrr
+- still needs:
+  - send ccs for middlebox
+  - client authentication
+  - ee data into epoch
+  - psk, 0rtt

@@ -35,7 +35,7 @@ let default_client_hello config =
               let acc' = ((g, priv),(group_to_named_group g, share)) :: acc in
               gen (pred c) gs' acc'
         in
-        List.split (gen 2 config.groups [])
+        List.split (gen 0 config.groups [])
       in
       let all = all_versions config.protocol_versions in
       let supported_versions = List.map (fun v -> Supported v) all in

@@ -5,6 +5,8 @@ open Core
 open Handshake_common
 open Config
 
+(* TODO CCS *)
+
 let answer_server_hello state ch (sh : server_hello) secrets raw log =
   (* assume SH valid, version 1.3, extensions are subset *)
   Logs.info (fun m -> m "here") ;
@@ -15,7 +17,6 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
     guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >>= fun () ->
 
     (* TODO: PSK *)
-    (* TODO: HRR *)
     (* TODO: early_secret elsewhere *)
     match map_find ~f:(function `KeyShare ks -> Some ks | _ -> None) sh.extensions with
     | None -> fail (`Fatal `InvalidServerHello)
@@ -47,32 +48,40 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
             { base with master_secret ; common_session_data13 }
           in
           let st = AwaitServerEncryptedExtensions13 (session, server_hs_secret, client_hs_secret, log) in
-          Ok ({ state with machina = Client13 st },
+          Ok ({ state with machina = Client13 st ; protocol_version = TLS_1_3 },
               [ `Change_enc (Some client_ctx) ;
                 `Change_dec (Some server_ctx) ])
 
 (* called from handshake_client.ml *)
-let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log = assert false
-(*  guard (TLS_1_3 = hrr.retry_version) (`Fatal `InvalidMessage) >>= fun () ->
-  let sg = Ciphersuite.group_to_any_group hrr.selected_group in
-  (match map_find ~f:(function `SupportedGroups gs -> Some gs | _ -> None) ch.extensions with
-    | None -> fail (`Fatal `InvalidMessage)
-    | Some gs -> guard (List.mem sg gs) (`Fatal `InvalidMessage)) >>= fun () ->
-  guard (List.mem (Ciphersuite.ciphersuite_to_any_ciphersuite hrr.ciphersuite) ch.ciphersuites) (`Fatal `InvalidMessage) >>= fun () ->
-  (match map_find ~f:(function `KeyShare ks -> Some ks | _ -> None) ch.extensions with
-    | None -> fail (`Fatal `InvalidMessage)
-    | Some ks ->
-      guard (List.for_all (fun (g, _) -> g <> sg) ks) (`Fatal `InvalidMessage) >|= fun () ->
-      let sec, share = Nocrypto.Dh.gen_key hrr.selected_group in
-      (sec, `KeyShare (ks@[sg, share]))) >>= fun (sec, ks) ->
+let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
+  (* when is a HRR invalid / what do we need to check?
+     -> we advertised the group and cipher
+     -> TODO we did not advertise a keyshare (does it matter?)
+  *)
+  guard (TLS_1_3 = hrr.retry_version) (`Fatal `InvalidMessage) >>= fun () ->
+  guard (List.mem hrr.selected_group state.config.groups) (`Fatal `InvalidMessage) >>= fun () ->
+  guard (List.mem hrr.ciphersuite state.config.ciphers13) (`Fatal `InvalidMessage) >>= fun () ->
+  (* generate a fresh keyshare *)
+  let secret, keyshare =
+    let g = hrr.selected_group in
+    let priv, share = Handshake_crypto13.dh_gen_key g in
+    (g, priv), (group_to_named_group g, share)
+  in
+  (* append server extensions (i.e. cookie!) *)
+  let cookie = match map_find ~f:(function `Cookie c -> Some c | _ -> None) hrr.extensions with
+    | None -> []
+    | Some c -> [ `Cookie c ]
+  in
+  (* use the same extensions as in original CH, apart from PSK!? and early_data *)
   let other_exts = List.filter (function `KeyShare _ -> false | _ -> true) ch.extensions in
-  let new_ch = { ch with extensions = (other_exts @ [ks]) } in
+  let new_ch = { ch with extensions = `KeyShare [keyshare] :: other_exts @ cookie} in
   let new_ch_raw = Writer.assemble_handshake (ClientHello new_ch) in
-  let st = AwaitServerHello13 (new_ch, [(hrr.selected_group, sec)], Cs.appends [ log ; raw ; new_ch_raw ]) in
+  let ch0_data = Nocrypto.Hash.digest (Ciphersuite.hash13 hrr.ciphersuite) log in
+  let ch0_hdr = Writer.assemble_message_hash (Cstruct.len ch0_data) in
+  let st = AwaitServerHello13 (new_ch, [secret], Cs.appends [ ch0_hdr ; ch0_data ; raw ; new_ch_raw ]) in
 
   Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (ClientHello new_ch);
-
-    return ({ state with machina = Client13 st }, [`Record (Packet.HANDSHAKE, new_ch_raw)]) *)
+  return ({ state with machina = Client13 st ; protocol_version = TLS_1_3 }, [`Record (Packet.HANDSHAKE, new_ch_raw)])
 
 let answer_encrypted_extensions state (session : session_data13) server_hs_secret client_hs_secret ee raw log =
   (* TODO we now know: - hostname - ALPN - early_data (preserve this in session!!) *)
