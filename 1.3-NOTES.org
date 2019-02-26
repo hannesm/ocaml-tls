@@ -414,3 +414,5 @@ both only ever up to configured max_size_limit! (not the one from the session ti
   - client authentication
   - ee data into epoch
   - psk, 0rtt
+* <2019-02-26 Tue>
+- tlsfuzzer testing https://gist.github.com/hannesm/97824e6a634e5f4209b018c119ecede7
