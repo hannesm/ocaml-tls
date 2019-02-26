@@ -56,7 +56,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
 let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
   (* when is a HRR invalid / what do we need to check?
      -> we advertised the group and cipher
-     -> TODO we did not advertise a keyshare (does it matter?)
+     -> TODO we did advertise such a keyshare already (does it matter?)
   *)
   guard (TLS_1_3 = hrr.retry_version) (`Fatal `InvalidMessage) >>= fun () ->
   guard (List.mem hrr.selected_group state.config.groups) (`Fatal `InvalidMessage) >>= fun () ->
@@ -84,8 +84,13 @@ let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
   return ({ state with machina = Client13 st ; protocol_version = TLS_1_3 }, [`Record (Packet.HANDSHAKE, new_ch_raw)])
 
 let answer_encrypted_extensions state (session : session_data13) server_hs_secret client_hs_secret ee raw log =
-  (* TODO we now know: - hostname - ALPN - early_data (preserve this in session!!) *)
+  (* TODO we now know: - hostname - early_data (preserve this in session!!) *)
   (* next message is either CertificateRequest or Certificate (or finished if PSK) *)
+  let alpn_protocol = map_find ~f:(function `ALPN proto -> Some proto | _ -> None) ee in
+  let session =
+    let common_session_data13 = { session.common_session_data13 with alpn_protocol } in
+    { session with common_session_data13 }
+  in
   let st =
 (*    if Ciphersuite.ciphersuite_psk session.ciphersuite then
       AwaitServerFinished13 (session, server_hs_secret, client_hs_secret, log <+> raw)
