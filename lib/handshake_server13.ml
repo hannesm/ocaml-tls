@@ -54,7 +54,8 @@ let answer_client_hello state ch raw =
         server_random = sh.server_random ;
         client_random = ch.client_random ;
       } in
-      { base with common_session_data13 ; ciphersuite13 = cipher }
+      let resumed = match epoch with None -> false | Some _ -> true in
+      { base with common_session_data13 ; ciphersuite13 = cipher ; resumed }
     in
     (sh, session)
   and keyshare group =

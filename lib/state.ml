@@ -154,6 +154,7 @@ type session_data13 = {
   master_secret          : kdf ;
   resumption_secret      : Cstruct.t ;
   state                  : epoch_state ;
+  resumed                : bool ;
 } [@@deriving sexp]
 
 type client13_handshake_state =

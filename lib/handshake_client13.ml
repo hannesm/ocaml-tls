@@ -26,17 +26,24 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
       | Some (_, secret) ->
         match Handshake_crypto13.dh_shared g secret share with
         | None -> fail (`Fatal `InvalidServerHello)
-        | Some psk ->
+        | Some shared ->
           let hlen = Nocrypto.Hash.digest_size (Ciphersuite.hash13 cipher) in
-          let early_secret = Handshake_crypto13.(derive (empty cipher) (Cstruct.create hlen)) in
-          let hs_secret = Handshake_crypto13.derive early_secret psk in
+          (match
+             map_find ~f:(function `PreSharedKey idx -> Some idx | _ -> None) sh.extensions,
+             state.config.Config.cached_ticket
+           with
+           | None, _ | _, None -> return (Cstruct.create hlen, false)
+           | Some idx, Some (psk, _epoch) ->
+             guard (idx = 0) (`Fatal `InvalidServerHello) >|= fun () ->
+             psk.secret, true) >>= fun (psk, resumed) ->
+          let early_secret = Handshake_crypto13.(derive (empty cipher) psk) in
+          let hs_secret = Handshake_crypto13.derive early_secret shared in
           let log = log <+> raw in
           let server_hs_secret, server_ctx, client_hs_secret, client_ctx =
             Handshake_crypto13.hs_ctx hs_secret log in
-          let master_secret = Handshake_crypto13.derive hs_secret (Cstruct.create hlen) in
-          (* TODO: preserve more data
-             master_secret
-          *)
+          let master_secret =
+            Handshake_crypto13.derive hs_secret (Cstruct.create hlen)
+          in
           let session =
             let base = empty_session13 cipher in
             let common_session_data13 =
@@ -45,7 +52,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
                 client_random = ch.client_random ;
                 master_secret = master_secret.secret }
             in
-            { base with master_secret ; common_session_data13 }
+            { base with master_secret ; common_session_data13 ; resumed }
           in
           let st = AwaitServerEncryptedExtensions13 (session, server_hs_secret, client_hs_secret, log) in
           Ok ({ state with machina = Client13 st ; protocol_version = TLS_1_3 },
@@ -92,10 +99,10 @@ let answer_encrypted_extensions state (session : session_data13) server_hs_secre
     { session with common_session_data13 }
   in
   let st =
-(*    if Ciphersuite.ciphersuite_psk session.ciphersuite then
+    if session.resumed then
       AwaitServerFinished13 (session, server_hs_secret, client_hs_secret, log <+> raw)
-      else*)
-    AwaitServerCertificateRequestOrCertificate13 (session, server_hs_secret, client_hs_secret, log <+> raw)
+    else
+      AwaitServerCertificateRequestOrCertificate13 (session, server_hs_secret, client_hs_secret, log <+> raw)
   in
   return ({ state with machina = Client13 st }, [])
 
