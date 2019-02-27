@@ -14,13 +14,15 @@ let ticket_cache = {
   timestamp = Ptime_clock.now
 }
 
-
 let test_client _ =
+  X509_lwt.private_of_pems
+    ~cert:server_cert
+    ~priv_key:server_key >>= fun cert ->
   let port = 4433 in
   let host = "127.0.0.1" in
   X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
   Tls_lwt.connect_ext
-    Tls.Config.(client ?cached_ticket:!mypsk ~ticket_cache ~authenticator ~ciphers:Ciphers.supported ())
+    Tls.Config.(client ~certificates:(`Single cert) ?cached_ticket:!mypsk ~ticket_cache ~authenticator ~ciphers:Ciphers.supported ())
     (host, port) >>= fun (ic, oc) ->
   let req = String.concat "\r\n" [
     "GET / HTTP/1.1" ; "Host: " ^ host ; "Connection: close" ; "" ; ""
@@ -32,7 +34,7 @@ let test_client _ =
 
 let jump _ =
   try
-    Lwt_main.run (test_client () >>= test_client) ; `Ok ()
+    Lwt_main.run (test_client ()) ; `Ok ()
   with
   | Tls_lwt.Tls_alert alert as exn ->
       print_alert "remote end" alert ; raise exn

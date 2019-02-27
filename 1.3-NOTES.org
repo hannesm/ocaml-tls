@@ -422,7 +422,7 @@ both only ever up to configured max_size_limit! (not the one from the session ti
   - need [(identity, obf_ts, old ts, current ts), secret] as input (maybe epoch)
     - could have multiple PSK!?
   - computes binder (using CH), and sends it out
- - missing lifetime + ticket extension (0RTT)
+ - missing lifetime + ticket extension (0RTT) -- now done!
 * <2019-02-27 Wed>
 - TODO BUG respect and record server's `Hostname (and report in epoch)
 - TODO ticket_cache, cached_session, session_cache Config thingies:
@@ -444,3 +444,4 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 - TODO temporarily disabled padding since it's awkwardly put by Writer at the end of the buffer
   ~~> PSK needs to go last!
 - TODO HRR and resumption
+- client authentication (unfinished, TODO doesn't respect server's CR exts)
