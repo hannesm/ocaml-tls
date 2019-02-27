@@ -105,6 +105,7 @@ let empty_session13 cipher = {
   master_secret         = Handshake_crypto13.empty cipher ;
   resumption_secret     = Cstruct.empty ;
   state                 = `Established ;
+  resumed               = false ;
 }
 
 let common_session_data_of_epoch (epoch : epoch_data) common_session_data =
