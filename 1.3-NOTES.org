@@ -441,7 +441,6 @@ both only ever up to configured max_size_limit! (not the one from the session ti
     ~> added lifetime and early_data to psk13!
 -> ts needed to preserve:
    ticket_issuance, obfuscation, lifetime
-- client psk (but does it work with respect to early_secret!?)
 - TODO temporarily disabled padding since it's awkwardly put by Writer at the end of the buffer
   ~~> PSK needs to go last!
 - TODO HRR and resumption

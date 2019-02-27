@@ -235,9 +235,9 @@ let answer_client_hello state ch raw =
       let log = Cstruct.append log ee_raw in
 
       begin
-        match epoch with
-        | Some _ -> return ([], log, session)
-        | None ->
+        if session.resumed then
+          return ([], log, session)
+        else
           let out, log, session = match config.Config.authenticator with
             | None -> [], log, session
             | Some _ ->
@@ -297,9 +297,9 @@ let answer_client_hello state ch raw =
       (* send sessionticket early *)
       (* TODO track the nonce across handshakes / newsessionticket messages (i.e. after post-handshake auth) - needs to be unique! *)
       let st, st_raw =
-        match epoch, config.Config.ticket_cache with
-        | Some _, _ | _, None -> None, []
-        | None, Some cache ->
+        match session.resumed, config.Config.ticket_cache with
+        | true, _ | _, None -> None, []
+        | false, Some cache ->
           let age_add =
             let cs = Nocrypto.Rng.generate 4 in
             Cstruct.BE.get_uint32 cs 0
