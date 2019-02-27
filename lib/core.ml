@@ -40,7 +40,7 @@ let all_versions (min, max) =
     else
       []
   in
-  gen min
+  List.rev (gen min)
 
 let tls_version_of_pair = function
   | (3, 1) -> Some TLS_1_0
@@ -366,10 +366,25 @@ module Cert = struct
   let sexp_of_t _ = Sexplib.Sexp.Atom "certificate"
 end
 
+module Ptime = struct
+  include Ptime
+  let sexp_of_t ts = Sexplib.Sexp.Atom (Ptime.to_rfc3339 ts)
+  let t_of_sexp = function
+    | (Sexplib.Sexp.Atom data) as s ->
+      begin match Ptime.of_rfc3339 data with
+        | Ok (t, _, _) -> t
+        | Error _ -> Sexplib.Conv.of_sexp_error "couldn't parse timestamp" s
+      end
+    | s -> Sexplib.Conv.of_sexp_error "couldn't parse timestamp, not an atom" s
+end
+
 type psk13 = {
   identifier : Cstruct.t ;
   obfuscation : int32 ;
-  secret : Cstruct.t ; (* of len 0..255 *)
+  secret : Cstruct.t ;
+  lifetime : int32 ;
+  early_data : int32 ;
+  issued_at : Ptime.t ;
   (* origin : [ `Resumption | `External ] (* using different labels for binder_key *) *)
 } [@@deriving sexp]
 

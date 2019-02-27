@@ -133,7 +133,7 @@ let answer_client_hello state ch raw =
               (* need to verify binder, do the obf_age computations + checking,
                  figure out whether the id is in our psk cache, and use the resumption secret as input
                  and return the idx *)
-              let old_ts, psk, old_epoch =
+              let psk, old_epoch =
                 match find_in_cache id (* config.Config.psk_cache id *) with
                 | None -> assert false (* see above *)
                 | Some x -> x
@@ -148,7 +148,7 @@ let answer_client_hello state ch raw =
                    | _ -> false
                 then
                   let now = cache.Config.timestamp () in
-                  let server_delta_t = Ptime.diff now old_ts in
+                  let server_delta_t = Ptime.diff now psk.issued_at in
                   let client_delta_t =
                     match Ptime.Span.of_float_s Int32.(to_float (sub obf_age psk.obfuscation) /. 1000.) with
                     | None ->
@@ -167,7 +167,7 @@ let answer_client_hello state ch raw =
                       no_resume
                     end else
                       (* if ticket_creation ts + lifetime > now, continue *)
-                      let until = match Ptime.add_span old_ts (Ptime.Span.of_int_s (Int32.to_int cache.Config.lifetime)) with
+                      let until = match Ptime.add_span psk.issued_at (Ptime.Span.of_int_s (Int32.to_int cache.Config.lifetime)) with
                         | None -> Ptime.epoch
                         | Some ts -> ts
                       in
@@ -385,27 +385,28 @@ let answer_client_certificate_verify state cv (sd : session_data13) client_fini 
   ({ state with machina = Server13 st ; session = `TLS13 sd :: state.session }, [])
 
 let answer_client_finished state fin client_fini dec_ctx st raw log =
-  let session = match state.session with
-    | `TLS13 sd :: _ -> sd
+  let session, rest = match state.session with
+    | `TLS13 sd :: rt -> sd, rt
     | _ -> assert false
   in
   let hash = Ciphersuite.hash13 session.ciphersuite13 in
   let data = finished hash client_fini log in
   guard (Cs.equal data fin) (`Fatal `BadFinished) >>= fun () ->
   guard (Cs.null state.hs_fragment) (`Fatal `HandshakeFragmentsNotEmpty) >|= fun () ->
-  (match st, state.config.Config.ticket_cache with
-   | None, _ | _, None -> ()
-   | Some st, Some cache ->
-     let resumption_secret = Handshake_crypto13.resumption session.master_secret (log <+> raw) in
-     let secret = Handshake_crypto13.res_secret hash resumption_secret st.nonce in
-     let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret } in
-     (match epoch_of_hs state with
-      | None -> ()
-      | Some e ->
-        let now = cache.Config.timestamp () in
-        (* cache.ticket_granted psk e *)
-        add_to_cache st.ticket (now, psk, e))) ;
-  let state' = { state with machina = Server13 Established13 } in
+  let session' = match st, state.config.Config.ticket_cache with
+    | None, _ | _, None -> session
+    | Some st, Some cache ->
+      let resumption_secret = Handshake_crypto13.resumption session.master_secret (log <+> raw) in
+      let session = { session with resumption_secret } in
+      let secret = Handshake_crypto13.res_secret hash resumption_secret st.nonce in
+      let issued_at = cache.Config.timestamp () in
+      let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret ; lifetime = st.lifetime ; early_data = state.config.Config.zero_rtt ; issued_at } in
+      let epoch = epoch_of_session true None TLS_1_3 (`TLS13 session) in
+      (* cache.ticket_granted psk e *)
+      add_to_cache st.ticket (psk, epoch) ;
+      session
+  in
+  let state' = { state with machina = Server13 Established13 ; session = `TLS13 session' :: rest } in
   (state', [ `Change_dec (Some dec_ctx) ])
 
 let handle_end_of_early_data state cf hs_ctx cc st buf log =

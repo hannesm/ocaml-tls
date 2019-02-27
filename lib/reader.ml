@@ -26,7 +26,9 @@ and raise_trailing_bytes msg = raise (Reader_error (TrailingBytes msg))
 let catch f x =
   try return (f x) with
   | Reader_error err   -> fail err
-  | Invalid_argument _ -> fail Underflow
+  | (Invalid_argument a) as e ->
+    Printf.printf "invalid argument %s\n%s\n%!" a (Printexc.to_string e) ;
+    fail Underflow
 
 let parse_version_int buf =
   let major = get_uint8 buf 0 in
@@ -323,6 +325,7 @@ let parse_client_presharedkeys buf =
   let identities = parse_list parse_id (sub buf 2 id_len) [] in
   let binders_len = BE.get_uint16 buf (id_len + 2) in
   let binders = parse_list parse_binder (sub buf (4 + id_len) binders_len) [] in
+  Printf.printf "identities are %d, binders %d\n%!" (List.length identities) (List.length binders) ;
   let id_binder = List.combine identities binders in
   if len buf <> 4 + binders_len + id_len then
     raise_trailing_bytes "psk"
@@ -523,6 +526,7 @@ let parse_client_hello buf =
   let sessionid = if slen = 0 then None else Some (sub buf 35 slen) in
   let ciphersuites, rt = parse_any_ciphersuites (shift buf (35 + slen)) in
   let _, rt' = parse_compression_methods rt in
+  Cstruct.hexdump rt' ;
   let extensions =
     if len rt' == 0 then [] else parse_extensions parse_client_extension rt'
   in

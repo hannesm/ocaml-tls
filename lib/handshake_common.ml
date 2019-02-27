@@ -112,6 +112,7 @@ let empty_session13 cipher = {
   common_session_data13 = empty_common_session_data ;
   ciphersuite13         = cipher ;
   master_secret         = Handshake_crypto13.empty cipher ;
+  resumption_secret     = Cstruct.empty ;
   state                 = `Established ;
 }
 
