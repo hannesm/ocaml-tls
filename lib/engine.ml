@@ -642,8 +642,45 @@ let client config =
         extensions   = dch.extensions @ extensions }
   in
 
+  let psk_ext = match config.Config.cached_ticket, config.Config.ticket_cache with
+    | None, _ | _, None -> []
+    | Some (psk, epoch), Some cache ->
+      let kex = `PskKeyExchangeModes [ Packet.PSK_KE_DHE ] in
+      (* what next!? *)
+      let now = cache.Config.timestamp () in
+      (* TODO check lifetime! *)
+      let obf_age =
+        let span = Ptime.Span.to_float_s (Ptime.diff now psk.issued_at) in
+        (* _in milliseconds_ *)
+        let ms = int_of_float (span *. 1000.) in
+        Int32.add psk.obfuscation (Int32.of_int ms)
+      in
+      let cipher = match Ciphersuite.ciphersuite_to_ciphersuite13 epoch.ciphersuite with
+        | None -> assert false
+        | Some c -> c
+      in
+      (* if all goes well, we can compute the binder key and embed into ch! *)
+      let early_secret = Handshake_crypto13.(derive (empty cipher) psk.secret) in
+      let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
+
+      let hash = Cstruct.create (Nocrypto.Hash.digest_size (Ciphersuite.hash13 cipher)) in
+      let incomplete_psks = [ (psk.identifier, obf_age), hash ] in
+      let ch' = { client_hello with extensions = client_hello.extensions @ [ kex ; `PreSharedKeys incomplete_psks ] } in
+      let ch'_raw = Writer.assemble_handshake (ClientHello ch') in
+
+      let binders_len = binders_len incomplete_psks in
+      let ch_part = Cstruct.(sub ch'_raw 0 (len ch'_raw - binders_len)) in
+      let binder = Handshake_crypto13.finished early_secret.hash binder_key ch_part in
+      let psks = [(psk.identifier, obf_age), binder] in
+      [kex ; `PreSharedKeys psks]
+  in
+  let client_hello = { client_hello with extensions = client_hello.extensions @ psk_ext } in
   let ch = ClientHello client_hello in
   let raw = Writer.assemble_handshake ch in
+
+
+
+
   let machina = AwaitServerHello (client_hello, secrets, [raw]) in
 
     (* from RFC5246, appendix E.1

@@ -7,10 +7,10 @@ let string_of_unix_err err f p =
 
 let add_to_cache, find_in_cache =
   let c = ref [] in
-  (fun now ticket session ->
+  (fun ticket session ->
      let id = ticket.Tls.Core.identifier in
      Logs.info (fun m -> m "adding id %a to cache" Cstruct.hexdump_pp id) ;
-     c := (id, (now, ticket, session)) :: !c),
+     c := (id, (ticket, session)) :: !c),
   (fun id -> match List.find_opt (fun (id', _) -> Cstruct.compare id id' = 0) !c with
      | None -> None
      | Some (_, ep) -> Some ep)
@@ -48,7 +48,7 @@ let serve_ssl port callback =
             yap ~tag @@ "handler: " ^ Tls.Engine.string_of_failure a
           | Unix.Unix_error (e, f, p) ->
             yap ~tag @@ "handler: " ^ (string_of_unix_err e f p)
-          | exn -> yap ~tag "handler: exception")
+          | _exn -> yap ~tag "handler: exception")
   in
 
   yap ~tag ("-> start @ " ^ string_of_int port) >>= fun () ->

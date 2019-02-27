@@ -145,10 +145,14 @@ type kdf = {
   hash : Nocrypto.Hash.hash ;
 } [@@deriving sexp]
 
+(* TODO needs log of CH..CF for post-handshake auth *)
+(* TODO application_traffic_secret_N+1 = expand a_t_s_N "traffic upd", "", Hash.length <- need to preserve a_t_s_n *)
+(* TODO drop master_secret!? *)
 type session_data13 = {
   common_session_data13  : common_session_data ;
   ciphersuite13          : Ciphersuite.ciphersuite13 ;
   master_secret          : kdf ;
+  resumption_secret      : Cstruct.t ;
   state                  : epoch_state ;
 } [@@deriving sexp]
 
@@ -316,6 +320,25 @@ let common_data_to_epoch common is_server peer_name =
     } in
   epoch
 
+let epoch_of_session server peer_name protocol_version = function
+  | `TLS (session : session_data) ->
+    let epoch = common_data_to_epoch session.common_session_data server peer_name in
+    {
+      epoch with
+      protocol_version       = protocol_version ;
+      ciphersuite            = session.ciphersuite ;
+      session_id             = session.session_id ;
+      extended_ms            = session.extended_ms ;
+    }
+  | `TLS13 (session : session_data13) ->
+    let epoch : epoch_data = common_data_to_epoch session.common_session_data13 server peer_name in
+    {
+      epoch with
+      ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
+      extended_ms            = true ; (* RFC 8446, Appendix D, last paragraph *)
+      state                  = session.state ;
+    }
+
 let epoch_of_hs hs =
   let server =
     match hs.machina with
@@ -325,20 +348,4 @@ let epoch_of_hs hs =
   in
   match hs.session with
   | []           -> None
-  | `TLS session :: _ ->
-     let epoch = common_data_to_epoch session.common_session_data server peer_name in
-     Some {
-       epoch with
-       protocol_version       = hs.protocol_version ;
-       ciphersuite            = session.ciphersuite ;
-       session_id             = session.session_id ;
-       extended_ms            = session.extended_ms ;
-     }
-  | `TLS13 session :: _ ->
-    let epoch : epoch_data = common_data_to_epoch session.common_session_data13 server peer_name in
-    Some {
-      epoch with
-      ciphersuite            = (session.ciphersuite13 :> Ciphersuite.ciphersuite) ;
-      extended_ms            = true ; (* RFC 8446, Appendix D, last paragraph *)
-      state                  = session.state ;
-    }
+  | session :: _ -> Some (epoch_of_session server peer_name hs.protocol_version session)

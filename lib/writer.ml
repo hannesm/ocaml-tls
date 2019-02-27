@@ -147,10 +147,23 @@ let assemble_keyshare_entry (ng, ks) =
   BE.set_uint16 l 0 (len ks) ;
   g <+> l <+> ks
 
-let assemble_client_psks psk = invalid_arg "NYI"
-(*  let c = create 2 in
-  BE.set_uint16 c 0 (len psk) ;
-    c <+> psk *)
+let assemble_psk_id (id, age) =
+  let id_len = create 2 in
+  BE.set_uint16 id_len 0 (len id) ;
+  let age_buf = create 4 in
+  BE.set_uint32 age_buf 0 age ;
+  id_len <+> id <+> age_buf
+
+let assemble_binder b =
+  let b_len = create 1 in
+  set_uint8 b_len 0 (len b) ;
+  b_len <+> b
+
+let assemble_client_psks psks =
+  let ids, binders = List.split psks in
+  let ids_buf = assemble_list Two assemble_psk_id ids in
+  let binders_buf = assemble_list Two assemble_binder binders in
+  ids_buf <+> binders_buf
 
 let assemble_ec_point_format f =
   let buf = create 1 in
@@ -189,6 +202,14 @@ let assemble_cookie c =
   let l = create 2 in
   BE.set_uint16 l 0 (len c) ;
   l <+> c
+
+let assemble_psk_key_exchange_mode mode =
+  let c = create 1 in
+  set_uint8 c 0 (psk_key_exchange_mode_to_int mode) ;
+  c
+
+let assemble_psk_key_exchange_modes modes =
+  assemble_list One assemble_psk_key_exchange_mode modes
 
 let assemble_ext (pay, typ) =
   let buf = Cstruct.create 4 in
@@ -247,6 +268,8 @@ let assemble_client_extension e =
       (Utils.Cs.empty, POST_HANDSHAKE_AUTH)
     | `Cookie c ->
       (assemble_cookie c, COOKIE)
+    | `PskKeyExchangeModes modes ->
+      (assemble_psk_key_exchange_modes modes, PSK_KEY_EXCHANGE_MODES)
     | x -> assemble_extension x
 
 let assemble_server_extension e =
@@ -328,7 +351,7 @@ let assemble_client_hello (cl : client_hello) : Cstruct.t =
    push the length to (at least) 512 bytes. *)
   let extensions = assemble_extensions ~none_if_empty:true assemble_client_extension cl.extensions in
   let extrapadding =
-    let buflen = len bbuf + len extensions + 4 in
+(*    let buflen = len bbuf + len extensions + 4 in
     if buflen >= 256 && buflen <= 511 then
       match len extensions with
         | 0 -> (* need to construct a 2 byte extension length as well *)
@@ -345,7 +368,7 @@ let assemble_client_hello (cl : client_hello) : Cstruct.t =
               -- but the extension length should not count the extension length field itself, therefore only +2 *)
            BE.set_uint16 extensions 0 (len extensions + l + 2);
            p
-    else
+    else *)
       create 0
   in
   bbuf <+> extensions <+> extrapadding
@@ -391,7 +414,7 @@ let assemble_session_ticket_extension e =
     (buf, EARLY_DATA)
   | _ -> invalid_arg "unknown extension"
 
-let assemble_session_ticket se =
+let assemble_session_ticket (se : session_ticket) =
   let buf = create 9 in
   BE.set_uint32 buf 0 se.lifetime ;
   BE.set_uint32 buf 4 se.age_add ;

@@ -135,6 +135,8 @@ let answer_finished state (session : session_data13) server_hs_secret client_hs_
   let _, server_app_ctx, _, client_app_ctx = Handshake_crypto13.app_ctx session.master_secret log in
   let myfin = Handshake_crypto13.finished hash client_hs_secret log in
   let mfin = Writer.assemble_handshake (Finished myfin) in
+  let resumption_secret = Handshake_crypto13.resumption session.master_secret  (log <+> mfin) in
+  let session = { session with resumption_secret } in
   let machina = Client13 Established13 in
 
   Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (Finished myfin);
@@ -144,12 +146,27 @@ let answer_finished state (session : session_data13) server_hs_secret client_hs_
      `Record (Packet.HANDSHAKE, mfin) ;
      `Change_enc (Some client_app_ctx) ])
 
-let answer_session_ticket state _se =
-  (* XXX: do sth with lifetime *)
-(*  (match state.session with
-   (*   | s::xs when not (Ciphersuite.ciphersuite_psk s.ciphersuite) -> return ({ s with psk_id } :: xs) *)
-    | _ -> fail (`Fatal `InvalidMessage)) >>= fun session -> *)
-  (*  return ({ state with session }, []) *)
+let answer_session_ticket state st =
+  (match state.config.ticket_cache with
+   | None -> ()
+   | Some cache ->
+     (* looks like we'll need the resumption secret in the state (we can compute once finished is done)! *)
+     let session = match state.session with
+       | `TLS13 session :: _ -> session
+       | _ -> assert false
+     in
+     let epoch = epoch_of_session false state.config.Config.peer_name TLS_1_3 (`TLS13 session) in
+     let secret = Handshake_crypto13.res_secret
+         (Ciphersuite.hash13 session.ciphersuite13)
+         session.resumption_secret st.nonce
+     in
+     let issued_at = cache.timestamp () in
+     let early_data = match map_find ~f:(function `EarlyDataIndication x -> Some x | _ -> None) st.extensions with
+       | None -> 0l
+       | Some x -> x
+     in
+     let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret ; lifetime = st.lifetime ; early_data ; issued_at } in
+     cache.ticket_granted psk epoch);
   return (state, [])
 
 let handle_handshake cs hs buf =

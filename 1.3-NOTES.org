@@ -416,3 +416,32 @@ both only ever up to configured max_size_limit! (not the one from the session ti
   - psk, 0rtt
 * <2019-02-26 Tue>
 - tlsfuzzer testing https://gist.github.com/hannesm/97824e6a634e5f4209b018c119ecede7
+- ee alpn into epoch
+- client psk:
+  - make psk from session ticket available!?
+  - need [(identity, obf_ts, old ts, current ts), secret] as input (maybe epoch)
+    - could have multiple PSK!?
+  - computes binder (using CH), and sends it out
+ - missing lifetime + ticket extension (0RTT)
+* <2019-02-27 Wed>
+- TODO BUG respect and record server's `Hostname (and report in epoch)
+- TODO ticket_cache, cached_session, session_cache Config thingies:
+  - session_cache is ID -> epoch option (for server)
+  - cached_session is epoch option (for client)
+  - now, tickets are a bit more intricate:
+    - need timestamp and compute time deltas
+    - server needs to include (lifetime, early_data_bytes ext)
+    - client _when sending_ needs obfuscated_age + delta, verify lifetime
+       or take timestamp * psk * lifetime as input, and compute what's needed
+    - client _when receiving_ needs to take timestamp and output lifetime
+    - client may send multiple tickets (when is this useful?)
+    - currently a record { lookup ; ticket_granted ; lifetime ; timestamp }
+      -> application passes a callback instead of requesting via epoch on a session
+        -> because the new session ticket may appear at any time, not under control of client
+    ~> added lifetime and early_data to psk13!
+-> ts needed to preserve:
+   ticket_issuance, obfuscation, lifetime
+- client psk (but does it work with respect to early_secret!?)
+- TODO temporarily disabled padding since it's awkwardly put by Writer at the end of the buffer
+  ~~> PSK needs to go last!
+- TODO HRR and resumption

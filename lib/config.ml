@@ -5,7 +5,6 @@ open Core
 
 open Sexplib.Std
 
-
 type certchain = X509.t list * Rsa.priv [@@deriving sexp]
 
 type own_cert = [
@@ -20,8 +19,8 @@ let session_cache_of_sexp _ = fun _ -> None
 let sexp_of_session_cache _ = Sexplib.Sexp.Atom "SESSION_CACHE"
 
 type ticket_cache = {
-  lookup : Cstruct.t -> (Ptime.t * psk13 * epoch_data) option ;
-  ticket_granted : Ptime.t -> psk13 -> epoch_data -> unit ;
+  lookup : Cstruct.t -> (psk13 * epoch_data) option ;
+  ticket_granted : psk13 -> epoch_data -> unit ;
   lifetime : int32 ;
   timestamp : unit -> Ptime.t
 }
@@ -43,6 +42,7 @@ type config = {
   session_cache : session_cache ;
   ticket_cache : ticket_cache_opt ;
   cached_session : epoch_data option ;
+  cached_ticket : (psk13 * epoch_data) option ;
   alpn_protocols : string list ;
   groups : group list ;
   zero_rtt : int32 ;
@@ -142,6 +142,7 @@ let default_config = {
   acceptable_cas = [] ;
   session_cache = (fun _ -> None) ;
   cached_session = None ;
+  cached_ticket = None ;
   alpn_protocols = [] ;
   groups = supported_groups ;
   ticket_cache = None ;
@@ -279,7 +280,7 @@ let with_acceptable_cas conf acceptable_cas = { conf with acceptable_cas }
 let (<?>) ma b = match ma with None -> b | Some a -> a
 
 let client
-  ~authenticator ?peer_name ?ciphers ?ciphers13 ?version ?signature_algorithms ?reneg ?certificates ?cached_session ?alpn_protocols ?groups () =
+  ~authenticator ?peer_name ?ciphers ?ciphers13 ?version ?signature_algorithms ?reneg ?certificates ?cached_session ?cached_ticket ?ticket_cache ?alpn_protocols ?groups () =
   let config =
     { default_config with
         authenticator = Some authenticator ;
@@ -292,6 +293,8 @@ let client
         peer_name = peer_name ;
         cached_session = cached_session ;
         alpn_protocols = alpn_protocols <?> default_config.alpn_protocols ;
+        ticket_cache = ticket_cache ;
+        cached_ticket = cached_ticket ;
         groups = groups <?> default_config.groups ;
     } in
   ( validate_common config ; validate_client config ; config )
