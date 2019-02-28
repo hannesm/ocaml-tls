@@ -6,15 +6,6 @@ open Handshake_common
 
 open Handshake_crypto13
 
-let add_to_cache, find_in_cache =
-  let c = ref [] in
-  (fun id session ->
-     Logs.info (fun m -> m "adding id %a to cache" Cstruct.hexdump_pp id) ;
-     c := (id, session) :: !c),
-  (fun id -> match List.find_opt (fun (id', _) -> Cstruct.compare id id' = 0) !c with
-     | None -> None
-     | Some (_, ep) -> Some ep)
-
 let answer_client_hello state ch raw =
   (match client_hello_valid ch with
    | `Error e -> fail (`Fatal (`InvalidClientHello e))
@@ -123,8 +114,7 @@ let answer_client_hello state ch raw =
             let idx_ids = List.mapi (fun i id -> (i, id)) ids in
             match
               List.filter (fun (_, ((id, _), _)) ->
-                  match (* cache.lookup *) find_in_cache id with
-                    None -> false | Some _ -> true)
+                  match cache.Config.lookup id with None -> false | Some _ -> true)
                 idx_ids
             with
             | [] ->
@@ -135,7 +125,7 @@ let answer_client_hello state ch raw =
                  figure out whether the id is in our psk cache, and use the resumption secret as input
                  and return the idx *)
               let psk, old_epoch =
-                match find_in_cache id (* config.Config.psk_cache id *) with
+                match cache.Config.lookup id with
                 | None -> assert false (* see above *)
                 | Some x -> x
               in
@@ -180,9 +170,8 @@ let answer_client_hello state ch raw =
                         let log = Cstruct.append log ch_part in
                         let binder' = Handshake_crypto13.finished early_secret.hash binder_key log in
                         if Cstruct.equal binder binder' then begin
-                          Log.info (fun m -> m "binder matched") ;
                           (* from 4.1.2 - earlydata is not allowed after hrr *)
-                          let zero = idx = 0 && not was_hrr in
+                          let zero = idx = 0 && not was_hrr && List.mem `EarlyDataIndication ch.extensions in
                           early_secret, Some old_epoch, [ `PreSharedKey idx ], zero
                         end else
                           no_resume
@@ -322,15 +311,15 @@ let answer_client_hello state ch raw =
       in
       let st, session =
         let session' = `TLS13 session :: state.session in
-        match List.mem `EarlyDataIndication ch.extensions, can_use_early_data with
-        | true, true ->
+        if can_use_early_data then
           (AwaitEndOfEarlyData13 (client_hs_secret, client_ctx, client_app_ctx, st, log),
            `TLS13 { session with state = `ZeroRTT } :: state.session)
-        | _, _ ->
-          if session.common_session_data13.client_auth then
-            (AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log), state.session)
-          else
-            (AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log), session')
+        else if session.common_session_data13.client_auth then
+          (AwaitClientCertificate13 (session, client_hs_secret, client_app_ctx, st, log),
+           state.session)
+        else
+          (AwaitClientFinished13 (client_hs_secret, client_app_ctx, st, log),
+           session')
       in
       let early_data_left = if List.mem `EarlyDataIndication ch.extensions then config.Config.zero_rtt else 0l in
       ({ state with machina = Server13 st ; session ; early_data_left },
@@ -403,8 +392,7 @@ let answer_client_finished state fin client_fini dec_ctx st raw log =
       let issued_at = cache.Config.timestamp () in
       let psk = { identifier = st.ticket ; obfuscation = st.age_add ; secret ; lifetime = st.lifetime ; early_data = state.config.Config.zero_rtt ; issued_at } in
       let epoch = epoch_of_session true None TLS_1_3 (`TLS13 session) in
-      (* cache.ticket_granted psk e *)
-      add_to_cache st.ticket (psk, epoch) ;
+      cache.Config.ticket_granted psk epoch ;
       session
   in
   let state' = { state with machina = Server13 Established13 ; session = `TLS13 session' :: rest } in

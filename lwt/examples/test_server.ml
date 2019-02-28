@@ -26,7 +26,6 @@ let serve_ssl port callback =
   callback channels addr >>= fun () ->
   yap ~tag "<- handler done"
 
-
 let test_server port =
   serve_ssl port @@ fun (ic, oc) addr ->
     yap ~tag:"handler" "accepted" >>= fun () ->
