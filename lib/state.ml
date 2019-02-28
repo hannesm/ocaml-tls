@@ -282,6 +282,8 @@ type fatal = [
   | `InvalidMessage
   | `Toomany0rttbytes
   | `MissingContentType
+  | `Downgrade12
+  | `Downgrade11
 ] [@@deriving sexp]
 
 type failure = [

@@ -447,3 +447,12 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 - client authentication (unfinished, TODO doesn't respect server's CR exts)
 * <2019-02-28 Thu>
 - TODO can_handle_appdata story in respect with 1.3 and 0rtt
+- cleanups (remove add_to_cache/find_in_cache), don't assemble clienthello multiple times
+---
+- client zerortt (+HRR+resume), sessionticket lifetime checks
+- API zerortt
+- check fragment being empty
+- post-HS auth
+- keyupdate
+- extensions (esp cert_sig_alg, others?)
+- OCSP/..

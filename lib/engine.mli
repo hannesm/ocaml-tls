@@ -120,6 +120,8 @@ type fatal = [
   | `InvalidMessage
   | `Toomany0rttbytes
   | `MissingContentType
+  | `Downgrade12
+  | `Downgrade11
 ]
 
 (** type of failures *)

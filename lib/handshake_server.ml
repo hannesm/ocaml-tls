@@ -151,12 +151,9 @@ let server_hello config client_version (session : session_data) version reneg =
   let host = option [] (fun _ -> [`Hostname]) session.common_session_data.own_name
   and server_random =
     let suffix =
-      match
-        any_version_to_version client_version,
-        snd config.protocol_versions
-      with
-      | Some x, TLS_1_3 when x = TLS_1_2 || x = TLS_1_1 || x = TLS_1_0 -> Packet.downgrade13
-      | Some x, TLS_1_2 when x = TLS_1_1 || x = TLS_1_0 -> Packet.downgrade12
+      match version, max_protocol_version config.protocol_versions with
+      | TLS_1_2, TLS_1_3 -> Packet.downgrade12
+      | _, TLS_1_3 -> Packet.downgrade11
       | _ -> Cstruct.create 0
     in
     let rst = Rng.generate (32 - Cstruct.len suffix) in
