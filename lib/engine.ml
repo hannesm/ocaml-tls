@@ -439,6 +439,8 @@ let decrement_early_data hs ty buf =
     let cipher = match hs.session with
       | `TLS13 sd::_ -> sd.ciphersuite13
       | _ -> `TLS_AES_128_GCM_SHA256 (* TODO assert (but ensure it never happens) *)
+      (* to assert here, we need to ensure all early_data states have a cipher..
+         which we do not (take CH ~> ED ~> <~ HRR into account, but then HRR could already select a cipher -- is it worth it?) *)
     in
     bytes hs.early_data_left cipher >|= fun early_data_left ->
     { hs with early_data_left }
