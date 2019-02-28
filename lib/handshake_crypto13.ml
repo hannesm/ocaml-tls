@@ -7,28 +7,32 @@ let left_pad_dh group msg =
   let padding = Cstruct.create (bytes - Cstruct.len msg) in
   padding <+> msg
 
+let not_all_zero = function
+  | None -> None
+  | Some cs ->
+    let all_zero = Cstruct.create (Cstruct.len cs) in
+    if Cstruct.equal all_zero cs then None else Some cs
+
 let dh_shared group secret share =
   (* RFC 8556, Section 7.4.1 - we need zero-padding on the left *)
-  match Core.group_to_impl group, secret with
-  | `Nocrypto nc_group, `Nocrypto secret ->
-    begin match Nocrypto.Dh.shared nc_group secret share with
-      | None -> None
-      | Some shared -> Some (left_pad_dh nc_group shared)
-    end
-  | `Hacl `X25519, `Hacl priv ->
-    Logs.debug (fun m -> m "kex with X25519 key secret %a (share %a)!"
-                   Cstruct.hexdump_pp (Hacl_x25519.to_cstruct priv)
-                   Cstruct.hexdump_pp share) ;
-    begin match Hacl_x25519.of_cstruct share with
-      | Error _ -> None
-      | Ok public -> Some (Hacl_x25519.key_exchange ~pub:public ~priv)
-    end
-  | `Fiat `P256, `Fiat scalar ->
-    begin match Fiat_p256.point_of_cs share with
-      | None -> None
-      | Some point -> Some (Fiat_p256.dh ~scalar ~point)
-    end
-  | _ -> assert false
+  not_all_zero
+    (match Core.group_to_impl group, secret with
+     | `Nocrypto nc_group, `Nocrypto secret ->
+       begin match Nocrypto.Dh.shared nc_group secret share with
+         | None -> None
+         | Some shared -> Some (left_pad_dh nc_group shared)
+       end
+     | `Hacl `X25519, `Hacl priv ->
+       begin match Hacl_x25519.of_cstruct share with
+         | Error _ -> None
+         | Ok public -> Some (Hacl_x25519.key_exchange ~pub:public ~priv)
+       end
+     | `Fiat `P256, `Fiat scalar ->
+       begin match Fiat_p256.point_of_cs share with
+         | None -> None
+         | Some point -> Some (Fiat_p256.dh ~scalar ~point)
+       end
+     | _ -> assert false)
 
 let dh_gen_key group =
   (* RFC 8556, Section 4.2.8.1 - we need zero-padding on the left *)
