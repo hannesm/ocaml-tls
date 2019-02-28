@@ -71,6 +71,7 @@ let alert_of_fatal = function
   | `InvalidMessage -> Packet.HANDSHAKE_FAILURE
   | `Toomany0rttbytes -> Packet.UNEXPECTED_MESSAGE
   | `MissingContentType -> Packet.UNEXPECTED_MESSAGE
+  | `Downgrade12 | `Downgrade11 -> Packet.ILLEGAL_PARAMETER
 
 let alert_of_failure = function
   | `Error x -> alert_of_error x

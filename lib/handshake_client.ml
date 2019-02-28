@@ -133,16 +133,12 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
   common_server_hello_validation cfg None sh ch >>= fun () ->
   validate_version ch.client_version state.config.protocol_versions sh.server_version >>= fun () ->
 
-  (let piece = Cstruct.sub sh.server_random 24 8 in
-   match any_version_to_version ch.client_version, sh.server_version with
-   | Some TLS_1_3, x when x = TLS_1_2 || x = TLS_1_1 || x = TLS_1_0 ->
-     (* TODO wrong way around: if Packet.downgrade12/13 is that piece, than do sth
-        -> but not require it to (not) be that piece *)
-     guard (not (Cstruct.equal Packet.downgrade13 piece)) (`Fatal `InvalidServerHello)
-   | Some TLS_1_2, x when x = TLS_1_1 || x = TLS_1_0 ->
-     (* TODO a bit too restrictive given plain TLS_1_2 servers *)
-     guard (not (Cstruct.equal Packet.downgrade12 piece)) (`Fatal `InvalidServerHello)
-   | _ -> return ()) >>= fun () ->
+  (if max_protocol_version state.config.protocol_versions = TLS_1_3 then
+     let piece = Cstruct.sub sh.server_random 24 8 in
+     guard (not (Cstruct.equal Packet.downgrade12 piece)) (`Fatal `Downgrade12) >>= fun () ->
+     guard (not (Cstruct.equal Packet.downgrade11 piece)) (`Fatal `Downgrade11)
+   else
+     return ()) >>= fun () ->
 
   let epoch_matches (epoch : epoch_data) =
     epoch.ciphersuite = sh.ciphersuite &&

@@ -621,5 +621,5 @@ type any_ciphersuite =
 ]
 
 let helloretryrequest = Nocrypto.Hash.digest `SHA256 (Cstruct.of_string "HelloRetryRequest")
-let downgrade13 = Cstruct.of_hex "44 4F 57 4E 47 52 44 01"
-let downgrade12 = Cstruct.of_hex "44 4F 57 4E 47 52 44 00"
+let downgrade12 = Cstruct.of_hex "44 4F 57 4E 47 52 44 01"
+let downgrade11 = Cstruct.of_hex "44 4F 57 4E 47 52 44 00"
