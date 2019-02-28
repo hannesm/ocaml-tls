@@ -646,8 +646,11 @@ let client config =
         extensions   = dch.extensions @ extensions }
   in
 
-  let psk_ext = match config.Config.cached_ticket, config.Config.ticket_cache with
-    | None, _ | _, None -> []
+  let client_hello, ch, raw =
+    match config.Config.cached_ticket, config.Config.ticket_cache with
+    | None, _ | _, None ->
+      let ch = ClientHello client_hello in
+      client_hello, ch, Writer.assemble_handshake ch
     | Some (psk, epoch), Some cache ->
       let kex = `PskKeyExchangeModes [ Packet.PSK_KE_DHE ] in
       (* what next!? *)
@@ -675,15 +678,17 @@ let client config =
       let binders_len = binders_len incomplete_psks in
       let ch_part = Cstruct.(sub ch'_raw 0 (len ch'_raw - binders_len)) in
       let binder = Handshake_crypto13.finished early_secret.hash binder_key ch_part in
+      let blen = Cstruct.len binder in
+      let prefix = Cstruct.create 3 in
+      Cstruct.BE.set_uint16 prefix 0 (blen + 1) ;
+      Cstruct.set_uint8 prefix 2 blen ;
+      let raw = Cstruct.concat [ ch_part ; prefix ; binder ] in
+
       let psks = [(psk.identifier, obf_age), binder] in
-      [kex ; `PreSharedKeys psks]
+      let client_hello' = { client_hello with extensions = client_hello.extensions @ [ kex ; `PreSharedKeys psks ] } in
+      let ch' = ClientHello client_hello' in
+      client_hello', ch', raw
   in
-  let client_hello = { client_hello with extensions = client_hello.extensions @ psk_ext } in
-  let ch = ClientHello client_hello in
-  let raw = Writer.assemble_handshake ch in
-
-
-
 
   let machina = AwaitServerHello (client_hello, secrets, [raw]) in
 
