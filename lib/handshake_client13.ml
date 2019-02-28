@@ -133,7 +133,7 @@ let answer_certificate_verify (state : handshake_state) (session : session_data1
   return ({ state with machina = Client13 st }, [])
 
 let answer_certificate_request (state : handshake_state) (session : session_data13) server_hs_secret client_hs_secret extensions raw log =
-  (* TODO respect extensions! *)
+  (* TODO respect extensions (sigalg, CA, OIDfilter)! *)
   let session =
     let common_session_data13 = { session.common_session_data13 with client_auth = true } in
     { session with common_session_data13 }

@@ -493,10 +493,7 @@ let maybe_app a b = match a, b with
   | None  , None   -> None
 
 let assemble_records (version : tls_version) rs =
-  let version = match version with
-    | TLS_1_3 -> TLS_1_2
-    | x -> x
-  in
+  let version = match version with TLS_1_3 -> TLS_1_2 | x -> x in
   Cs.appends (List.map (Writer.assemble_hdr version) rs)
 
 (* main entry point *)
@@ -569,6 +566,7 @@ let can_handle_appdata s = hs_can_handle_appdata s.handshake
 let handshake_in_progress s = match s.handshake.machina with
   | Client Established | Server Established -> false
   | Client13 Established13 | Server13 Established13 -> false
+  (* TODO fix *)
   (*  | Server13 (TrialUntilFinished13 _) | Server13 (AwaitEndOfEarlyData13 _) | Server13 (AwaitClientFinished13 _) -> false *)
   | _ -> true
 

@@ -26,9 +26,7 @@ and raise_trailing_bytes msg = raise (Reader_error (TrailingBytes msg))
 let catch f x =
   try return (f x) with
   | Reader_error err   -> fail err
-  | (Invalid_argument a) as e ->
-    Printf.printf "invalid argument %s\n%s\n%!" a (Printexc.to_string e) ;
-    fail Underflow
+  | Invalid_argument _ -> fail Underflow
 
 let parse_version_int buf =
   let major = get_uint8 buf 0 in
@@ -290,11 +288,6 @@ let parse_extension buf = function
          raise_trailing_bytes "extended master secret"
       else
         `ExtendedMasterSecret
-  | DRAFT_SUPPORT ->
-      if len buf <> 2 then
-         raise_trailing_bytes "extended master secret"
-      else
-        `Draft (BE.get_uint16 buf 0)
   | x -> `UnknownExtension (extension_type_to_int x, buf)
 
 let parse_keyshare_entry buf =
@@ -548,7 +541,7 @@ let parse_server_hello buf =
   in
   (* depending on the content of the server_random we have to diverge in behaviour *)
   if Cstruct.equal server_random helloretryrequest then begin
-    (* hello retry request, TODO: verify cmp=empty *)
+    (* hello retry request, TODO: verify compression=empty *)
     match Ciphersuite.ciphersuite_to_ciphersuite13 ciphersuite with
     | None -> raise_unknown "unsupported ciphersuite in hello retry request"
     | Some ciphersuite ->
