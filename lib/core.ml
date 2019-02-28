@@ -49,8 +49,6 @@ let tls_version_of_pair = function
   | (3, 4) -> Some TLS_1_3
   | _      -> None
 
-let draft = 0x000c
-
 type tls_any_version =
   | SSL_3
   | Supported of tls_version
@@ -101,7 +99,6 @@ module SessionID = struct
   let equal = Cstruct.equal
 end
 
-(* TODO needs to be updated in respect to psk13 *)
 module PreSharedKeyID = struct
   type t = Cstruct.t [@@deriving sexp]
   let compare = Cstruct.compare
@@ -211,7 +208,6 @@ type client_extension = [
   | `KeyShare of (Packet.named_group * Cstruct.t) list
   | `EarlyDataIndication
   | `PreSharedKeys of psk_identity list
-  | `Draft of int
   | `SupportedVersions of tls_any_version list
   | `PostHandshakeAuthentication
   | `Cookie of Cstruct.t
@@ -233,7 +229,6 @@ type server_extension = [
   | `SecureRenegotiation of Cstruct.t
   | `ExtendedMasterSecret
   | `ALPN of string
-  | `Draft of int
   | `UnknownExtension of (int * Cstruct.t)
 ] [@@deriving sexp]
 

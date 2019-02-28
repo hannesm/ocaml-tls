@@ -109,6 +109,7 @@ module Ciphers = struct
 
 end
 
+(* TODO split into <=12 and >=13, the SHA1 isn't 13 anymore *)
 let default_signature_algorithms =
   [ `RSA_PSS_RSAENC_SHA256 ;
     `RSA_PSS_RSAENC_SHA384 ;

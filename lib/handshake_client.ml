@@ -176,34 +176,7 @@ let answer_server_hello state (ch : client_hello) sh secrets raw log =
       in
       let machina = AwaitServerChangeCipherSpecResume (session, client_ctx, server_ctx, log @ [raw]) in
       Ok ({ state with machina = Client machina }, [])
-    | _ ->
-       let machina =
-         let cipher = sh.ciphersuite in
-         let session_id = match sh.sessionid with None -> Cstruct.create 0 | Some x -> x in
-         let extended_ms =
-           List.mem `ExtendedMasterSecret ch.extensions &&
-             List.mem `ExtendedMasterSecret sh.extensions
-         in
-         let session =
-           let session = empty_session in
-           let common_session_data = {
-             session.common_session_data with
-             client_random    = ch.client_random ;
-             server_random    = sh.server_random ;
-           } in
-           { session with
-             common_session_data ;
-             client_version   = ch.client_version ;
-             ciphersuite      = cipher ;
-             session_id ;
-             extended_ms ;
-           }
-         in
-         Ciphersuite.(match ciphersuite_kex cipher with
-                      | `RSA     -> AwaitCertificate_RSA (session, log @ [raw])
-                      | `DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
-       in
-       Ok ({ state with machina = Client machina }, [])
+    | _ -> Ok (common_server_hello_machina state sh ch raw log)
 
 let answer_server_hello_renegotiate state session (ch : client_hello) sh raw log =
   common_server_hello_validation state.config (Some session.renegotiation) sh ch >>= fun () ->

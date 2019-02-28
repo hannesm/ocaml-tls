@@ -448,11 +448,18 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 * <2019-02-28 Thu>
 - TODO can_handle_appdata story in respect with 1.3 and 0rtt
 - cleanups (remove add_to_cache/find_in_cache), don't assemble clienthello multiple times
+- downgrade magic numbers cleanups
 ---
 - client zerortt (+HRR+resume), sessionticket lifetime checks
+- client send CCS (middlebox mode)
 - API zerortt
 - check fragment being empty
-- post-HS auth
+- post-HS authentication
 - keyupdate
 - extensions (esp cert_sig_alg, others?)
 - OCSP/..
+- server side ticket issuance and reusability (stateless tickets, nonce, etc.)
+- general: when should the session be in the state (and epoch return sth useful)?
+  - the whole peeking whether the top is a `TLS13 isn't so nice
+- padding policy (or general padding API)
+- looked at diff master..tls13
