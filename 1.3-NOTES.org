@@ -462,4 +462,4 @@ both only ever up to configured max_size_limit! (not the one from the session ti
 - general: when should the session be in the state (and epoch return sth useful)?
   - the whole peeking whether the top is a `TLS13 isn't so nice
 - padding policy (or general padding API)
-- looked at diff master..tls13
+- looked at diff master..tls13 (minimised, found some issues)
