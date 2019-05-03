@@ -139,13 +139,13 @@ let validate_keytype_usage certificate ciphersuite =
   | None -> fail (`Fatal `NoCertificateReceived)
   | Some cert ->
     let open X509 in
-    guard (supports_keytype cert keytype)
+    guard (Certificate.supports_keytype cert keytype)
       (`Fatal `NotRSACertificate) >>= fun () ->
-    guard (Extension.supports_usage ~not_present:true cert usage)
+    guard (Certificate.supports_usage ~not_present:true cert usage)
       (`Fatal `InvalidCertificateUsage) >>= fun () ->
     guard
-      (Extension.supports_extended_usage cert `Server_auth ||
-       Extension.supports_extended_usage ~not_present:true cert `Any)
+      (Certificate.supports_extended_usage cert `Server_auth ||
+       Certificate.supports_extended_usage ~not_present:true cert `Any)
       (`Fatal `InvalidCertificateExtendedUsage)
 
 let answer_certificate_RSA state session cs raw log =
@@ -243,7 +243,7 @@ let answer_server_hello_done state session sigalgs kex premaster raw log =
 
   ( match session.client_auth, session.own_private_key with
     | true, Some p ->
-       let cert = Certificate (List.map X509.Encoding.cs_of_cert session.own_certificate) in
+       let cert = Certificate (List.map X509.Certificate.encode_der session.own_certificate) in
        let ccert = Writer.assemble_handshake cert in
        let to_sign = log @ [ raw ; ccert ; ckex ] in
        let data = Cs.appends to_sign in

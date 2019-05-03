@@ -4,4 +4,4 @@
  (synopsis "Transport layer security (TLS 1.x) purely in OCaml")
  (preprocess (pps ppx_cstruct ppx_sexp_conv))
  (flags (:standard -w -9-33))
- (libraries cstruct nocrypto result x509 sexplib))
+ (libraries cstruct cstruct-sexp nocrypto result x509 sexplib))

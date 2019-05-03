@@ -233,23 +233,25 @@ module X509 (KV : Mirage_kv_lwt.RO) (C: Mirage_clock.PCLOCK) = struct
 
   let read kv name = KV.get kv name >|== fun x -> Cstruct.of_string x
 
-  open X509.Encoding.Pem
-
   let authenticator kv clock = function
     | `Noop -> return X509.Authenticator.null
     | `CAs  ->
         let time = Ptime.v (C.now_d_ps clock) in
-        read kv ca_roots_file
-        >|= Certificate.of_pem_cstruct
-        >|= X509.Authenticator.chain_of_trust ?crls:None ~time
+        read kv ca_roots_file >>= fun data ->
+        match X509.Certificate.decode_pem_multiple data with
+        | Ok cas -> Lwt.return (X509.Authenticator.chain_of_trust ?crls:None ~time cas)
+        | Error (`Parse e) -> Lwt.fail_with ("decode error " ^ e)
 
   let certificate kv =
     let read name =
-      read kv (Mirage_kv.Key.v (name ^ ".pem")) >|=
-      Certificate.of_pem_cstruct >>= fun certs ->
-      (read kv (Mirage_kv.Key.v (name ^ ".key")) >|= fun pem ->
-       match Private_key.of_pem_cstruct1 pem with `RSA key -> key) >|= fun pk ->
-      (certs, pk)
+      read kv (Mirage_kv.Key.v (name ^ ".pem")) >>= fun data ->
+      match X509.Certificate.decode_pem_multiple data with
+      | Error (`Parse e) -> Lwt.fail_with ("failed to parse certificates " ^ e)
+      | Ok certs ->
+        read kv (Mirage_kv.Key.v (name ^ ".key")) >>= fun pem ->
+        match X509.Private_key.decode_pem pem with
+        | Error (`Parse e) -> Lwt.fail_with ("failed to parse private key " ^ e)
+        | Ok (`RSA key) -> Lwt.return (certs, key)
     in function | `Default   -> read default_cert
                 | `Name name -> read name
 end

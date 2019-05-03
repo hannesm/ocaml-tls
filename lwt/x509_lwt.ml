@@ -1,9 +1,8 @@
 open Lwt
 
-type priv = X509.t list * Nocrypto.Rsa.priv
+type priv = X509.Certificate.t list * Nocrypto.Rsa.priv
 
-type authenticator = X509.Authenticator.a
-
+type authenticator = X509.Authenticator.t
 
 let failure msg = fail @@ Failure msg
 
@@ -12,7 +11,6 @@ let catch_invalid_arg th h =
     (function
       | Invalid_argument msg -> h msg
       | exn                  -> fail exn)
-
 
 let (</>) a b = a ^ "/" ^ b
 
@@ -45,23 +43,22 @@ let extension str =
     | i -> scan (pred i) in
   scan n
 
-
 let private_of_pems ~cert ~priv_key =
-  let open X509.Encoding.Pem in
-  catch_invalid_arg
-    (read_file cert >|= Certificate.of_pem_cstruct)
-    (o failure @@ Printf.sprintf "Private certificates (%s): %s" cert) >>= fun certs ->
-  catch_invalid_arg
-    (read_file priv_key >|= fun pem ->
-     match Private_key.of_pem_cstruct1 pem with
-     | `RSA key -> key)
-    (o failure @@ Printf.sprintf "Private key (%s): %s" priv_key) >>= fun pk ->
-  return (certs, pk)
+  (read_file cert >>= fun data ->
+   match X509.Certificate.decode_pem_multiple data with
+   | Error (`Parse e) -> failure @@ Printf.sprintf "Certificate (%s) decoding failure: %s" cert e
+   | Ok certs -> Lwt.return certs) >>= fun certs ->
+  (read_file priv_key >>= fun data ->
+   match X509.Private_key.decode_pem data with
+   | Error (`Parse e) -> failure @@ Printf.sprintf "Private key (%s) decoding failure: %s" priv_key e
+   | Ok (`RSA key) -> Lwt.return key) >|= fun pk ->
+  (certs, pk)
 
 let certs_of_pem path =
-  catch_invalid_arg
-    (read_file path >|= X509.Encoding.Pem.Certificate.of_pem_cstruct)
-    (o failure @@ Printf.sprintf "Certificates in %s: %s" path)
+  read_file path >>= fun data ->
+  match X509.Certificate.decode_pem_multiple data with
+  | Error (`Parse e) -> failure @@ Printf.sprintf "Certificates in %s: %s" path e
+  | Ok datas -> Lwt.return datas
 
 let certs_of_pem_dir path =
   read_dir path

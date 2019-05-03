@@ -174,22 +174,25 @@ type tls_body =
 (** the master secret of a TLS connection *)
 type master_secret = Cstruct_sexp.t [@@deriving sexp]
 
+let epoch_data_of_sexp _ = assert false
+let sexp_of_epoch_data _ = assert false
+
 (** information about an open session *)
 type epoch_data = {
   protocol_version       : tls_version ;
   ciphersuite            : Ciphersuite.ciphersuite ;
-  peer_random            : Cstruct_sexp.t ;
-  peer_certificate_chain : X509.t list ;
-  peer_certificate       : X509.t option ;
+  peer_random            : Cstruct.t ;
+  peer_certificate_chain : X509.Certificate.t list ;
+  peer_certificate       : X509.Certificate.t option ;
   peer_name              : string option ;
-  trust_anchor           : X509.t option ;
-  received_certificates  : X509.t list ;
-  own_random             : Cstruct_sexp.t ;
-  own_certificate        : X509.t list ;
+  trust_anchor           : X509.Certificate.t option ;
+  received_certificates  : X509.Certificate.t list ;
+  own_random             : Cstruct.t ;
+  own_certificate        : X509.Certificate.t list ;
   own_private_key        : Nocrypto.Rsa.priv option ;
   own_name               : string option ;
   master_secret          : master_secret ;
   session_id             : SessionID.t ;
   extended_ms            : bool ;
   alpn_protocol          : string option ;
-} [@@deriving sexp]
+}

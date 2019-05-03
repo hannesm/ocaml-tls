@@ -73,25 +73,28 @@ type dh_sent = Dh.group * Dh.secret [@@deriving sexp]
 (* a collection of client and server verify bytes for renegotiation *)
 type reneg_params = Cstruct_sexp.t * Cstruct_sexp.t [@@deriving sexp]
 
+let session_data_of_sexp _ = assert false
+let sexp_of_session_data _ = assert false
+
 type session_data = {
-  server_random          : Cstruct_sexp.t ; (* 32 bytes random from the server hello *)
-  client_random          : Cstruct_sexp.t ; (* 32 bytes random from the client hello *)
+  server_random          : Cstruct.t ; (* 32 bytes random from the server hello *)
+  client_random          : Cstruct.t ; (* 32 bytes random from the client hello *)
   client_version         : tls_any_version ; (* version in client hello (needed in RSA client key exchange) *)
   ciphersuite            : Ciphersuite.ciphersuite ;
-  peer_certificate_chain : X509.t list ;
-  peer_certificate       : X509.t option ;
-  trust_anchor           : X509.t option ;
-  received_certificates  : X509.t list ;
-  own_certificate        : X509.t list ;
+  peer_certificate_chain : X509.Certificate.t list ;
+  peer_certificate       : X509.Certificate.t option ;
+  trust_anchor           : X509.Certificate.t option ;
+  received_certificates  : X509.Certificate.t list ;
+  own_certificate        : X509.Certificate.t list ;
   own_private_key        : Nocrypto.Rsa.priv option ;
   master_secret          : master_secret ;
   renegotiation          : reneg_params ; (* renegotiation data *)
   own_name               : string option ;
   client_auth            : bool ;
-  session_id             : Cstruct_sexp.t ;
+  session_id             : Cstruct.t ;
   extended_ms            : bool ;
   alpn_protocol          : string option ; (* selected alpn protocol after handshake *)
-} [@@deriving sexp]
+}
 
 (* state machine of the server *)
 type server_handshake_state =
@@ -172,7 +175,7 @@ type error = [
   | `NoMatchingCertificateFound of string
   | `NoCertificateConfigured
   | `CouldntSelectCertificate
-] [@@deriving sexp]
+]
 
 type fatal = [
   | `NoSecureRenegotiation
@@ -209,12 +212,15 @@ type fatal = [
   | `InvalidCertificateExtendedUsage
   | `InvalidSession
   | `NoApplicationProtocol
-] [@@deriving sexp]
+]
+
+let failure_of_sexp _ = failwith "not supported"
+let sexp_of_failure _ = Sexplib.Sexp.Atom "Failure"
 
 type failure = [
   | `Error of error
   | `Fatal of fatal
-] [@@deriving sexp]
+]
 
 (* Monadic control-flow core. *)
 include Control.Or_error_make (struct type err = failure end)

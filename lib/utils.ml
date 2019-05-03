@@ -80,6 +80,13 @@ module Cs = struct
   let null cs = Cstruct.len cs = 0
 end
 
+let rec filter_map_res ~f = function
+  | [] -> []
+  | x::xs ->
+      match f x with
+      | Error _ -> filter_map_res ~f xs
+      | Ok x' -> x' :: filter_map_res ~f xs
+
 let rec filter_map ~f = function
   | []    -> []
   | x::xs ->
