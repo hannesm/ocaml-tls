@@ -157,12 +157,13 @@ let agreed_cert certs hostname =
   | _                                 -> fail (`Error `CouldntSelectCertificate)
 
 let agreed_cipher cert requested =
+  let ku = X509.(Extension.(find Key_usage (Certificate.extensions cert))) in
+  let usage req = match ku with None -> true | Some (_, ku) -> List.mem req ku in
   let type_usage_matches cipher =
     let cstyp, csusage =
       Ciphersuite.(required_keytype_and_usage @@ ciphersuite_kex cipher)
     in
-    X509.Certificate.(supports_keytype cert cstyp &&
-                      supports_usage ~not_present:true cert csusage)
+    X509.Certificate.(supports_keytype cert cstyp && usage csusage)
   in
   List.filter type_usage_matches requested
 

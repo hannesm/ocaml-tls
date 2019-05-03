@@ -141,11 +141,16 @@ let validate_keytype_usage certificate ciphersuite =
     let open X509 in
     guard (Certificate.supports_keytype cert keytype)
       (`Fatal `NotRSACertificate) >>= fun () ->
-    guard (Certificate.supports_usage ~not_present:true cert usage)
+    let exts = Certificate.extensions cert in
+    guard
+      (match Extension.(find Key_usage exts) with
+       | None -> true
+       | Some (_, ku) -> List.mem usage ku)
       (`Fatal `InvalidCertificateUsage) >>= fun () ->
     guard
-      (Certificate.supports_extended_usage cert `Server_auth ||
-       Certificate.supports_extended_usage ~not_present:true cert `Any)
+      (match Extension.(find Ext_key_usage exts) with
+       | None -> true
+       | Some (_, eku) -> List.mem `Server_auth eku || List.mem `Any eku)
       (`Fatal `InvalidCertificateExtendedUsage)
 
 let answer_certificate_RSA state session cs raw log =

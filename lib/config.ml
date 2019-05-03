@@ -196,11 +196,14 @@ let validate_server config =
       certificate_chains
   in
   if
+    let open X509 in
     not (CertTypeUsageSet.for_all
            (fun (t, u) ->
               List.exists (fun c ->
-                  X509.Certificate.supports_keytype c t &&
-                  X509.Certificate.supports_usage ~not_present:true c u)
+                  Certificate.supports_keytype c t &&
+                  (match Extension.(find Key_usage (Certificate.extensions c)) with
+                   | None -> true
+                   | Some (_, ku) -> List.mem u ku))
                 server_certs)
            typeusage)
   then
