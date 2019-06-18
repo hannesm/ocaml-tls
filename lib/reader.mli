@@ -8,9 +8,6 @@ type error =
   | UnknownVersion of (int * int)
   | UnknownContent of int
 
-val error_of_sexp : Sexplib.Sexp.t -> error
-val sexp_of_error : error -> Sexplib.Sexp.t
-
 type nonrec 'a result = ('a, error) result
 
 val parse_version     : Cstruct.t -> Core.tls_version result

@@ -2,8 +2,6 @@ open Packet
 open Core
 open Cstruct
 
-open Sexplib.Conv
-
 type error =
   | TrailingBytes  of string
   | WrongLength    of string
@@ -12,7 +10,6 @@ type error =
   | Overflow       of int
   | UnknownVersion of (int * int)
   | UnknownContent of int
-  [@@deriving sexp]
 
 include Control.Or_error_make (struct type err = error end)
 type nonrec 'a result = ('a, error) result

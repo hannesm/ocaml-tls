@@ -59,16 +59,11 @@ module Make (F : Mirage_flow_lwt.S) = struct
     | Ok ()   -> Ok ()
     | Error e -> Error (`Write e :> write_error)
 
-  let tracing flow f =
-    match flow.tracer with
-    | None      -> f ()
-    | Some hook -> Tls.Tracing.active ~hook f
-
   let read_react flow =
 
     let handle tls buf =
       match
-        tracing flow @@ fun () -> Tls.Engine.handle_tls tls buf
+        Tls.Engine.handle_tls tls buf
       with
       | `Ok (res, `Response resp, `Data data) ->
           flow.state <- ( match res with
@@ -115,7 +110,7 @@ module Make (F : Mirage_flow_lwt.S) = struct
     | `Error e -> return @@ Error (e :> write_error)
     | `Active tls ->
         match
-          tracing flow @@ fun () -> Tls.Engine.send_application_data tls bufs
+          Tls.Engine.send_application_data tls bufs
         with
         | Some (tls, answer) ->
             flow.state <- `Active tls ;
@@ -151,7 +146,7 @@ module Make (F : Mirage_flow_lwt.S) = struct
     | `Eof        -> return @@ Error `Closed
     | `Error e    -> return @@ Error (e :> write_error)
     | `Active tls ->
-        match tracing flow @@ fun () -> Tls.Engine.reneg ?authenticator ?acceptable_cas ?cert tls with
+        match Tls.Engine.reneg ?authenticator ?acceptable_cas ?cert tls with
         | None             ->
             (* XXX make this impossible to reach *)
             invalid_arg "Renegotiation already in progress"
@@ -167,9 +162,7 @@ module Make (F : Mirage_flow_lwt.S) = struct
     match flow.state with
     | `Active tls ->
       flow.state <- `Eof ;
-      let (_, buf) = tracing flow @@ fun () ->
-        Tls.Engine.send_close_notify tls
-      in
+      let (_, buf) = Tls.Engine.send_close_notify tls in
       FLOW.(write flow.flow buf >>= fun _ -> close flow.flow)
     | _           -> return_unit
 

@@ -8,16 +8,14 @@ maintainer:   ["Hannes Mehnert <hannes@mehnert.org>" "David Kaloper <david@numm.
 license:      "BSD2"
 
 build: [
-  ["jbuilder" "subst" "-n" name] {pinned}
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
 ]
-build-test: [["jbuilder" "runtest" "-p" name "-j" jobs]]
 
 depends: [
-  "jbuilder" {build & >= "1.0+beta10"}
-  "ppx_sexp_conv" {build}
-  "ppx_cstruct" {build}
-  "result"
+  "dune" {build & >= "1.0"}
+  "ppx_cstruct"
   "cstruct" {>= "1.9.0"}
   "sexplib"
   "nocrypto" {>= "0.5.4"}

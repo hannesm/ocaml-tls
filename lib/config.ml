@@ -3,9 +3,6 @@ open Nocrypto
 open Utils
 open Core
 
-open Sexplib.Std
-
-
 type certchain = X509.Certificate.t list * Rsa.priv
 
 type own_cert = [
@@ -19,6 +16,10 @@ type session_cache = SessionID.t -> epoch_data option
 
 let config_of_sexp _ = failwith "not implemented"
 let sexp_of_config _ = Sexplib.Sexp.Atom "CONFIG"
+let server_of_sexp _ = failwith "not implemented"
+let sexp_of_server _ = Sexplib.Sexp.Atom "CONFIG"
+let client_of_sexp _ = failwith "not implemented"
+let sexp_of_client _ = Sexplib.Sexp.Atom "CONFIG"
 
 type config = {
   ciphers           : Ciphersuite.ciphersuite list ;
@@ -213,8 +214,8 @@ let validate_server config =
   (* TODO: verify that certificates are x509 v3 if TLS_1_2 *)
 
 
-type client = config [@@deriving sexp]
-type server = config [@@deriving sexp]
+type client = config
+type server = config
 
 let of_server conf = conf
 and of_client conf = conf

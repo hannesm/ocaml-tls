@@ -18,9 +18,8 @@ type 'k stream_state = {
 
 (* initialisation vector style, depending on TLS version *)
 type iv_mode =
-  | Iv of Cstruct_sexp.t  (* traditional CBC (reusing last cipherblock) *)
+  | Iv of Cstruct.t  (* traditional CBC (reusing last cipherblock) *)
   | Random_iv        (* TLS 1.1 and higher explicit IV (we use random) *)
-  [@@deriving sexp]
 
 type 'k cbc_cipher    = (module Cipher_block.S.CBC with type key = 'k)
 type 'k cbc_state = {
@@ -63,15 +62,15 @@ let cipher_st_of_sexp =
 type crypto_context = {
   sequence  : int64 ; (* sequence number *)
   cipher_st : cipher_st ; (* cipher state *)
-} [@@deriving sexp]
+}
 
 (* the raw handshake log we need to carry around *)
-type hs_log = Cstruct_sexp.t list [@@deriving sexp]
+type hs_log = Cstruct.t list
 (* diffie hellman group and secret *)
-type dh_sent = Dh.group * Dh.secret [@@deriving sexp]
+type dh_sent = Dh.group * Dh.secret
 
 (* a collection of client and server verify bytes for renegotiation *)
-type reneg_params = Cstruct_sexp.t * Cstruct_sexp.t [@@deriving sexp]
+type reneg_params = Cstruct.t * Cstruct.t
 
 let session_data_of_sexp _ = assert false
 let sexp_of_session_data _ = assert false
@@ -106,11 +105,10 @@ type server_handshake_state =
   | AwaitClientKeyExchange_DHE_RSA of session_data * dh_sent * hs_log (* server hello done is sent, and DHE_RSA key exchange used, waiting for client key exchange *)
   | AwaitClientCertificateVerify of session_data * crypto_context * crypto_context * hs_log
   | AwaitClientChangeCipherSpec of session_data * crypto_context * crypto_context * hs_log (* client key exchange received, next should be change cipher spec *)
-  | AwaitClientChangeCipherSpecResume of session_data * crypto_context * Cstruct_sexp.t * hs_log (* resumption: next should be change cipher spec *)
+  | AwaitClientChangeCipherSpecResume of session_data * crypto_context * Cstruct.t * hs_log (* resumption: next should be change cipher spec *)
   | AwaitClientFinished of session_data * hs_log (* change cipher spec received, next should be the finished including a hmac over all handshake packets *)
-  | AwaitClientFinishedResume of session_data * Cstruct_sexp.t * hs_log (* change cipher spec received, next should be the finished including a hmac over all handshake packets *)
+  | AwaitClientFinishedResume of session_data * Cstruct.t * hs_log (* change cipher spec received, next should be the finished including a hmac over all handshake packets *)
   | Established (* handshake successfully completed *)
-  [@@deriving sexp]
 
 (* state machine of the client *)
 type client_handshake_state =
@@ -120,19 +118,17 @@ type client_handshake_state =
   | AwaitCertificate_RSA of session_data * hs_log (* certificate expected with RSA key exchange *)
   | AwaitCertificate_DHE_RSA of session_data * hs_log (* certificate expected with DHE_RSA key exchange *)
   | AwaitServerKeyExchange_DHE_RSA of session_data * hs_log (* server key exchange expected with DHE_RSA *)
-  | AwaitCertificateRequestOrServerHelloDone of session_data * Cstruct_sexp.t * Cstruct_sexp.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
-  | AwaitServerHelloDone of session_data * (Hash.hash * Packet.signature_algorithm_type) list option * Cstruct_sexp.t * Cstruct_sexp.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
-  | AwaitServerChangeCipherSpec of session_data * crypto_context * Cstruct_sexp.t * hs_log (* change cipher spec expected *)
+  | AwaitCertificateRequestOrServerHelloDone of session_data * Cstruct.t * Cstruct.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
+  | AwaitServerHelloDone of session_data * (Hash.hash * Packet.signature_algorithm_type) list option * Cstruct.t * Cstruct.t * hs_log (* server hello done expected, client key exchange and premastersecret are ready *)
+  | AwaitServerChangeCipherSpec of session_data * crypto_context * Cstruct.t * hs_log (* change cipher spec expected *)
   | AwaitServerChangeCipherSpecResume of session_data * crypto_context * crypto_context * hs_log (* change cipher spec expected *)
-  | AwaitServerFinished of session_data * Cstruct_sexp.t * hs_log (* finished expected with a hmac over all handshake packets *)
+  | AwaitServerFinished of session_data * Cstruct.t * hs_log (* finished expected with a hmac over all handshake packets *)
   | AwaitServerFinishedResume of session_data * hs_log (* finished expected with a hmac over all handshake packets *)
   | Established (* handshake successfully completed *)
-  [@@deriving sexp]
 
 type handshake_machina_state =
   | Client of client_handshake_state
   | Server of server_handshake_state
-  [@@deriving sexp]
 
 (* state during a handshake, used in the handlers *)
 type handshake_state = {
@@ -140,14 +136,14 @@ type handshake_state = {
   protocol_version : tls_version ;
   machina          : handshake_machina_state ; (* state machine state *)
   config           : Config.config ; (* given config *)
-  hs_fragment      : Cstruct_sexp.t ; (* handshake messages can be fragmented, leftover from before *)
-} [@@deriving sexp]
+  hs_fragment      : Cstruct.t ; (* handshake messages can be fragmented, leftover from before *)
+}
 
 (* connection state: initially None, after handshake a crypto context *)
-type crypto_state = crypto_context option [@@deriving sexp]
+type crypto_state = crypto_context option
 
 (* record consisting of a content type and a byte vector *)
-type record = Packet.content_type * Cstruct_sexp.t [@@deriving sexp]
+type record = Packet.content_type * Cstruct.t
 
 (* response returned by a handler *)
 type rec_resp = [
@@ -164,8 +160,8 @@ type state = {
   handshake : handshake_state ; (* the current handshake state *)
   decryptor : crypto_state ; (* the current decryption state *)
   encryptor : crypto_state ; (* the current encryption state *)
-  fragment  : Cstruct_sexp.t ; (* the leftover fragment from TCP fragmentation *)
-} [@@deriving sexp]
+  fragment  : Cstruct.t ; (* the leftover fragment from TCP fragmentation *)
+}
 
 type error = [
   | `AuthenticationFailure of X509.Validation.validation_error
