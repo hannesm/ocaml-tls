@@ -107,12 +107,9 @@ let answer_encrypted_extensions state (session : session_data13) server_hs_secre
   return ({ state with machina = Client13 st }, [])
 
 let answer_certificate state (session : session_data13) server_hs_secret client_hs_secret certs raw log =
-  let name = match state.config.peer_name with
-    | None -> None | Some x -> Some (`Wildcard x)
-  in
   (* certificates are (cs, ext) list - ext being statusrequest or signed_cert_timestamp *)
   let certs = List.map fst certs in
-  validate_chain state.config.authenticator certs name >>=
+  validate_chain state.config.authenticator certs (host_name_opt state.config.peer_name) >>=
   fun (peer_certificate, received_certificates, peer_certificate_chain, trust_anchor) ->
   let session =
     let common_session_data13 = {
@@ -156,7 +153,7 @@ let answer_finished state (session : session_data13) server_hs_secret client_hs_
        | _ -> ([], None)
      in
      let certificate =
-       let cs = List.map X509.Encoding.cs_of_cert own_certificate in
+       let cs = List.map X509.Certificate.encode_der own_certificate in
       Certificate (Writer.assemble_certificates_1_3 Cstruct.empty cs)
      in
      let cert_raw = Writer.assemble_handshake certificate in

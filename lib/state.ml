@@ -71,8 +71,8 @@ type hs_log = Cstruct_sexp.t list [@@deriving sexp]
 type dh_sent = Dh.group * Dh.secret [@@deriving sexp]
 
 type dh_secret = [
-  | `Fiat of Fiat_p256.scalar
-  | `Hacl of Hacl_x25519.priv Hacl_x25519.key
+  | `Fiat of Fiat_p256.secret
+  | `Hacl of Hacl_x25519.secret
   | `Nocrypto of Nocrypto.Dh.secret
 ]
 let sexp_of_dh_secret _ = Sexp.Atom "dh_secret"
@@ -140,7 +140,7 @@ type client_handshake_state =
   [@@deriving sexp]
 
 type kdf = {
-  secret : Cstruct.t ;
+  secret : Cstruct_sexp.t ;
   cipher : Ciphersuite.ciphersuite13 ;
   hash : Nocrypto.Hash.hash ;
 } [@@deriving sexp]
@@ -152,26 +152,26 @@ type session_data13 = {
   common_session_data13  : common_session_data ;
   ciphersuite13          : Ciphersuite.ciphersuite13 ;
   master_secret          : kdf ;
-  resumption_secret      : Cstruct.t ;
+  resumption_secret      : Cstruct_sexp.t ;
   state                  : epoch_state ;
   resumed                : bool ;
 } [@@deriving sexp]
 
 type client13_handshake_state =
-  | AwaitServerHello13 of client_hello * (group * dh_secret) list * Cstruct.t (* this is for CH1 ~> HRR ~> CH2 <~ WAIT SH *)
-  | AwaitServerEncryptedExtensions13 of session_data13 * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerCertificateRequestOrCertificate13 of session_data13 * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerCertificate13 of session_data13 * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerCertificateVerify13 of session_data13 * Cstruct.t * Cstruct.t * Cstruct.t
-  | AwaitServerFinished13 of session_data13 * Cstruct.t * Cstruct.t * Cstruct.t
+  | AwaitServerHello13 of client_hello * (group * dh_secret) list * Cstruct_sexp.t (* this is for CH1 ~> HRR ~> CH2 <~ WAIT SH *)
+  | AwaitServerEncryptedExtensions13 of session_data13 * Cstruct_sexp.t * Cstruct_sexp.t * Cstruct_sexp.t
+  | AwaitServerCertificateRequestOrCertificate13 of session_data13 * Cstruct_sexp.t * Cstruct_sexp.t * Cstruct_sexp.t
+  | AwaitServerCertificate13 of session_data13 * Cstruct_sexp.t * Cstruct_sexp.t * Cstruct_sexp.t
+  | AwaitServerCertificateVerify13 of session_data13 * Cstruct_sexp.t * Cstruct_sexp.t * Cstruct_sexp.t
+  | AwaitServerFinished13 of session_data13 * Cstruct_sexp.t * Cstruct_sexp.t * Cstruct_sexp.t
   | Established13
   [@@deriving sexp]
 
 type server13_handshake_state =
-  | AwaitClientCertificate13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | AwaitClientCertificateVerify13 of session_data13 * Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | AwaitClientFinished13 of Cstruct.t * crypto_context * session_ticket option * Cstruct.t
-  | AwaitEndOfEarlyData13 of Cstruct.t * crypto_context * crypto_context * session_ticket option * Cstruct.t
+  | AwaitClientCertificate13 of session_data13 * Cstruct_sexp.t * crypto_context * session_ticket option * Cstruct_sexp.t
+  | AwaitClientCertificateVerify13 of session_data13 * Cstruct_sexp.t * crypto_context * session_ticket option * Cstruct_sexp.t
+  | AwaitClientFinished13 of Cstruct_sexp.t * crypto_context * session_ticket option * Cstruct_sexp.t
+  | AwaitEndOfEarlyData13 of Cstruct_sexp.t * crypto_context * crypto_context * session_ticket option * Cstruct_sexp.t
   | Established13
   [@@deriving sexp]
 
@@ -245,8 +245,8 @@ type client_hello_errors = [
   | `NoKeyShareExtension
   | `NoSupportedGroupExtension
   | `NotSetSupportedGroup of Packet.named_group list
-  | `NotSetKeyShare of (Packet.named_group * Cstruct.t) list
-  | `NotSubsetKeyShareSupportedGroup of (Packet.named_group list * (Packet.named_group * Cstruct.t) list)
+  | `NotSetKeyShare of (Packet.named_group * Cstruct_sexp.t) list
+  | `NotSubsetKeyShareSupportedGroup of (Packet.named_group list * (Packet.named_group * Cstruct_sexp.t) list)
 ] [@@deriving sexp]
 
 type fatal = [

@@ -100,13 +100,13 @@ module SessionID = struct
 end
 
 module PreSharedKeyID = struct
-  type t = Cstruct.t [@@deriving sexp]
+  type t = Cstruct_sexp.t [@@deriving sexp]
   let compare = Cstruct.compare
   let hash t = Hashtbl.hash (Cstruct.to_bigarray t)
   let equal = Cstruct.equal
 end
 
-type psk_identity = (Cstruct.t * int32) * Cstruct.t [@@deriving sexp]
+type psk_identity = (Cstruct_sexp.t * int32) * Cstruct_sexp.t [@@deriving sexp]
 
 let binders_len psks =
   let binder_len (_, binder) =
@@ -311,14 +311,14 @@ type hello_retry = {
 
 type session_ticket_extension = [
   | `EarlyDataIndication of int32
-  | `UnknownExtension of int * Cstruct.t
+  | `UnknownExtension of int * Cstruct_sexp.t
 ] [@@deriving sexp]
 
 type session_ticket = {
   lifetime : int32 ;
   age_add : int32 ;
-  nonce : Cstruct.t ;
-  ticket : Cstruct.t ;
+  nonce : Cstruct_sexp.t ;
+  ticket : Cstruct_sexp.t ;
   extensions : session_ticket_extension list
 } [@@deriving sexp]
 
@@ -326,10 +326,10 @@ type certificate_request_extension = [
   (*  | `StatusRequest *)
   | `SignatureAlgorithms of signature_algorithm list
   (* | `SignedCertificateTimestamp *)
-  | `CertificateAuthorities of X509.distinguished_name list
+  | `CertificateAuthorities of X509.Distinguished_name.t list
   (* | `OidFilters *)
   (* | `SignatureAlgorithmsCert *)
-  | `UnknownExtension of (int * Cstruct.t)
+  | `UnknownExtension of (int * Cstruct_sexp.t)
 ]
 
 type tls_handshake =
@@ -374,9 +374,9 @@ module Ptime = struct
 end
 
 type psk13 = {
-  identifier : Cstruct.t ;
+  identifier : Cstruct_sexp.t ;
   obfuscation : int32 ;
-  secret : Cstruct.t ;
+  secret : Cstruct_sexp.t ;
   lifetime : int32 ;
   early_data : int32 ;
   issued_at : Ptime.t ;

@@ -135,7 +135,7 @@ let answer_client_hello state ch raw =
                 if c' = cipher &&
                    match hostname, old_epoch.own_name with
                    | None, None -> true
-                   | Some x, Some y -> String.equal x y
+                   | Some x, Some y -> Domain_name.equal x (Domain_name.of_string_exn y)
                    | _ -> false
                 then
                   let now = cache.Config.timestamp () in
@@ -204,8 +204,9 @@ let answer_client_hello state ch raw =
         | _ -> fail (`Fatal `InvalidSession)) >>= fun (chain, priv) ->
       alpn_protocol config ch >>= fun alpn_protocol ->
       let session =
+        let own_name = match hostname with None -> None | Some x -> Some (Domain_name.to_string x) in
         let common_session_data13 = { session.common_session_data13 with
-                                      own_name = hostname ; own_certificate = chain ;
+                                      own_name = own_name ; own_certificate = chain ;
                                       own_private_key = Some priv ; alpn_protocol }
         in
         { session with common_session_data13 }
@@ -245,7 +246,7 @@ let answer_client_hello state ch raw =
               [raw_cert_req], log <+> raw_cert_req, { session with common_session_data13 }
           in
 
-          let certs = List.map X509.Encoding.cs_of_cert chain in
+          let certs = List.map X509.Certificate.encode_der chain in
           let cert = Certificate (Writer.assemble_certificates_1_3 Cstruct.empty certs) in
           let cert_raw = Writer.assemble_handshake cert in
           Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake cert ;
@@ -341,7 +342,7 @@ let answer_client_certificate state cert (sd : session_data13) client_fini dec_c
   | Ok (_, []), None -> assert false
   | Ok (_ctx, []), Some auth ->
     begin match auth [] with
-      | `Ok anchor ->
+      | Ok anchor ->
         let trust_anchor = match anchor with
           | None -> None
           | Some (_chain, ta) -> Some ta
@@ -350,7 +351,7 @@ let answer_client_certificate state cert (sd : session_data13) client_fini dec_c
         let sd = { sd with common_session_data13 } in
         let st = AwaitClientFinished13 (client_fini, dec_ctx, st, log <+> raw) in
         Ok ({ state with machina = Server13 st ; session = `TLS13 sd :: state.session }, [])
-      | `Fail e -> fail (`Error (`AuthenticationFailure e))
+      | Error e -> fail (`Error (`AuthenticationFailure e))
     end
   | Ok (_ctx, cert_exts), auth ->
     (* TODO what to do with ctx? send through authenticator? *)

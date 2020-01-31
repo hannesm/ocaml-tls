@@ -35,7 +35,7 @@ let hostname (h : client_hello) : [ `host ] Domain_name.t option =
 let rec find_matching host certs =
   match certs with
   | (s::_, _) as chain ::xs ->
-    if X509.supports_hostname s host then
+    if X509.Certificate.supports_hostname s host then
       Some chain
     else
       find_matching host xs
@@ -44,14 +44,11 @@ let rec find_matching host certs =
 
 let agreed_cert certs hostname =
   let match_host ?default host certs =
-     let host = String.lowercase host in
-     match find_matching (`Strict host) certs with
+     match find_matching host certs with
      | Some x -> return x
-     | None   -> match find_matching (`Wildcard host) certs with
-                 | Some x -> return x
-                 | None   -> match default with
-                             | Some c -> return c
-                             | None   -> fail (`Error (`NoMatchingCertificateFound host))
+     | None   -> match default with
+       | Some c -> return c
+       | None   -> fail (`Error (`NoMatchingCertificateFound (Domain_name.to_string host)))
   in
   match certs, hostname with
   | `None                    , _      -> fail (`Error `NoCertificateConfigured)
@@ -400,7 +397,7 @@ let verify_digitally_signed version ?context_string sig_algs data signature_data
          let hash_algo = hash_of_signature_algorithm sig_alg in
          let compare_hashes should data =
            match X509.Certificate.decode_pkcs1_digest_info should with
-           | Some (hash_algo', target) when hash_algo = hash_algo' ->
+           | Ok (hash_algo', target) when hash_algo = hash_algo' ->
              guard (Crypto.digest_eq hash_algo ~target data) (`Fatal `RSASignatureMismatch)
            | _ -> fail (`Fatal `HashAlgorithmMismatch)
          in

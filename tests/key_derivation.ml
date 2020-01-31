@@ -508,7 +508,9 @@ d9 bb fe ad 8e 43 87 0a ba e3 f7 eb 8b 4e 0e ee
   Nocrypto.Rsa.priv_of_primes ~e ~p ~q
 
 let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ]
-and cert = X509.Encoding.parse (Cstruct.sub cert 11 0x01b0)
+and cert = match X509.Certificate.decode_der (Cstruct.sub cert 11 0x01b0) with
+  | Ok c -> Some c
+  | Error _ -> None
 
 let self_signature () =
   match
@@ -627,18 +629,20 @@ c9 82 88 76 11 20 95 fe  66 76 2b db f7 c6 72 e1
 |}
   in
   let check_pub pr pu =
-    match Hacl_x25519.of_cstruct pr with
+    match Hacl_x25519.key_of_cstruct pr with
     | Ok priv ->
       let pub = Hacl_x25519.public priv in
-      Alcotest.check cs __LOC__ pu (Hacl_x25519.to_cstruct pub)
-    | Error msg -> Alcotest.fail msg
+      Alcotest.check cs __LOC__ pu pub
+    | Error _ -> Alcotest.fail "bad private key"
   in
   let check_one p ks =
-    match Hacl_x25519.of_cstruct p, Hacl_x25519.of_cstruct ks with
-    | Ok priv, Ok pub ->
-      let shared = Hacl_x25519.key_exchange ~priv ~pub in
-      Alcotest.check cs __LOC__ ikm shared
-    | Error msg, _ | _, Error msg -> Alcotest.fail msg
+    match Hacl_x25519.key_of_cstruct p with
+    | Ok priv ->
+      begin match Hacl_x25519.key_exchange priv ks with
+        | Ok shared -> Alcotest.check cs __LOC__ ikm shared
+        | Error _ -> Alcotest.fail "bad kex"
+      end
+    | Error _ -> Alcotest.fail "bad private key"
   in
   check_one c_priv s_keyshare ;
   check_one s_priv c_keyshare ;

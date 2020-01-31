@@ -669,9 +669,9 @@ let parse_certificate_request_extension raw =
         raise_trailing_bytes "certificate authorities"
       else
         let cas = List.fold_left (fun cas buf ->
-            match X509.Encoding.distinguished_name_of_cs buf with
-            | Some ca -> ca :: cas
-            | None -> cas)
+            match X509.Distinguished_name.decode_der buf with
+            | Ok ca -> ca :: cas
+            | Error _ -> cas)
             [] cas
         in
         `CertificateAuthorities (List.rev cas)

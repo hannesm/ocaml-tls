@@ -218,7 +218,7 @@ let assemble_extensions ?none_if_empty assemble_e es =
 
 let assemble_ca ca =
   let lenbuf = create 2 in
-  let data = X509.Encoding.cs_of_distinguished_name ca in
+  let data = X509.Distinguished_name.encode_der ca in
   BE.set_uint16 lenbuf 0 (len data) ;
   lenbuf <+> data
 

@@ -23,14 +23,14 @@ let dh_shared group secret share =
          | Some shared -> Some (left_pad_dh nc_group shared)
        end
      | `Hacl `X25519, `Hacl priv ->
-       begin match Hacl_x25519.of_cstruct share with
+       begin match Hacl_x25519.key_exchange priv share with
          | Error _ -> None
-         | Ok public -> Some (Hacl_x25519.key_exchange ~pub:public ~priv)
+         | Ok shared -> Some shared
        end
-     | `Fiat `P256, `Fiat scalar ->
-       begin match Fiat_p256.point_of_cs share with
-         | None -> None
-         | Some point -> Some (Fiat_p256.dh ~scalar ~point)
+     | `Fiat `P256, `Fiat priv ->
+       begin match Fiat_p256.key_exchange priv share with
+         | Error _ -> None
+         | Ok shared -> Some shared
        end
      | _ -> assert false)
 
@@ -41,21 +41,11 @@ let dh_gen_key group =
     let sec, shared = Nocrypto.Dh.gen_key nc_group in
     `Nocrypto sec, left_pad_dh nc_group shared
   | `Hacl `X25519 ->
-    let random = Nocrypto.Rng.generate Hacl_x25519.key_length_bytes in
-    let secret =
-      match Hacl_x25519.of_cstruct random with
-      | Ok s -> s
-      | Error msg -> invalid_arg msg
-    in
-    let public = Hacl_x25519.(to_cstruct (public secret)) in
-    (`Hacl secret, public)
+    let secret, shared = Hacl_x25519.gen_key ~rng:Nocrypto.Rng.generate in
+    `Hacl secret, shared
   | `Fiat `P256 ->
-    let random = Nocrypto.Rng.generate 32 in (* TODO *)
-    match Fiat_p256.scalar_of_cs random with
-    | None -> invalid_arg "bad random / secret"
-    | Some sc ->
-      let pub = Fiat_p256.public sc in
-      (`Fiat sc, Fiat_p256.point_to_cs pub)
+    let secret, shared = Fiat_p256.gen_key ~rng:Nocrypto.Rng.generate in
+    `Fiat secret, shared
 
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
 
