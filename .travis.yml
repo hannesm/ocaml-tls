@@ -4,7 +4,6 @@ script: bash -ex .travis-opam.sh
 env:
   global:
     - PACKAGE="tls"
-    - PINS="hacl_x25519:git+https://github.com/hannesm/hacl#for-tests"
   matrix:
     - OCAML_VERSION=4.05 DEPOPTS="lwt ptime"
     - OCAML_VERSION=4.06

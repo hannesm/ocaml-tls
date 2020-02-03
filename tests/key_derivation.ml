@@ -629,18 +629,14 @@ c9 82 88 76 11 20 95 fe  66 76 2b db f7 c6 72 e1
 |}
   in
   let check_pub pr pu =
-    match Hacl_x25519.of_cstruct pr with
-    | Ok (priv, pub) -> Alcotest.check cs __LOC__ pu pub
-    | Error _ -> Alcotest.fail "bad private key"
+    let _priv, pub = Hacl_x25519.gen_key ~rng:(fun _ -> pr) in
+    Alcotest.check cs __LOC__ pu pub
   in
   let check_one p ks =
-    match Hacl_x25519.of_cstruct p with
-    | Ok (priv, _pub) ->
-      begin match Hacl_x25519.key_exchange priv ks with
-        | Ok shared -> Alcotest.check cs __LOC__ ikm shared
-        | Error _ -> Alcotest.fail "bad kex"
-      end
-    | Error _ -> Alcotest.fail "bad private key"
+    let priv, _pub = Hacl_x25519.gen_key ~rng:(fun _ -> p) in
+    match Hacl_x25519.key_exchange priv ks with
+    | Ok shared -> Alcotest.check cs __LOC__ ikm shared
+    | Error _ -> Alcotest.fail "bad kex"
   in
   check_one c_priv s_keyshare ;
   check_one s_priv c_keyshare ;
