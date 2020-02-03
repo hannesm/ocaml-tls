@@ -43,9 +43,6 @@ depends: [
   "hacl_x25519"
   "fiat-p256"
 ]
-pin-depends: [
-  [ "hacl_x25519.dev" "git+https://github.com/mirage/ocaml-hacl-ecc.git" ]
-]
 depopts: [
   "lwt"
   "mirage-flow"
