@@ -519,7 +519,6 @@ let parse_client_hello buf =
   let sessionid = if slen = 0 then None else Some (sub buf 35 slen) in
   let ciphersuites, rt = parse_any_ciphersuites (shift buf (35 + slen)) in
   let _, rt' = parse_compression_methods rt in
-  Cstruct.hexdump rt' ;
   let extensions =
     if len rt' == 0 then [] else parse_extensions parse_client_extension rt'
   in

@@ -347,7 +347,7 @@ let assemble_client_hello (cl : client_hello) : Cstruct.t =
    push the length to (at least) 512 bytes. *)
   let extensions = assemble_extensions ~none_if_empty:true assemble_client_extension cl.extensions in
   let extrapadding =
-(*    let buflen = len bbuf + len extensions + 4 in
+    let buflen = len bbuf + len extensions + 4 in
     if buflen >= 256 && buflen <= 511 then
       match len extensions with
         | 0 -> (* need to construct a 2 byte extension length as well *)
@@ -364,7 +364,7 @@ let assemble_client_hello (cl : client_hello) : Cstruct.t =
               -- but the extension length should not count the extension length field itself, therefore only +2 *)
            BE.set_uint16 extensions 0 (len extensions + l + 2);
            p
-    else *)
+    else
       create 0
   in
   bbuf <+> extensions <+> extrapadding
