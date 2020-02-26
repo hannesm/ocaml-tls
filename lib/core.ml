@@ -1,7 +1,6 @@
 (** Core type definitions *)
 
 open Sexplib.Conv
-open Nocrypto
 
 open Packet
 open Ciphersuite
@@ -144,11 +143,11 @@ let group_to_named_group = function
   | `P256 -> SECP256R1
 
 let group_to_impl = function
-  | `FFDHE2048 -> `Nocrypto Nocrypto.Dh.Group.ffdhe2048
-  | `FFDHE3072 -> `Nocrypto Nocrypto.Dh.Group.ffdhe3072
-  | `FFDHE4096 -> `Nocrypto Nocrypto.Dh.Group.ffdhe4096
-  | `FFDHE6144 -> `Nocrypto Nocrypto.Dh.Group.ffdhe6144
-  | `FFDHE8192 -> `Nocrypto Nocrypto.Dh.Group.ffdhe8192
+  | `FFDHE2048 -> `Mirage_crypto Mirage_crypto_pk.Dh.Group.ffdhe2048
+  | `FFDHE3072 -> `Mirage_crypto Mirage_crypto_pk.Dh.Group.ffdhe3072
+  | `FFDHE4096 -> `Mirage_crypto Mirage_crypto_pk.Dh.Group.ffdhe4096
+  | `FFDHE6144 -> `Mirage_crypto Mirage_crypto_pk.Dh.Group.ffdhe6144
+  | `FFDHE8192 -> `Mirage_crypto Mirage_crypto_pk.Dh.Group.ffdhe8192
   | `X25519 -> `Hacl `X25519
   | `P256 -> `Fiat `P256
 
@@ -398,7 +397,7 @@ type epoch_data = {
   received_certificates  : Cert.t list ;
   own_random             : Cstruct_sexp.t ;
   own_certificate        : Cert.t list ;
-  own_private_key        : Nocrypto.Rsa.priv option ;
+  own_private_key        : Mirage_crypto_pk.Rsa.priv option ;
   own_name               : string option ;
   master_secret          : master_secret ;
   session_id             : SessionID.t ;

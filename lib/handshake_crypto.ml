@@ -1,6 +1,3 @@
-open Nocrypto.Uncommon
-open Nocrypto.Hash
-
 open Core
 open State
 
@@ -20,31 +17,37 @@ let p_hash (hmac, hmac_n) key seed len =
   in
   expand (hmac ~key seed) len
 
-let prf_mac = function
+let prf_mac =
+  let open Mirage_crypto.Hash in
+  function
   | `TLS_RSA_WITH_AES_256_GCM_SHA384
   | `TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 -> (module SHA384 : S)
   | _ -> (module SHA256 : S)
 
 let pseudo_random_function version cipher len secret label seed =
+  let open Mirage_crypto.Hash in
   let labelled = Cstruct.of_string label <+> seed in
   match version with
   | TLS_1_1 | TLS_1_0 ->
      let (s1, s2) = halve secret in
      let md5 = p_hash (MD5.hmac, MD5.digest_size) s1 labelled len
      and sha = p_hash (SHA1.hmac, SHA1.digest_size) s2 labelled len in
-     Cs.xor md5 sha
+     Mirage_crypto.Uncommon.Cs.xor md5 sha
   | TLS_1_2 ->
      let module D = (val (prf_mac cipher)) in
      p_hash (D.hmac, D.digest_size) secret labelled len
+  | TLS_1_3 -> assert false
 
 let key_block version cipher len master_secret seed =
   pseudo_random_function version cipher len master_secret "key expansion" seed
 
 let hash version cipher data =
+  let open Mirage_crypto.Hash in
   match version with
   | TLS_1_0 | TLS_1_1 -> MD5.digest data <+> SHA1.digest data
   | TLS_1_2 -> let module H = (val (prf_mac cipher)) in
-               H.digest data
+    H.digest data
+  | TLS_1_3 -> assert false
 
 let finished version cipher master_secret label ps =
   let data = Utils.Cs.appends ps in

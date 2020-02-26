@@ -1,11 +1,9 @@
-open Nocrypto
-
 open Utils
 open Core
 
 open Sexplib.Std
 
-type certchain = Cert.t list * Rsa.priv [@@deriving sexp]
+type certchain = Cert.t list * Mirage_crypto_pk.Rsa.priv [@@deriving sexp]
 
 type own_cert = [
   | `None
@@ -190,8 +188,8 @@ module CertTypeUsageSet = Set.Make(CertTypeUsageOrdered)
 
 let validate_certificate_chain = function
   | (s::chain, priv) ->
-     let pub = Rsa.pub_of_priv priv in
-     if Rsa.pub_bits pub < min_rsa_key_size then
+     let pub = Mirage_crypto_pk.Rsa.pub_of_priv priv in
+     if Mirage_crypto_pk.Rsa.pub_bits pub < min_rsa_key_size then
        invalid "RSA key too short!" ;
      ( match X509.Certificate.public_key s with
        | `RSA pub' when pub = pub' -> ()

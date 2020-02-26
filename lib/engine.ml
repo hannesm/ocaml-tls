@@ -1,5 +1,3 @@
-open Nocrypto
-
 open Utils
 open Core
 open State
@@ -164,7 +162,7 @@ let encrypt (version : tls_version) (st : crypto_state) ty buf =
              in
              ( match c.iv_mode with
                | Random_iv ->
-                  let iv = Rng.generate (Crypto.cbc_block c.cipher) in
+                  let iv = Mirage_crypto_rng.generate (Crypto.cbc_block c.cipher) in
                   let m, _ = enc iv in
                   (CBC c, iv <+> m)
                | Iv iv ->
@@ -184,7 +182,7 @@ let encrypt (version : tls_version) (st : crypto_state) ty buf =
 
 (* well-behaved pure decryptor *)
 let verify_mac sequence mac mac_k ty ver decrypted =
-  let macstart = Cstruct.len decrypted - Hash.digest_size mac in
+  let macstart = Cstruct.len decrypted - Mirage_crypto.Hash.digest_size mac in
   guard (macstart >= 0) (`Fatal `MACUnderflow) >>= fun () ->
   let (body, mmac) = Cstruct.split decrypted macstart in
   let cmac =
@@ -577,8 +575,8 @@ let send_application_data st css =
      Tracing.css ~tag:"application-data-out" css ;
      let datas = match st.encryptor with
        (* Mitigate implicit IV in CBC mode: prepend empty fragment *)
-       | Some { cipher_st = CBC { iv_mode = Iv _ } } -> Cstruct.create 0 :: css
-       | _                                           -> css
+       | Some { cipher_st = CBC { iv_mode = Iv _ ; _ } ; _ } -> Cstruct.create 0 :: css
+       | _ -> css
      in
      let ty = Packet.APPLICATION_DATA in
      let data = List.map (fun cs -> (ty, cs)) datas in
@@ -616,7 +614,7 @@ let reneg ?authenticator ?acceptable_cas ?cert st =
 let client config =
   let config = Config.of_client config in
   let state = new_state config `Client in
-  let dch, version, secrets = Handshake_client.default_client_hello config in
+  let dch, _version, secrets = Handshake_client.default_client_hello config in
   let ciphers, extensions = match config.Config.protocol_versions with
       (* from RFC 5746 section 3.3:
    Both the SSLv3 and TLS 1.0/TLS 1.1 specifications require
@@ -669,7 +667,7 @@ let client config =
       let early_secret = Handshake_crypto13.(derive (empty cipher) psk.secret) in
       let binder_key = Handshake_crypto13.derive_secret early_secret "res binder" Cstruct.empty in
 
-      let hash = Cstruct.create (Nocrypto.Hash.digest_size (Ciphersuite.hash13 cipher)) in
+      let hash = Cstruct.create (Mirage_crypto.Hash.digest_size (Ciphersuite.hash13 cipher)) in
       let incomplete_psks = [ (psk.identifier, obf_age), hash ] in
       let ch' = { client_hello with extensions = client_hello.extensions @ [ kex ; `PreSharedKeys incomplete_psks ] } in
       let ch'_raw = Writer.assemble_handshake (ClientHello ch') in
@@ -712,8 +710,8 @@ let client config =
 
 let server config = new_state Config.(of_server config) `Server
 
-open Sexplib
-open Sexplib.Conv
+(* open Sexplib
+ * open Sexplib.Conv *)
 
 type epoch = [
   | `InitialEpoch

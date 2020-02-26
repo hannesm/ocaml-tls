@@ -1,3 +1,5 @@
+open Tls
+
 (* key derivation example trace taken from draft-ietf-tls-tls13-vectors-07 *)
 let cs =
   let module M = struct
@@ -32,7 +34,7 @@ let expand0 = Cstruct.of_hex {|
 |}
 
 let derive_hs_secret () =
-  let hash_val = Nocrypto.Hash.digest hash Cstruct.empty in
+  let hash_val = Mirage_crypto.Hash.digest hash Cstruct.empty in
   Alcotest.check cs __LOC__ expand0
     (Handshake_crypto13.derive_secret_no_hash hash secret0 ~ctx:hash_val "derived")
 
@@ -97,7 +99,7 @@ let read_handshake_iv = Cstruct.of_hex {|
 
 let derive_c_hs_traffic () =
   let log = Cstruct.append ch sh in
-  let hash_val = Nocrypto.Hash.digest hash log in
+  let hash_val = Mirage_crypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ c_hs_traffic_secret
     (Handshake_crypto13.derive_secret_no_hash hash hs_secret ~ctx:hash_val "c hs traffic") ;
   match !my_secret with
@@ -130,7 +132,7 @@ let write_handshake_iv = Cstruct.of_hex {|
 
 let derive_s_hs_traffic () =
   let log = Cstruct.append ch sh in
-  let hash_val = Nocrypto.Hash.digest hash log in
+  let hash_val = Mirage_crypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ s_hs_traffic_secret
     (Handshake_crypto13.derive_secret_no_hash hash hs_secret ~ctx:hash_val "s hs traffic") ;
   match !my_secret with
@@ -211,9 +213,9 @@ let derive_finished () =
   let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ] in
   Alcotest.check cs __LOC__ finished_expanded
     (Handshake_crypto13.derive_secret_no_hash hash s_hs_traffic_secret "finished") ;
-  let hash_val = Nocrypto.Hash.digest hash log in
+  let hash_val = Mirage_crypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ finished_key
-    (Nocrypto.Hash.mac hash ~key:finished_expanded hash_val) ;
+    (Mirage_crypto.Hash.mac hash ~key:finished_expanded hash_val) ;
   match !my_secret with
   | None -> Alcotest.fail "expected some secret"
   | Some t ->
@@ -234,7 +236,7 @@ let master = Cstruct.of_hex {|
 |}
 
 let derive_master () =
-  let hash_val = Nocrypto.Hash.digest hash Cstruct.empty in
+  let hash_val = Mirage_crypto.Hash.digest hash Cstruct.empty in
   Alcotest.check cs __LOC__ master
     (Handshake_crypto13.derive_secret_no_hash hash hs_secret ~ctx:hash_val "derived")
 
@@ -285,7 +287,7 @@ let app_read_iv = Cstruct.of_hex {|
 
 let derive_traffic_keys () =
   let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ; finished ] in
-  let hash_val = Nocrypto.Hash.digest hash log in
+  let hash_val = Mirage_crypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ c_ap_traffic
     (Handshake_crypto13.derive_secret_no_hash hash master_secret ~ctx:hash_val "c ap traffic") ;
   Alcotest.check cs __LOC__ s_ap_traffic
@@ -420,10 +422,10 @@ let processed_payload () =
     Cstruct.append server_payload t
   in
   let nonce = Crypto.aead_nonce write_handshake_iv 0L in
-  let key = Nocrypto.Cipher_block.AES.GCM.of_secret write_handshake_key in
+  let key = Mirage_crypto.Cipher_block.AES.GCM.of_secret write_handshake_key in
   let adata = Writer.assemble_hdr TLS_1_2 (Packet.APPLICATION_DATA, Cstruct.empty) in
   Cstruct.BE.set_uint16 adata 3 (17 + Cstruct.len server_payload) ;
-  let res = Nocrypto.Cipher_block.AES.GCM.encrypt ~key ~adata ~iv:nonce buf in
+  let res = Mirage_crypto.Cipher_block.AES.GCM.encrypt ~key ~adata ~iv:nonce buf in
   let buf' = Cstruct.append res.message res.tag in
   let data = Writer.assemble_hdr TLS_1_2 (Packet.APPLICATION_DATA, buf') in
   Alcotest.check cs __LOC__ server_payload_processed data
@@ -441,7 +443,7 @@ da f8 6c c8 56 23 1f 2d  5a ba 46 c4 34 ec 19 6c
 
 let resumption () =
   let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ; cert_verify ; finished ; c_finished ] in
-  let hash_val = Nocrypto.Hash.digest hash log in
+  let hash_val = Mirage_crypto.Hash.digest hash log in
   Alcotest.check cs __LOC__ res_master
     (Handshake_crypto13.derive_secret_no_hash hash master_secret ~ctx:hash_val "res master") ;
   match !my_secret with
@@ -449,7 +451,7 @@ let resumption () =
   | Some s -> Alcotest.check cs __LOC__ res_master (Handshake_crypto13.resumption s log)
 
 let private_key =
-  let modulus = Cstruct.of_hex {|
+  let _modulus = Cstruct.of_hex {|
 b4 bb 49 8f 82 79 30 3d  98 08 36 39 9b 36 c6 98
 8c 0c 68 de 55 e1 bd b8  26 d3 90 1a 24 61 ea fd
 2d e4 9a 91 d0 15 ab bc  9a 95 13 7a ce 6c 1a f1
@@ -460,7 +462,7 @@ a9 d9 ef bf ae 8e a6 d1  d0 3e 2b d1 93 ef f0 ab
 9a 80 02 c4 74 28 a6 d3  5a 8d 88 d7 9f 7f 1e 3f
 |}
   and public_exponent = Cstruct.of_hex "01 00 01"
-  and private_exponent = Cstruct.of_hex {|
+  and _private_exponent = Cstruct.of_hex {|
 04 de a7 05 d4 3a 6e a7  20 9d d8 07 21 11 a8 3c
 81 e3 22 a5 92 78 b3 34  80 64 1e af 7c 0a 69 85
 b8 e3 1c 44 f6 de 62 e1  b4 c2 30 9f 61 26 e7 7b
@@ -482,30 +484,30 @@ d9 bb fe ad 8e 43 87 0a ba e3 f7 eb 8b 4e 0e ee
 8a f1 d9 b4 71 9b a6 19 6c f2 cb ba ee eb f8 b3
 49 0a fe 9e 9f fa 74 a8 8a a5 1f c6 45 62 93 03
 |}
-  and exponent1 = Cstruct.of_hex {|
+  and _exponent1 = Cstruct.of_hex {|
 3f 57 34 5c 27 fe 1b 68 7e 6e 76 16 27 b7 8b 1b
 82 64 33 dd 76 0f a0 be a6 a6 ac f3 94 90 aa 1b
 47 cd a4 86 9d 68 f5 84 dd 5b 50 29 bd 32 09 3b
 82 58 66 1f e7 15 02 5e 5d 70 a4 5a 08 d3 d3 19
 |}
-  and exponent2 = Cstruct.of_hex {|
+  and _exponent2 = Cstruct.of_hex {|
 18 3d a0 13 63 bd 2f 28 85 ca cb dc 99 64 bf 47
 64 f1 51 76 36 f8 64 01 28 6f 71 89 3c 52 cc fe
 40 a6 c2 3d 0d 08 6b 47 c6 fb 10 d8 fd 10 41 e0
 4d ef 7e 9a 40 ce 95 7c 41 77 94 e1 04 12 d1 39
 |}
-  and coefficient = Cstruct.of_hex {|
+  and _coefficient = Cstruct.of_hex {|
 83 9c a9 a0 85 e4 28 6b 2c 90 e4 66 99 7a 2c 68
 1f 21 33 9a a3 47 78 14 e4 de c1 18 33 05 0e d5
 0d d1 3c c0 38 04 8a 43 c5 9b 2a cc 41 68 89 c0
 37 66 5f e5 af a6 05 96 9f 8c 01 df a5 ca 96 9d
 |}
   in
-  let e = Nocrypto.Numeric.Z.of_cstruct_be public_exponent
-  and p = Nocrypto.Numeric.Z.of_cstruct_be prime1
-  and q = Nocrypto.Numeric.Z.of_cstruct_be prime2
+  let e = Mirage_crypto_pk.Z_extra.of_cstruct_be public_exponent
+  and p = Mirage_crypto_pk.Z_extra.of_cstruct_be prime1
+  and q = Mirage_crypto_pk.Z_extra.of_cstruct_be prime2
   in
-  Nocrypto.Rsa.priv_of_primes ~e ~p ~q
+  Mirage_crypto_pk.Rsa.priv_of_primes ~e ~p ~q
 
 let log = Cstruct.concat [ ch ; sh ; enc_ext ; cert ]
 and cert = match X509.Certificate.decode_der (Cstruct.sub cert 11 0x01b0) with
@@ -601,7 +603,7 @@ be 7f d6 1d 28 27 db 27  9c ce 14 50 77 d4 54 a3
 
 let binder () =
   let binder_hash = Cstruct.of_hex "63 22 4b 2e 45 73 f2 d3 45 4c a8 4b 9d 00 9a 04 f6 be 9e 05 71 1a 83 96 47 3a ef a0 1e 92 4a 14" in
-  Alcotest.check cs __LOC__ binder_hash (Nocrypto.Hash.digest hash ch_res_prefix) ;
+  Alcotest.check cs __LOC__ binder_hash (Mirage_crypto.Hash.digest hash ch_res_prefix) ;
   match !my_secret with
   | None -> Alcotest.fail "expected secret"
   | Some s ->
@@ -672,5 +674,5 @@ let () =
   Fmt_tty.setup_std_outputs ();
   Logs.set_level (Some Logs.Debug);
   Logs.set_reporter (Logs_fmt.reporter ~dst:Format.std_formatter ()) ;
-  Nocrypto_entropy_unix.initialize () ;
+  Mirage_crypto_rng_unix.initialize () ;
   Alcotest.run "Key derivation tests" [ "key extraction and derivation", tests ]

@@ -2,8 +2,6 @@ open Utils
 open Core
 open State
 
-open Nocrypto
-
 let src = Logs.Src.create "handshake" ~doc:"TLS handshake"
 module Log = (val Logs.src_log src : Logs.LOG)
 
@@ -208,7 +206,7 @@ let server_exts_subset_of_client sexts cexts =
 
 module Group = struct
   type t = Packet.named_group
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
 end
 
 module GroupSet = Set.Make(Group)
@@ -217,7 +215,7 @@ module GroupSet = Set.Make(Group)
 let of_list xs = List.fold_right GroupSet.add xs GroupSet.empty
 
 let client_hello_valid (ch : client_hello) =
-  let open Ciphersuite in
+  (*  let open Ciphersuite in *)
   (* match ch.version with
     | TLS_1_0 ->
        if List.mem TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA ch.ciphersuites then
@@ -282,8 +280,8 @@ let client_hello_valid (ch : client_hello) =
 
   let share_ciphers =
     match
-      first_match (filter_map ~f:any_ciphersuite_to_ciphersuite ch.ciphersuites) Config.Ciphers.supported,
-      first_match (filter_map ~f:any_ciphersuite_to_ciphersuite13 ch.ciphersuites) Config.Ciphers.supported13
+      first_match (filter_map ~f:Ciphersuite.any_ciphersuite_to_ciphersuite ch.ciphersuites) Config.Ciphers.supported,
+      first_match (filter_map ~f:Ciphersuite.any_ciphersuite_to_ciphersuite13 ch.ciphersuites) Config.Ciphers.supported13
     with
     | None, None -> false
     | _ -> true
@@ -302,7 +300,7 @@ let client_hello_valid (ch : client_hello) =
 
 
 let server_hello_valid (sh : server_hello) =
-  let open Ciphersuite in
+  (* let open Ciphersuite in *)
   List_set.is_proper_set (extension_types to_server_ext_type sh.extensions)
   (* TODO:
       - EC stuff must be present if EC ciphersuite chosen
@@ -326,8 +324,8 @@ let to_sign_1_3 context_string =
 let signature version ?context_string data client_sig_algs signature_algorithms private_key =
   match version with
   | TLS_1_0 | TLS_1_1 ->
-    let data = Hash.MD5.digest data <+> Hash.SHA1.digest data in
-    let signed = Rsa.PKCS1.sig_encode ~key:private_key data in
+    let data = Mirage_crypto.Hash.MD5.digest data <+> Mirage_crypto.Hash.SHA1.digest data in
+    let signed = Mirage_crypto_pk.Rsa.PKCS1.sig_encode ~key:private_key data in
     return (Writer.assemble_digitally_signed signed)
   | TLS_1_2 ->
     (* if no signature_algorithms extension is sent by the client,
@@ -339,9 +337,9 @@ let signature version ?context_string data client_sig_algs signature_algorithms 
         | None      -> fail (`Error (`NoConfiguredSignatureAlgorithm client_algos))
         | Some sig_alg -> return sig_alg ) >|= fun sig_alg ->
     let hash_alg = Core.hash_of_signature_algorithm sig_alg in
-    let hash = Hash.digest hash_alg data in
+    let hash = Mirage_crypto.Hash.digest hash_alg data in
     let cs = X509.Certificate.encode_pkcs1_digest_info (hash_alg, hash) in
-    let sign = Rsa.PKCS1.sig_encode ~key:private_key cs in
+    let sign = Mirage_crypto_pk.Rsa.PKCS1.sig_encode ~key:private_key cs in
     Writer.assemble_digitally_signed_1_2 sig_alg sign
   | TLS_1_3 ->
     (* RSA-PSS is used *)
@@ -355,11 +353,11 @@ let signature version ?context_string data client_sig_algs signature_algorithms 
     let hash_algo = hash_of_signature_algorithm sig_alg in
     match signature_scheme_of_signature_algorithm sig_alg with
     | `PSS ->
-      let module H = (val (Hash.module_of hash_algo)) in
-      let module PSS = Rsa.PSS(H) in
+      let module H = (val (Mirage_crypto.Hash.module_of hash_algo)) in
+      let module PSS = Mirage_crypto_pk.Rsa.PSS(H) in
       let data = H.digest data in
       let to_sign = prefix <+> data in
-      let signature = PSS.sign ~key:private_key to_sign in
+      let signature = PSS.sign ~key:private_key (`Message to_sign) in
       return (Writer.assemble_digitally_signed_1_2 sig_alg signature)
     | _ -> fail (`Error (`NoConfiguredSignatureAlgorithm [])) (*TODO different warning, types *)
 
@@ -374,7 +372,7 @@ let verify_digitally_signed version ?context_string sig_algs data signature_data
   peer_rsa_key certificate >>= fun pubkey ->
 
   let decode_pkcs1_signature raw_signature =
-    match Rsa.PKCS1.sig_decode ~key:pubkey raw_signature with
+    match Mirage_crypto_pk.Rsa.PKCS1.sig_decode ~key:pubkey raw_signature with
     | Some signature -> return signature
     | None -> fail (`Fatal `RSASignatureVerificationFailed)
   in
@@ -384,7 +382,7 @@ let verify_digitally_signed version ?context_string sig_algs data signature_data
     ( match Reader.parse_digitally_signed data with
       | Ok signature ->
          let compare_hashes should data =
-           let computed_sig = Hash.MD5.digest data <+> Hash.SHA1.digest data in
+           let computed_sig = Mirage_crypto.Hash.MD5.digest data <+> Mirage_crypto.Hash.SHA1.digest data in
            guard (Cs.equal should computed_sig) (`Fatal `RSASignatureMismatch)
          in
          decode_pkcs1_signature signature >>= fun raw ->
@@ -411,15 +409,16 @@ let verify_digitally_signed version ?context_string sig_algs data signature_data
         let hash_algo = hash_of_signature_algorithm sig_alg in
         begin match signature_scheme_of_signature_algorithm sig_alg with
           | `PSS ->
-            let module H = (val (Hash.module_of hash_algo)) in
-            let module PSS = Rsa.PSS(H) in
+            let module H = (val (Mirage_crypto.Hash.module_of hash_algo)) in
+            let module PSS = Mirage_crypto_pk.Rsa.PSS(H) in
             let data =
               let prefix = to_sign_1_3 context_string
               and data = H.digest signature_data
               in
               prefix <+> data
             in
-            guard (PSS.verify ~key:pubkey ~signature data) (`Fatal `RSASignatureMismatch)
+            guard (PSS.verify ~key:pubkey ~signature (`Message data))
+              (`Fatal `RSASignatureMismatch)
           | `PKCS1 ->
             fail (`Fatal `UnsupportedSignatureScheme)
         end
@@ -434,8 +433,8 @@ let validate_chain authenticator certificates hostname =
   and key_size min cs =
     let check c =
       match X509.Certificate.public_key c with
-      | `RSA key when Rsa.pub_bits key >= min -> true
-      | _                                     -> false
+      | `RSA key when Mirage_crypto_pk.Rsa.pub_bits key >= min -> true
+      | _ -> false
     in
     guard (List.for_all check cs) (`Fatal `KeyTooSmall)
 

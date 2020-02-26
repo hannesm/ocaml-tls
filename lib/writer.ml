@@ -469,6 +469,7 @@ let assemble_handshake hs =
        let cs = assemble_extensions assemble_encrypted_extension ee in
        (cs, ENCRYPTED_EXTENSIONS)
     | KeyUpdate -> (create 0, KEY_UPDATE)
+    | EndOfEarlyData -> assert false
   in
   let pay_len = len payload in
   let buf = assemble_hs payload_type pay_len in

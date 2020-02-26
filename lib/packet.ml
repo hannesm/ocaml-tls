@@ -620,6 +620,6 @@ type any_ciphersuite =
   [@@uint16_t] [@@sexp]
 ]
 
-let helloretryrequest = Nocrypto.Hash.digest `SHA256 (Cstruct.of_string "HelloRetryRequest")
+let helloretryrequest = Mirage_crypto.Hash.digest `SHA256 (Cstruct.of_string "HelloRetryRequest")
 let downgrade12 = Cstruct.of_hex "44 4F 57 4E 47 52 44 01"
 let downgrade11 = Cstruct.of_hex "44 4F 57 4E 47 52 44 00"

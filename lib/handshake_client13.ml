@@ -27,7 +27,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
         match Handshake_crypto13.dh_shared g secret share with
         | None -> fail (`Fatal `InvalidServerHello)
         | Some shared ->
-          let hlen = Nocrypto.Hash.digest_size (Ciphersuite.hash13 cipher) in
+          let hlen = Mirage_crypto.Hash.digest_size (Ciphersuite.hash13 cipher) in
           (match
              map_find ~f:(function `PreSharedKey idx -> Some idx | _ -> None) sh.extensions,
              state.config.Config.cached_ticket
@@ -60,7 +60,7 @@ let answer_server_hello state ch (sh : server_hello) secrets raw log =
                 `Change_dec (Some server_ctx) ])
 
 (* called from handshake_client.ml *)
-let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
+let answer_hello_retry_request state (ch : client_hello) hrr _secrets raw log =
   (* when is a HRR invalid / what do we need to check?
      -> we advertised the group and cipher
      -> TODO we did advertise such a keyshare already (does it matter?)
@@ -83,7 +83,7 @@ let answer_hello_retry_request state (ch : client_hello) hrr secrets raw log =
   let other_exts = List.filter (function `KeyShare _ -> false | _ -> true) ch.extensions in
   let new_ch = { ch with extensions = `KeyShare [keyshare] :: other_exts @ cookie} in
   let new_ch_raw = Writer.assemble_handshake (ClientHello new_ch) in
-  let ch0_data = Nocrypto.Hash.digest (Ciphersuite.hash13 hrr.ciphersuite) log in
+  let ch0_data = Mirage_crypto.Hash.digest (Ciphersuite.hash13 hrr.ciphersuite) log in
   let ch0_hdr = Writer.assemble_message_hash (Cstruct.len ch0_data) in
   let st = AwaitServerHello13 (new_ch, [secret], Cs.appends [ ch0_hdr ; ch0_data ; raw ; new_ch_raw ]) in
 
@@ -129,7 +129,7 @@ let answer_certificate_verify (state : handshake_state) (session : session_data1
   let st = AwaitServerFinished13 (session, server_hs_secret, client_hs_secret, log <+> raw) in
   return ({ state with machina = Client13 st }, [])
 
-let answer_certificate_request (state : handshake_state) (session : session_data13) server_hs_secret client_hs_secret extensions raw log =
+let answer_certificate_request (state : handshake_state) (session : session_data13) server_hs_secret client_hs_secret _extensions raw log =
   (* TODO respect extensions (sigalg, CA, OIDfilter)! *)
   let session =
     let common_session_data13 = { session.common_session_data13 with client_auth = true } in

@@ -1,5 +1,3 @@
-open Nocrypto
-
 open Utils
 
 open Core
@@ -65,7 +63,7 @@ let default_client_hello config =
   in
   let ch = {
     client_version = Supported version ;
-    client_random  = Rng.generate 32 ;
+    client_random  = Mirage_crypto_rng.generate 32 ;
     sessionid      = sessionid ;
     ciphersuites   = List.map Ciphersuite.ciphersuite_to_any_ciphersuite ciphers ;
     extensions     = `ExtendedMasterSecret :: host @ extensions @ alpn
@@ -119,7 +117,8 @@ let common_server_hello_machina state (sh : server_hello) (ch : client_hello) ra
     in
     Ciphersuite.(match ciphersuite_kex cipher with
         | `RSA     -> AwaitCertificate_RSA (session, log @ [raw])
-        | `DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw]))
+        | `DHE_RSA -> AwaitCertificate_DHE_RSA (session, log @ [raw])
+        | _ -> assert false)
   in
   ({ state with protocol_version = sh.server_version ; machina = Client machina }, [])
 
@@ -214,9 +213,9 @@ let answer_certificate_RSA state (session : session_data) cs raw log =
     | x           -> fail (`Fatal (`NoVersions [ x ])) (* TODO: get rid of this... *)
   ) >>= fun version ->
   let ver = Writer.assemble_protocol_version version in
-  let premaster = ver <+> Rng.generate 46 in
+  let premaster = ver <+> Mirage_crypto_rng.generate 46 in
   peer_rsa_key peer_certificate >|= fun pubkey ->
-  let kex = Rsa.PKCS1.encrypt ~key:pubkey premaster
+  let kex = Mirage_crypto_pk.Rsa.PKCS1.encrypt ~key:pubkey premaster
   in
 
   let machina =
@@ -237,6 +236,7 @@ let answer_certificate_DHE_RSA state (session : session_data) cs raw log =
   ({ state with machina = Client machina }, [])
 
 let answer_server_key_exchange_DHE_RSA state (session : session_data) kex raw log =
+  let open Mirage_crypto_pk in
   let dh_params kex =
     match Reader.parse_dh_parameters kex with
     | Ok data  -> return data
@@ -270,6 +270,7 @@ let answer_certificate_request state (session : session_data) cr kex pms raw log
        ( match Reader.parse_certificate_request_1_2 cr with
          | Ok (types, sigalgs, cas) -> return (types, Some sigalgs, cas)
          | Error re -> fail (`Fatal (`ReaderError re)) )
+    | TLS_1_3 -> assert false
   ) >|= fun (types, sigalgs, _cas) ->
   (* TODO: respect cas, maybe multiple client certificates? *)
   let own_certificate, own_private_key =

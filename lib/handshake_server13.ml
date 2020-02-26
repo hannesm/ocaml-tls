@@ -33,7 +33,7 @@ let answer_client_hello state ch raw =
     let ciphersuite = (cipher :> Ciphersuite.ciphersuite) in
     let sh =
       { server_version = TLS_1_3 ;
-        server_random = Nocrypto.Rng.generate 32 ;
+        server_random = Mirage_crypto_rng.generate 32 ;
         sessionid = ch.sessionid ;
         ciphersuite ;
         extensions }
@@ -64,7 +64,7 @@ let answer_client_hello state ch raw =
     begin match first_match groups config.Config.groups with
       | None -> fail (`Fatal `NoSupportedGroup)
       | Some group ->
-        let cookie = Nocrypto.Hash.digest (Ciphersuite.hash13 cipher) raw in
+        let cookie = Mirage_crypto.Hash.digest (Ciphersuite.hash13 cipher) raw in
         let hrr = { retry_version = TLS_1_3 ; ciphersuite = cipher ; sessionid = ch.sessionid ; selected_group = group ; extensions = [ `Cookie cookie ] } in
         let hrr_raw = Writer.assemble_handshake (HelloRetryRequest hrr) in
         Tracing.sexpf ~tag:"handshake-out" ~f:sexp_of_tls_handshake (HelloRetryRequest hrr) ;
@@ -95,7 +95,7 @@ let answer_client_hello state ch raw =
       in
 
       let hostname = hostname ch in
-      let hlen = Nocrypto.Hash.digest_size (Ciphersuite.hash13 cipher) in
+      let hlen = Mirage_crypto.Hash.digest_size (Ciphersuite.hash13 cipher) in
 
       let early_secret, epoch, exts, can_use_early_data =
         let secret ?(psk = Cstruct.create hlen) () = Handshake_crypto13.(derive (empty cipher) psk) in
@@ -291,11 +291,11 @@ let answer_client_hello state ch raw =
         | true, _ | _, None -> None, []
         | false, Some cache ->
           let age_add =
-            let cs = Nocrypto.Rng.generate 4 in
+            let cs = Mirage_crypto_rng.generate 4 in
             Cstruct.BE.get_uint32 cs 0
           in
-          let psk_id = Nocrypto.Rng.generate 32 in
-          let nonce = Nocrypto.Rng.generate 4 in
+          let psk_id = Mirage_crypto_rng.generate 32 in
+          let nonce = Mirage_crypto_rng.generate 4 in
           let extensions = match config.Config.zero_rtt with
             | 0l -> []
             | x -> [ `EarlyDataIndication x ]

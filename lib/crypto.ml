@@ -1,6 +1,5 @@
-
-open Nocrypto
-open Nocrypto.Uncommon
+open Mirage_crypto
+open Mirage_crypto_pk
 
 open Ciphersuite
 
@@ -8,12 +7,12 @@ let (<+>) = Utils.Cs.(<+>)
 
 
 (* on-the-wire dh_params <-> (group, pub_message) *)
-let dh_params_pack { Dh.p; gg } message =
-  let cs_of_z = Numeric.Z.to_cstruct_be ?size:None in
+let dh_params_pack { Dh.p; gg; _ } message =
+  let cs_of_z = Z_extra.to_cstruct_be ?size:None in
   { Core.dh_p = cs_of_z p ; dh_g = cs_of_z gg ; dh_Ys = message }
 
 and dh_params_unpack { Core.dh_p ; dh_g ; dh_Ys } =
-  let z_of_cs = Numeric.Z.of_cstruct_be ?bits:None in
+  let z_of_cs = Z_extra.of_cstruct_be ?bits:None in
   ({ Dh.p = z_of_cs dh_p ; gg = z_of_cs dh_g ; q = None }, dh_Ys)
 
 module Ciphers = struct
@@ -77,6 +76,7 @@ let sequence_buf seq =
   buf
 
 let aead_nonce nonce seq =
+  let open Mirage_crypto.Uncommon in
   let s =
     let l = Cstruct.len nonce in
     let s = sequence_buf seq in

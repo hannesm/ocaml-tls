@@ -15,9 +15,6 @@ let resolve host service =
       fail (Invalid_argument msg)
   | ai::_ -> return ai.ai_addr
 
-
-let gettimeofday = Unix.gettimeofday
-
 module Lwt_cs = struct
 
   let naked ~name f fd cs =
@@ -89,6 +86,7 @@ module Unix = struct
         match (t.state, n) with
         | (`Active _  , 0) -> t.state <- `Eof ; return `Eof
         | (`Active tls, n) -> handle tls (Cstruct.sub recv_buf 0 n)
+        | _ -> assert false
 
   let rec read t buf =
 
@@ -252,4 +250,4 @@ and connect authenticator addr =
 
 
 (* Boot the entropy loop at module init time. *)
-let () = ignore @@ Nocrypto_entropy_lwt.initialize ()
+let () = Mirage_crypto_rng_unix.initialize ()

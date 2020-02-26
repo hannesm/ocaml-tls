@@ -1,4 +1,3 @@
-open Nocrypto
 open Core
 
 (** Configuration of the TLS stack *)
@@ -6,7 +5,7 @@ open Core
 (** {1 Config type} *)
 
 (** certificate chain and private key of the first certificate *)
-type certchain = Cert.t list * Nocrypto.Rsa.priv
+type certchain = Cert.t list * Mirage_crypto_pk.Rsa.priv
 
 (** polymorphic variant of own certificates *)
 type own_cert = [

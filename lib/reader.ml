@@ -798,3 +798,4 @@ let parse_handshake = catch @@ fun buf ->
     | Some END_OF_EARLY_DATA ->
       EndOfEarlyData
     | None  -> raise_unknown @@ "handshake type" ^ string_of_int typ
+    | _ -> assert false

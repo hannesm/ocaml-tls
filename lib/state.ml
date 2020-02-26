@@ -5,7 +5,8 @@ open Sexplib
 open Sexplib.Conv
 
 open Core
-open Nocrypto
+open Mirage_crypto
+open Mirage_crypto_pk
 
 type hmac_key = Cstruct.t
 
@@ -73,7 +74,7 @@ type dh_sent = Dh.group * Dh.secret [@@deriving sexp]
 type dh_secret = [
   | `Fiat of Fiat_p256.secret
   | `Hacl of Hacl_x25519.secret
-  | `Nocrypto of Nocrypto.Dh.secret
+  | `Mirage_crypto of Mirage_crypto_pk.Dh.secret
 ]
 let sexp_of_dh_secret _ = Sexp.Atom "dh_secret"
 let dh_secret_of_sexp = Conv.of_sexp_error "dh_secret_of_sexp: not implemented"
@@ -90,7 +91,7 @@ type common_session_data = {
   trust_anchor           : Cert.t option ;
   received_certificates  : Cert.t list ;
   own_certificate        : Cert.t list ;
-  own_private_key        : Nocrypto.Rsa.priv option ;
+  own_private_key        : Mirage_crypto_pk.Rsa.priv option ;
   own_name               : string option ;
   client_auth            : bool ;
   master_secret          : master_secret ;
@@ -142,7 +143,7 @@ type client_handshake_state =
 type kdf = {
   secret : Cstruct_sexp.t ;
   cipher : Ciphersuite.ciphersuite13 ;
-  hash : Nocrypto.Hash.hash ;
+  hash : Ciphersuite.H.t ;
 } [@@deriving sexp]
 
 (* TODO needs log of CH..CF for post-handshake auth *)

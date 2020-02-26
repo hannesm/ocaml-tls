@@ -1,6 +1,6 @@
 open Lwt
 
-type priv = X509.Certificate.t list * Nocrypto.Rsa.priv
+type priv = X509.Certificate.t list * Mirage_crypto_pk.Rsa.priv
 
 type authenticator = X509.Authenticator.t
 
@@ -94,7 +94,7 @@ let authenticator ?hash_whitelist ?crls param =
     crls_of_pem_dir crls >|= fun crls ->
     X509.Authenticator.chain_of_trust ?hash_whitelist ?crls ~time:now cas
   and dotted_hex_to_cs hex =
-    Nocrypto.Uncommon.Cs.of_hex
+    Cstruct.of_hex
       (String.map (function ':' -> ' ' | x -> x) hex)
   and fingerp hash fingerprints =
     X509.Authenticator.server_key_fingerprint ~time:now ~hash ~fingerprints

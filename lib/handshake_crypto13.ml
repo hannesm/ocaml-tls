@@ -1,9 +1,12 @@
-open Nocrypto
-
 let (<+>) = Utils.Cs.(<+>)
 
+let cdiv (x : int) (y : int) =
+  if x > 0 && y > 0 then (x + y - 1) / y
+  else if x < 0 && y < 0 then (x + y + 1) / y
+  else x / y
+
 let left_pad_dh group msg =
-  let bytes = Nocrypto.Uncommon.cdiv (Nocrypto.Dh.modulus_size group) 8 in
+  let bytes = cdiv (Mirage_crypto_pk.Dh.modulus_size group) 8 in
   let padding = Cstruct.create (bytes - Cstruct.len msg) in
   padding <+> msg
 
@@ -17,8 +20,8 @@ let dh_shared group secret share =
   (* RFC 8556, Section 7.4.1 - we need zero-padding on the left *)
   not_all_zero
     (match Core.group_to_impl group, secret with
-     | `Nocrypto nc_group, `Nocrypto secret ->
-       begin match Nocrypto.Dh.shared nc_group secret share with
+     | `Mirage_crypto nc_group, `Mirage_crypto secret ->
+       begin match Mirage_crypto_pk.Dh.shared nc_group secret share with
          | None -> None
          | Some shared -> Some (left_pad_dh nc_group shared)
        end
@@ -37,14 +40,14 @@ let dh_shared group secret share =
 let dh_gen_key group =
   (* RFC 8556, Section 4.2.8.1 - we need zero-padding on the left *)
   match Core.group_to_impl group with
-  | `Nocrypto nc_group ->
-    let sec, shared = Nocrypto.Dh.gen_key nc_group in
-    `Nocrypto sec, left_pad_dh nc_group shared
+  | `Mirage_crypto nc_group ->
+    let sec, shared = Mirage_crypto_pk.Dh.gen_key nc_group in
+    `Mirage_crypto sec, left_pad_dh nc_group shared
   | `Hacl `X25519 ->
-    let secret, shared = Hacl_x25519.gen_key ~rng:Nocrypto.Rng.generate in
+    let secret, shared = Hacl_x25519.gen_key ~rng:Mirage_crypto_rng.generate in
     `Hacl secret, shared
   | `Fiat `P256 ->
-    let secret, shared = Fiat_p256.gen_key ~rng:Nocrypto.Rng.generate in
+    let secret, shared = Fiat_p256.gen_key ~rng:Mirage_crypto_rng.generate in
     `Fiat secret, shared
 
 let trace tag cs = Tracing.cs ~tag:("crypto " ^ tag) cs
@@ -78,7 +81,7 @@ let hkdflabel label context length =
 
 let derive_secret_no_hash hash prk ?length ?(ctx = Cstruct.empty) label =
   let length = match length with
-    | None -> Nocrypto.Hash.digest_size hash
+    | None -> Mirage_crypto.Hash.digest_size hash
     | Some x -> x
   in
   let info = hkdflabel label ctx length in
@@ -88,7 +91,7 @@ let derive_secret_no_hash hash prk ?length ?(ctx = Cstruct.empty) label =
   key
 
 let derive_secret t label log =
-  let ctx = Nocrypto.Hash.digest t.State.hash log in
+  let ctx = Mirage_crypto.Hash.digest t.State.hash log in
   trace "derive secret ctx" ctx ;
   derive_secret_no_hash t.State.hash t.State.secret ~ctx label
 
@@ -158,4 +161,4 @@ let res_secret hash secret nonce =
 
 let finished hash secret data =
   let key = derive_secret_no_hash hash secret "finished" in
-  Hash.mac hash ~key (Hash.digest hash data)
+  Mirage_crypto.Hash.mac hash ~key (Mirage_crypto.Hash.digest hash data)
