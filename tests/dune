@@ -1,0 +1,9 @@
+(test
+  (name unittestrunner)
+  (modules readertests readerwritertests testlib writertests unittests unittestrunner)
+  (libraries tls oUnit cstruct-unix))
+
+(test
+  (name key_derivation)
+  (modules key_derivation)
+  (libraries tls alcotest hacl_x25519 logs.fmt fmt.tty mirage-crypto-rng.unix))

@@ -59,11 +59,11 @@ module X509 (KV : Mirage_kv.RO) (C : Mirage_clock.PCLOCK) : sig
       If [crl] is provided, the corresponding file is read and used as
       revocation list (DER encoded). Both options only apply if [`CAs] is used.
  *)
-  val authenticator : ?hash_whitelist:Nocrypto.Hash.hash list -> ?crl:string ->
+  val authenticator : ?hash_whitelist:Mirage_crypto.Hash.hash list -> ?crl:string ->
     KV.t -> [< `Noop | `CAs ] -> X509.Authenticator.t Lwt.t
 
   (** [certificate store typ] unmarshals a certificate chain and
       private key material from the [store]. *)
   val certificate   : KV.t -> [< `Default | `Name of string ]
-                           -> (X509.Certificate.t list * Nocrypto.Rsa.priv) Lwt.t
+                           -> (X509.Certificate.t list * Mirage_crypto_pk.Rsa.priv) Lwt.t
 end
