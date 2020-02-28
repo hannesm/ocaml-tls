@@ -1,7 +1,7 @@
 (test
   (name unittestrunner)
   (modules readertests readerwritertests testlib writertests unittests unittestrunner)
-  (libraries tls oUnit cstruct-unix))
+  (libraries tls ounit2 cstruct-unix))
 
 (test
   (name key_derivation)

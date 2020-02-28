@@ -1,16 +1,4 @@
 _build/
-*.native
-*.byte
+.merlin
 *.install
-
-main.ml
-.mirage.config
-mirage-unikernel*opam
-mirage/*/myocamlbuild.ml
-mirage/*/*ukvm
-mirage/*/tls_client
-mirage/*/tls_server
-Makefile
-key_gen.ml
-
 random/
